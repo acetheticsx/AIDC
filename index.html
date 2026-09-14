@@ -3,119 +3,40 @@
 <head>
   <meta charset="utf-8">
 
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, viewport-fit=cover"
-  >
-
-  <meta
-    name="theme-color"
-    content="#f7f7f5"
-  >
-
-  <meta
-    name="color-scheme"
-    content="light"
-  >
-
-  <meta
-    name="description"
-    content="AIDC, the developer console for The Ace Base."
-  >
-
-  <meta
-    name="application-name"
-    content="AIDC"
-  >
-
-  <meta
-    name="referrer"
-    content="strict-origin-when-cross-origin"
-  >
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f7f5">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="AIDC, the developer console for The Ace Base.">
+  <meta name="application-name" content="AIDC">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
 
   <title>AIDC</title>
 
-  <!-- ═══════════════════════════════════════
-       Fonts
-  ═══════════════════════════════════════ -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 
-  <link
-    rel="preconnect"
-    href="https://fonts.googleapis.com"
-  >
+  <link rel="icon" type="image/png" href="/assets/icon.png">
+  <link rel="apple-touch-icon" href="/assets/icon.png">
 
-  <link
-    rel="preconnect"
-    href="https://fonts.gstatic.com"
-    crossorigin
-  >
-
-  <link
-    href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap"
-    rel="stylesheet"
-  >
-
-  <!-- ═══════════════════════════════════════
-       Icons / App Assets
-  ═══════════════════════════════════════ -->
-
-  <link
-    rel="icon"
-    type="image/png"
-    href="./assets/icon.png"
-  >
-
-  <link
-    rel="apple-touch-icon"
-    href="./assets/icon.png"
-  >
-
-  <!-- Hugeicons -->
-  <link
-    rel="stylesheet"
-    href="https://use.hugeicons.com/font/icons.css"
-  >
-
-  <!-- ═══════════════════════════════════════
-       AIDC
-  ═══════════════════════════════════════ -->
-
-  <link
-    rel="stylesheet"
-    href="./style.css"
-  >
+  <link rel="stylesheet" href="https://use.hugeicons.com/font/icons.css">
+  <link rel="stylesheet" href="/style.css">
 </head>
 
 <body>
-
-  <main
-    id="app"
-    aria-label="AIDC"
-  >
+  <main id="app" aria-label="AIDC">
     <aidc-app></aidc-app>
 
     <noscript>
       <section class="aidc-noscript">
         <div>
           <h1>JavaScript is required</h1>
-
-          <p>
-            AIDC requires JavaScript to run.
-          </p>
+          <p>AIDC requires JavaScript to run.</p>
         </div>
       </section>
     </noscript>
   </main>
 
-  <!--
-    Single application entry point.
-    app.js registers the AIDC components
-    from components.js.
-  -->
-  <script
-    type="module"
-    src="./app.js"
-  ></script>
-
+  <script type="module" src="/app.js"></script>
 </body>
 </html>
