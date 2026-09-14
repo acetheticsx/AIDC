@@ -37,6 +37,40 @@
     </noscript>
   </main>
 
+  <script>
+    /*
+     * Fallback UI for the case where app.js (or one of its
+     * imports such as api.js) fails to load. Without this,
+     * the page is left blank because <aidc-app> never gets
+     * registered as a custom element.
+     */
+    window.setTimeout(function () {
+      if (customElements.get("aidc-app")) {
+        return;
+      }
+
+      var app = document.getElementById("app");
+
+      if (!app || app.textContent.trim()) {
+        return;
+      }
+
+      app.innerHTML =
+        '<section style="padding:2rem;' +
+        'font:14px/1.55 ui-sans-serif,system-ui,sans-serif;' +
+        'color:#111110;max-width:36rem;margin:0 auto">' +
+        '<h1 style="margin:0 0 8px;font-size:20px;font-weight:600">' +
+        "Failed to load AIDC" +
+        "</h1>" +
+        '<p style="margin:0;color:#777773">' +
+        "The interface could not be initialised. Open the browser " +
+        "console for details — most commonly this means a module " +
+        "failed to load." +
+        "</p>" +
+        "</section>";
+    }, 2500);
+  </script>
+
   <script type="module" src="/app.js"></script>
 </body>
 </html>

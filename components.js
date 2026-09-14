@@ -299,6 +299,17 @@ export function registerAIDCComponents(AIDC) {
           tabindex="0"
           @click=${this.open}
           @keydown=${event => {
+            /*
+             * Ignore keydown originating from
+             * nested interactive elements
+             * (e.g. the copy button) so that
+             * Enter/Space on those does not
+             * also navigate.
+             */
+            if (event.target !== event.currentTarget) {
+              return;
+            }
+
             if (
               event.key === "Enter" ||
               event.key === " "
@@ -1517,6 +1528,17 @@ export function registerAIDCComponents(AIDC) {
     }
 
     updated(changed) {
+      /*
+       * When the component is pointed at a
+       * different application, clear local
+       * selections immediately so stale
+       * scopes from the previous app never
+       * leak into the loading state.
+       */
+      if (changed.has("applicationId")) {
+        this.localScopes = [];
+      }
+
       if (
         changed.has("applicationId") &&
         this.applicationId
@@ -1907,16 +1929,29 @@ export function registerAIDCComponents(AIDC) {
       this.description = "";
       this.submitting = false;
       this.error = "";
+
+      /*
+       * Tracks whether the modal was open on
+       * the previous render, so the name
+       * field is only focused when the modal
+       * *transitions* to open — not on every
+       * reactive update.
+       */
+      this._wasOpen = false;
     }
 
     updated() {
-      if (state.ui.createModal) {
+      const open = state.ui.createModal;
+
+      if (open && !this._wasOpen) {
         requestAnimationFrame(() => {
           this.querySelector(
             "#aidc-create-name"
           )?.focus();
         });
       }
+
+      this._wasOpen = open;
     }
 
     handleEscape() {

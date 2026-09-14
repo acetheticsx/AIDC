@@ -104,7 +104,8 @@ function validateRedirectUri(value) {
   const isLocalhost =
     hostname === "localhost" ||
     hostname === "127.0.0.1" ||
-    hostname === "::1";
+    hostname === "::1" ||
+    hostname === "[::1]";
 
   if (parsed.protocol === "http:" && !isLocalhost) {
     return {
@@ -118,6 +119,11 @@ function validateRedirectUri(value) {
     uri
   };
 }
+
+/*
+ * Supported scopes (shared by the scopes endpoints below)
+ */
+const SUPPORTED_SCOPES = ["openid", "profile", "email"];
 
 /*
  * Health
@@ -653,6 +659,188 @@ app.delete(
 );
 
 /*
+ * Scopes
+ *
+ * Requires the following table in the public schema:
+ *
+ *   CREATE TABLE IF NOT EXISTS public.application_scopes (
+ *     application_id uuid NOT NULL
+ *       REFERENCES public.applications(id) ON DELETE CASCADE,
+ *     scope text NOT NULL,
+ *     PRIMARY KEY (application_id, scope)
+ *   );
+ *
+ * If your schema stores scopes differently (JSONB column,
+ * text[] column, etc.), adapt the two queries below.
+ */
+
+/*
+ * GET /api/applications/:id/scopes
+ */
+app.get(
+  "/api/applications/:id/scopes",
+  async (req, res) => {
+    const { id } = req.params;
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({
+        error: "Invalid application ID"
+      });
+    }
+
+    try {
+      const application = await pool.query(
+        `
+        SELECT id
+        FROM public.applications
+        WHERE id = $1
+        `,
+        [id]
+      );
+
+      if (application.rows.length === 0) {
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
+      const result = await pool.query(
+        `
+        SELECT scope
+        FROM public.application_scopes
+        WHERE application_id = $1
+        ORDER BY scope ASC
+        `,
+        [id]
+      );
+
+      res.json({
+        scopes: result.rows.map(row => row.scope)
+      });
+    } catch (error) {
+      console.error(
+        "GET /api/applications/:id/scopes:",
+        error
+      );
+
+      res.status(500).json({
+        error: "Failed to fetch scopes"
+      });
+    }
+  }
+);
+
+/*
+ * PUT /api/applications/:id/scopes
+ */
+app.put(
+  "/api/applications/:id/scopes",
+  async (req, res) => {
+    const { id } = req.params;
+    const { scopes } = req.body ?? {};
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({
+        error: "Invalid application ID"
+      });
+    }
+
+    if (!Array.isArray(scopes)) {
+      return res.status(400).json({
+        error: "Scopes must be an array"
+      });
+    }
+
+    const normalized = [
+      ...new Set(
+        scopes
+          .filter(scope => typeof scope === "string")
+          .map(scope => scope.trim().toLowerCase())
+          .filter(Boolean)
+      )
+    ];
+
+    if (!normalized.includes("openid")) {
+      return res.status(400).json({
+        error: "The openid scope is required"
+      });
+    }
+
+    const invalid = normalized.filter(
+      scope => !SUPPORTED_SCOPES.includes(scope)
+    );
+
+    if (invalid.length > 0) {
+      return res.status(400).json({
+        error: `Unsupported scope: ${invalid.join(", ")}`
+      });
+    }
+
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const application = await client.query(
+        `
+        SELECT id
+        FROM public.applications
+        WHERE id = $1
+        `,
+        [id]
+      );
+
+      if (application.rows.length === 0) {
+        await client.query("ROLLBACK");
+
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
+      await client.query(
+        `
+        DELETE FROM public.application_scopes
+        WHERE application_id = $1
+        `,
+        [id]
+      );
+
+      for (const scope of normalized) {
+        await client.query(
+          `
+          INSERT INTO public.application_scopes
+            (application_id, scope)
+          VALUES
+            ($1, $2)
+          `,
+          [id, scope]
+        );
+      }
+
+      await client.query("COMMIT");
+
+      res.json({
+        scopes: normalized
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+
+      console.error(
+        "PUT /api/applications/:id/scopes:",
+        error
+      );
+
+      res.status(500).json({
+        error: "Failed to update scopes"
+      });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/*
  * Frontend
  *
  * Explicitly serve only the frontend files.
@@ -668,6 +856,18 @@ app.get("/", (req, res) => {
 app.get("/app.js", (req, res) => {
   res.sendFile(
     path.join(PROJECT_ROOT, "app.js")
+  );
+});
+
+/*
+ * api.js is imported by app.js. Without this route the
+ * browser receives a 404 for the import and the whole
+ * module graph aborts — which is why the page appeared
+ * blank.
+ */
+app.get("/api.js", (req, res) => {
+  res.sendFile(
+    path.join(PROJECT_ROOT, "api.js")
   );
 });
 
@@ -714,11 +914,20 @@ app.use("/api", (req, res) => {
  * Error handler
  */
 app.use((error, req, res, next) => {
-  console.error("Unhandled server error:", error);
-
   if (res.headersSent) {
     return next(error);
   }
+
+  /*
+   * Malformed JSON body from express.json().
+   */
+  if (error?.type === "entity.parse.failed") {
+    return res.status(400).json({
+      error: "Invalid JSON body"
+    });
+  }
+
+  console.error("Unhandled server error:", error);
 
   res.status(500).json({
     error: "Internal server error"

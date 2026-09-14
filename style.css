@@ -3060,9 +3060,5 @@ body:has(
     transition-duration:
       1ms !important;
   }
+}
 
-  /* AIDC stylesheet verification */
-html {
-  --aidc-css-loaded: 1;
-}
-}
