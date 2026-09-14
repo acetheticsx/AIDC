@@ -94,9 +94,17 @@ export function emptyState({
   `;
 }
 
-export function getApplication(state, applicationId) {
-  return state.applications.find(
-    (application) => application.id === applicationId
+export function getApplication(source, applicationId) {
+  const state =
+    source?.state?.applications
+      ? source.state
+      : source;
+
+  return (
+    state?.applications?.find(
+      application =>
+        application.id === applicationId
+    ) || null
   );
 }
 
@@ -120,7 +128,8 @@ export function validateRedirectUri(value) {
   if (uri.length > 2048) {
     return {
       valid: false,
-      error: "Redirect URI must be 2048 characters or fewer."
+      error:
+        "Redirect URI must be 2048 characters or fewer."
     };
   }
 
@@ -141,29 +150,34 @@ export function validateRedirectUri(value) {
   ) {
     return {
       valid: false,
-      error: "Only HTTP and HTTPS URLs are allowed."
+      error:
+        "Only HTTP and HTTPS URLs are allowed."
     };
   }
 
   if (parsed.hash) {
     return {
       valid: false,
-      error: "Redirect URIs cannot contain fragments."
+      error:
+        "Redirect URIs cannot contain fragments."
     };
   }
 
   if (parsed.username || parsed.password) {
     return {
       valid: false,
-      error: "Redirect URIs cannot contain credentials."
+      error:
+        "Redirect URIs cannot contain credentials."
     };
   }
 
-  const hostname = parsed.hostname.toLowerCase();
+  const hostname =
+    parsed.hostname.toLowerCase();
 
   const isLocalhost =
     hostname === "localhost" ||
     hostname === "127.0.0.1" ||
+    hostname === "::1" ||
     hostname === "[::1]";
 
   if (
@@ -172,7 +186,8 @@ export function validateRedirectUri(value) {
   ) {
     return {
       valid: false,
-      error: "HTTP is only allowed for localhost."
+      error:
+        "HTTP is only allowed for localhost."
     };
   }
 
