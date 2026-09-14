@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+
+  <meta
+    name="theme-color"
+    content="#f7f7f5"
+  >
+
+  <meta
+    name="color-scheme"
+    content="light"
+  >
+
+  <meta
+    name="description"
+    content="TAB Console, the developer console for The Ace Base."
+  >
+
+  <meta
+    name="application-name"
+    content="TAB Console"
+  >
+
+  <meta
+    name="referrer"
+    content="strict-origin-when-cross-origin"
+  >
+
+  <title>TAB Console</title>
+
+  <!-- ─────────────────────────────
+       Fonts
+  ───────────────────────────── -->
+
+  <!--
+    Satoshi:
+    Place the actual Satoshi font files in ./assets/fonts/
+    and define the required weights in style.css.
+
+    Instrument Serif:
+    Loaded from Google Fonts.
+  -->
+
+  <link
+    rel="preconnect"
+    href="https://fonts.googleapis.com"
+  >
+
+  <link
+    rel="preconnect"
+    href="https://fonts.gstatic.com"
+    crossorigin
+  >
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap"
+    rel="stylesheet"
+  >
+
+  <!-- ─────────────────────────────
+       Icons
+  ───────────────────────────── -->
+
+  <link
+    rel="icon"
+    type="image/png"
+    href="./assets/icon.png"
+  >
+
+  <link
+    rel="apple-touch-icon"
+    href="./assets/icon.png"
+  >
+
+  <!-- ─────────────────────────────
+       Open Props
+  ───────────────────────────── -->
+
+  <link
+    rel="preconnect"
+    href="https://unpkg.com"
+    crossorigin
+  >
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/open-props"
+  >
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/open-props/normalize.min.css"
+  >
+
+  <!-- ─────────────────────────────
+       TAB Console
+  ───────────────────────────── -->
+
+  <link
+    rel="stylesheet"
+    href="./style.css"
+  >
+</head>
+
+<body>
+  <main
+    id="app"
+    aria-label="TAB Console"
+  >
+    <aidc-app></aidc-app>
+
+    <noscript>
+      <section class="aidc-noscript">
+        <div>
+          <h1>JavaScript is required</h1>
+          <p>
+            TAB Console requires JavaScript to run.
+          </p>
+        </div>
+      </section>
+    </noscript>
+  </main>
+
+  <script
+    type="module"
+    src="./app.js"
+  ></script>
+</body>
+</html>
