@@ -677,6 +677,12 @@ app.get("/components.js", (req, res) => {
   );
 });
 
+app.get("/helpers.js", (req, res) => {
+  res.sendFile(
+    path.join(PROJECT_ROOT, "helpers.js")
+  );
+});
+
 app.get("/style.css", (req, res) => {
   res.sendFile(
     path.join(PROJECT_ROOT, "style.css")
