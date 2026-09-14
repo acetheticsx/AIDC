@@ -1,572 +1,656 @@
-/*
- * TAB Console
- * Public-facing product: AIDC
- *
- * app.js
- * ------------------------------------------------------------
- * Core application logic:
- * - State
- * - Local persistence
- * - Hash routing
- * - Application CRUD
- * - Clipboard
- * - Notifications
- * - Modal control
- *
- * UI components are registered by components.js.
- * No build step.
- */
-
 import { registerAIDCComponents } from "./components.js";
 
+/* ─────────────────────────────────────────────
+   Configuration
+───────────────────────────────────────────── */
 
-/* ============================================================
-   STORAGE
-   ============================================================ */
+const API_BASE =
+  window.AIDC_API_URL ||
+  "/api";
 
-const STORAGE_KEY = "tab-console-applications";
-
-const defaultApplications = [
-  {
-    id: "quero",
-    name: "Quero",
-    description: "AI application",
-    status: "Active",
-    clientId: "ace_client_quero",
-    createdAt: "2026-09-01"
-  },
-  {
-    id: "orbit",
-    name: "Orbit",
-    description: "Matrix-based communication application",
-    status: "Active",
-    clientId: "ace_client_orbit",
-    createdAt: "2026-09-02"
-  }
-];
-
-function cloneDefaults() {
-  return defaultApplications.map(application => ({
-    ...application
-  }));
-}
-
-function isValidApplication(application) {
-  return (
-    application &&
-    typeof application === "object" &&
-    typeof application.id === "string" &&
-    typeof application.name === "string" &&
-    typeof application.description === "string" &&
-    typeof application.status === "string" &&
-    typeof application.clientId === "string" &&
-    typeof application.createdAt === "string"
-  );
-}
-
-function loadApplications() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-
-    if (stored === null) {
-      return cloneDefaults();
-    }
-
-    const parsed = JSON.parse(stored);
-
-    /*
-     * Empty arrays are valid.
-     * This means deleting every application
-     * survives a page reload.
-     */
-    if (!Array.isArray(parsed)) {
-      return cloneDefaults();
-    }
-
-    return parsed.filter(isValidApplication);
-  } catch (error) {
-    console.error(
-      "AIDC: unable to load applications:",
-      error
-    );
-
-    return cloneDefaults();
-  }
-}
-
-function saveApplications(list) {
-  try {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(list)
-    );
-
-    return true;
-  } catch (error) {
-    console.error(
-      "AIDC: unable to save applications:",
-      error
-    );
-
-    return false;
-  }
-}
-
-
-/* ============================================================
-   STATE
-   ============================================================ */
+/* ─────────────────────────────────────────────
+   State
+───────────────────────────────────────────── */
 
 const state = {
-  applications: loadApplications(),
-
+  applications: [],
   user: null,
-
+  loading: false,
   ui: {
     notice: null,
-    deleteApplication: null
+    deleteApplication: null,
+    createModal: false
   }
 };
 
+/* ─────────────────────────────────────────────
+   Haptics
+───────────────────────────────────────────── */
 
-/* ============================================================
-   ROUTER
-   ============================================================ */
+let lastHaptic = 0;
 
-const router = {
-  get hash() {
-    return location.hash || "#/";
-  },
+function haptic(duration = 6) {
+  if (!("vibrate" in navigator)) return;
 
-  get parts() {
-    return this.hash
-      .replace(/^#\/?/, "")
-      .split("/")
-      .filter(Boolean);
-  },
+  const now = Date.now();
 
-  navigate(path = "/") {
-    const normalized = path.startsWith("/")
-      ? path
-      : `/${path}`;
+  // Prevent accidental repeated vibration.
+  if (now - lastHaptic < 50) return;
 
-    const nextHash = `#${normalized}`;
+  lastHaptic = now;
 
-    if (location.hash === nextHash) {
-      return;
-    }
-
-    location.hash = normalized;
-  },
-
-  is(path) {
-    return this.hash === `#${path}`;
-  },
-
-  applicationId() {
-    if (this.parts[0] !== "applications") {
-      return null;
-    }
-
-    return this.parts[1] || null;
-  },
-
-  applicationSection() {
-    if (this.parts[0] !== "applications") {
-      return null;
-    }
-
-    return this.parts[2] || "overview";
+  try {
+    navigator.vibrate(duration);
+  } catch {
+    // Haptics are optional.
   }
-};
-
-
-/* ============================================================
-   UTILITIES
-   ============================================================ */
-
-function generateId(value) {
-  const slug = String(value || "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  if (slug) {
-    return slug;
-  }
-
-  if (
-    globalThis.crypto &&
-    typeof crypto.randomUUID === "function"
-  ) {
-    return crypto.randomUUID();
-  }
-
-  return `application-${Date.now()}`;
 }
 
-function generateClientId() {
-  if (
-    globalThis.crypto &&
-    typeof crypto.randomUUID === "function"
-  ) {
-    return `ace_client_${crypto.randomUUID()}`;
-  }
+/*
+ * Very light global button haptics.
+ * This means existing components don't need
+ * to manually implement vibration everywhere.
+ */
+document.addEventListener(
+  "pointerdown",
+  (event) => {
+    const button = event.target.closest(
+      "button, [role='button']"
+    );
 
-  return `ace_client_${Date.now()}_${Math.random()
-    .toString(36)
-    .slice(2)}`;
-}
+    if (!button || button.disabled) return;
 
-function findApplication(id) {
-  return state.applications.find(
-    application => application.id === id
+    haptic(6);
+  },
+  { passive: true }
+);
+
+/* ─────────────────────────────────────────────
+   API
+───────────────────────────────────────────── */
+
+async function request(path, options = {}) {
+  const response = await fetch(
+    `${API_BASE}${path}`,
+    {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      }
+    }
   );
+
+  let data = null;
+
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error ||
+      `Request failed with status ${response.status}`
+    );
+  }
+
+  return data;
 }
 
+/* ─────────────────────────────────────────────
+   Notifications
+───────────────────────────────────────────── */
 
-/* ============================================================
-   NOTIFICATIONS
-   ============================================================ */
-
-let noticeTimer = null;
-let noticeId = 0;
-
-function notify(
-  message,
-  type = "default"
-) {
-  const id = ++noticeId;
-
+function notify(message, type = "success") {
   state.ui.notice = {
-    id,
+    id: Date.now(),
     message,
     type
   };
 
-  window.dispatchEvent(
-    new CustomEvent("aidc-notice")
-  );
+  emitState();
 
-  if (noticeTimer) {
-    clearTimeout(noticeTimer);
-  }
+  window.clearTimeout(notify.timer);
 
-  noticeTimer = setTimeout(() => {
-    if (state.ui.notice?.id !== id) {
-      return;
-    }
-
+  notify.timer = window.setTimeout(() => {
     state.ui.notice = null;
-
-    window.dispatchEvent(
-      new CustomEvent("aidc-notice-clear")
-    );
-
-    noticeTimer = null;
-  }, 3500);
+    emitState();
+  }, 3200);
 }
 
+/* ─────────────────────────────────────────────
+   State bridge
+───────────────────────────────────────────── */
 
-/* ============================================================
-   CLIPBOARD
-   ============================================================ */
-
-async function copyToClipboard(value) {
-  if (!value) {
-    return false;
-  }
-
-  try {
-    if (
-      navigator.clipboard &&
-      typeof navigator.clipboard.writeText === "function"
-    ) {
-      await navigator.clipboard.writeText(value);
-      return true;
-    }
-  } catch {
-    /* Fall through to legacy clipboard support. */
-  }
-
-  try {
-    const textarea =
-      document.createElement("textarea");
-
-    textarea.value = value;
-
-    textarea.setAttribute(
-      "readonly",
-      ""
-    );
-
-    Object.assign(textarea.style, {
-      position: "fixed",
-      top: "0",
-      left: "0",
-      width: "1px",
-      height: "1px",
-      opacity: "0",
-      pointerEvents: "none"
-    });
-
-    document.body.appendChild(textarea);
-
-    textarea.focus();
-    textarea.select();
-
-    const copied =
-      document.execCommand("copy");
-
-    textarea.remove();
-
-    return copied;
-  } catch (error) {
-    console.error(
-      "AIDC: unable to copy:",
-      error
-    );
-
-    return false;
-  }
+function emitState() {
+  window.dispatchEvent(
+    new CustomEvent("aidc-state-change", {
+      detail: state
+    })
+  );
 }
 
-
-/* ============================================================
-   APPLICATION CRUD
-   ============================================================ */
+/* ─────────────────────────────────────────────
+   Applications
+───────────────────────────────────────────── */
 
 const applications = {
-  create({
-    name,
-    description
-  }) {
-    const trimmedName =
-      String(name || "").trim();
+  async load() {
+    state.loading = true;
+    emitState();
 
-    if (!trimmedName) {
-      throw new Error(
-        "Application name is required."
+    try {
+      const data = await request(
+        "/applications"
       );
-    }
 
-    const baseId =
-      generateId(trimmedName);
+      state.applications =
+        Array.isArray(data.applications)
+          ? data.applications
+          : [];
 
-    let id = baseId;
-    let counter = 2;
-
-    while (findApplication(id)) {
-      id = `${baseId}-${counter}`;
-      counter++;
-    }
-
-    const application = {
-      id,
-
-      name: trimmedName,
-
-      description:
-        String(description || "").trim() ||
-        "OIDC application",
-
-      status: "Active",
-
-      clientId:
-        generateClientId(),
-
-      createdAt:
-        new Date()
-          .toISOString()
-          .slice(0, 10)
-    };
-
-    const nextApplications = [
-      ...state.applications,
-      application
-    ];
-
-    if (!saveApplications(nextApplications)) {
-      throw new Error(
-        "Application could not be saved."
+      return state.applications;
+    } catch (error) {
+      console.error(
+        "Failed to load applications:",
+        error
       );
+
+      notify(
+        error.message ||
+          "Failed to load applications",
+        "error"
+      );
+
+      return [];
+    } finally {
+      state.loading = false;
+      emitState();
     }
-
-    state.applications =
-      nextApplications;
-
-    return application;
   },
 
-  remove(id) {
-    const application =
-      findApplication(id);
+  async create({
+    name,
+    description = ""
+  }) {
+    haptic(8);
 
-    if (!application) {
-      return false;
-    }
-
-    const nextApplications =
-      state.applications.filter(
-        item => item.id !== id
+    try {
+      const data = await request(
+        "/applications",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name,
+            description
+          })
+        }
       );
 
-    if (!saveApplications(nextApplications)) {
-      return false;
+      const application =
+        data.application;
+
+      state.applications = [
+        application,
+        ...state.applications
+      ];
+
+      emitState();
+
+      notify(
+        `${application.name} created`
+      );
+
+      return application;
+    } catch (error) {
+      console.error(
+        "Failed to create application:",
+        error
+      );
+
+      notify(
+        error.message ||
+          "Failed to create application",
+        "error"
+      );
+
+      throw error;
     }
+  },
 
-    state.applications =
-      nextApplications;
+  async get(id) {
+    try {
+      const data = await request(
+        `/applications/${encodeURIComponent(id)}`
+      );
 
-    return true;
+      return data.application;
+    } catch (error) {
+      console.error(
+        "Failed to load application:",
+        error
+      );
+
+      notify(
+        error.message ||
+          "Failed to load application",
+        "error"
+      );
+
+      return null;
+    }
+  },
+
+  async update(id, changes) {
+    haptic(8);
+
+    try {
+      const data = await request(
+        `/applications/${encodeURIComponent(id)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(changes)
+        }
+      );
+
+      const updated =
+        data.application;
+
+      const index =
+        state.applications.findIndex(
+          (application) =>
+            application.id === id
+        );
+
+      if (index !== -1) {
+        state.applications[index] =
+          updated;
+      }
+
+      emitState();
+
+      notify(
+        `${updated.name} updated`
+      );
+
+      return updated;
+    } catch (error) {
+      console.error(
+        "Failed to update application:",
+        error
+      );
+
+      notify(
+        error.message ||
+          "Failed to update application",
+        "error"
+      );
+
+      throw error;
+    }
+  },
+
+  async remove(id) {
+    haptic(10);
+
+    try {
+      const data = await request(
+        `/applications/${encodeURIComponent(id)}`,
+        {
+          method: "DELETE"
+        }
+      );
+
+      state.applications =
+        state.applications.filter(
+          (application) =>
+            application.id !== id
+        );
+
+      state.ui.deleteApplication =
+        null;
+
+      emitState();
+
+      notify(
+        `${data.application.name} deleted`
+      );
+
+      return true;
+    } catch (error) {
+      console.error(
+        "Failed to delete application:",
+        error
+      );
+
+      notify(
+        error.message ||
+          "Failed to delete application",
+        "error"
+      );
+
+      throw error;
+    }
   }
 };
 
+/* ─────────────────────────────────────────────
+   Router
+───────────────────────────────────────────── */
 
-/* ============================================================
-   CREATE MODAL
-   ============================================================ */
+function parseHash() {
+  const hash =
+    window.location.hash
+      .replace(/^#\/?/, "")
+      .replace(/\/+$/, "");
+
+  if (!hash) {
+    return {
+      path: "/"
+    };
+  }
+
+  const parts = hash
+    .split("/")
+    .filter(Boolean);
+
+  if (parts[0] === "applications") {
+    if (!parts[1]) {
+      return {
+        path: "/applications"
+      };
+    }
+
+    return {
+      path: "/applications/:id",
+      id: parts[1],
+      section:
+        parts[2] || "overview"
+    };
+  }
+
+  return {
+    path: `/${parts[0]}`
+  };
+}
+
+function navigate(path) {
+  const normalized =
+    path.startsWith("#")
+      ? path
+      : `#${path}`;
+
+  if (
+    window.location.hash === normalized
+  ) {
+    emitState();
+    return;
+  }
+
+  window.location.hash =
+    normalized;
+}
+
+function routeIs(path) {
+  return parseHash().path === path;
+}
+
+function applicationId() {
+  return parseHash().id || null;
+}
+
+function applicationSection() {
+  return (
+    parseHash().section ||
+    "overview"
+  );
+}
+
+window.addEventListener(
+  "hashchange",
+  () => {
+    emitState();
+  }
+);
+
+/* ─────────────────────────────────────────────
+   Modal controls
+───────────────────────────────────────────── */
 
 function openCreateModal() {
-  window.dispatchEvent(
-    new CustomEvent("aidc-open-create")
-  );
+  state.ui.createModal = true;
+  haptic(8);
+  emitState();
 }
 
 function closeCreateModal() {
-  window.dispatchEvent(
-    new CustomEvent("aidc-close-dialog")
-  );
+  state.ui.createModal = false;
+  emitState();
 }
 
-
-/* ============================================================
-   DELETE MODAL
-   ============================================================ */
-
 function openDeleteModal(application) {
-  if (!application) {
-    return;
-  }
+  if (!application) return;
 
   state.ui.deleteApplication =
     application;
 
-  window.dispatchEvent(
-    new CustomEvent("aidc-open-delete")
-  );
+  haptic(8);
+  emitState();
 }
 
 function closeDeleteModal() {
   state.ui.deleteApplication =
     null;
 
-  window.dispatchEvent(
-    new CustomEvent("aidc-close-delete")
-  );
+  emitState();
 }
 
-function confirmDeleteApplication() {
+async function confirmDeleteApplication() {
   const application =
     state.ui.deleteApplication;
 
-  if (!application) {
-    return false;
+  if (!application) return;
+
+  await applications.remove(
+    application.id
+  );
+
+  if (
+    applicationId() ===
+    application.id
+  ) {
+    navigate("/applications");
+  }
+}
+
+/* ─────────────────────────────────────────────
+   Clipboard
+───────────────────────────────────────────── */
+
+async function copyToClipboard(text) {
+  if (!text) return false;
+
+  try {
+    if (
+      navigator.clipboard &&
+      window.isSecureContext
+    ) {
+      await navigator.clipboard.writeText(
+        text
+      );
+
+      haptic(6);
+      notify("Copied to clipboard");
+
+      return true;
+    }
+  } catch {
+    // Fall through to legacy method.
   }
 
-  const removed =
-    applications.remove(
-      application.id
+  try {
+    const textarea =
+      document.createElement("textarea");
+
+    textarea.value = text;
+    textarea.setAttribute(
+      "readonly",
+      ""
     );
 
-  if (!removed) {
+    textarea.style.position =
+      "fixed";
+    textarea.style.opacity = "0";
+
+    document.body.appendChild(
+      textarea
+    );
+
+    textarea.select();
+
+    const copied =
+      document.execCommand(
+        "copy"
+      );
+
+    textarea.remove();
+
+    if (copied) {
+      haptic(6);
+      notify("Copied to clipboard");
+    }
+
+    return copied;
+  } catch {
     notify(
-      "Application could not be deleted",
+      "Unable to copy",
       "error"
     );
 
     return false;
   }
-
-  state.ui.deleteApplication =
-    null;
-
-  window.dispatchEvent(
-    new CustomEvent("aidc-close-delete")
-  );
-
-  window.dispatchEvent(
-    new CustomEvent("aidc-state-change")
-  );
-
-  router.navigate(
-    "/applications"
-  );
-
-  notify(
-    `${application.name} deleted`
-  );
-
-  return true;
 }
 
+/* ─────────────────────────────────────────────
+   IDs
+───────────────────────────────────────────── */
 
-/* ============================================================
-   PUBLIC API FOR COMPONENTS
-   ============================================================ */
+function generateId() {
+  if (
+    typeof crypto !== "undefined" &&
+    crypto.randomUUID
+  ) {
+    return crypto.randomUUID();
+  }
+
+  return (
+    Date.now().toString(36) +
+    Math.random()
+      .toString(36)
+      .slice(2)
+  );
+}
+
+function generateClientId() {
+  if (
+    typeof crypto !== "undefined" &&
+    crypto.getRandomValues
+  ) {
+    const bytes =
+      new Uint8Array(24);
+
+    crypto.getRandomValues(bytes);
+
+    return (
+      "aidc_" +
+      Array.from(bytes)
+        .map((byte) =>
+          byte
+            .toString(16)
+            .padStart(2, "0")
+        )
+        .join("")
+    );
+  }
+
+  return (
+    "aidc_" +
+    Math.random()
+      .toString(36)
+      .slice(2) +
+    Date.now().toString(36)
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Helpers
+───────────────────────────────────────────── */
+
+function findApplication(id) {
+  return (
+    state.applications.find(
+      (application) =>
+        application.id === id
+    ) || null
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Public AIDC API
+───────────────────────────────────────────── */
 
 const AIDC = {
+  API_BASE,
+
   state,
-  router,
 
   applications,
 
-  findApplication,
+  router: {
+    navigate,
+    parse: parseHash,
+    is: routeIs,
+    applicationId,
+    applicationSection
+  },
+
+  utils: {
+    generateId,
+    generateClientId,
+    findApplication
+  },
+
+  haptic,
 
   notify,
+
   copyToClipboard,
 
-  openCreateModal,
-  closeCreateModal,
+  modals: {
+    openCreate: openCreateModal,
+    closeCreate: closeCreateModal,
 
-  openDeleteModal,
-  closeDeleteModal,
-  confirmDeleteApplication
+    openDelete: openDeleteModal,
+    closeDelete: closeDeleteModal,
+    confirmDelete:
+      confirmDeleteApplication
+  },
+
+  emitState
 };
 
-
-/* ============================================================
-   COMPONENT REGISTRATION
-   ============================================================ */
+/* ─────────────────────────────────────────────
+   Register Lit components
+───────────────────────────────────────────── */
 
 registerAIDCComponents(AIDC);
 
+/* ─────────────────────────────────────────────
+   Initial data
+───────────────────────────────────────────── */
 
-/* ============================================================
-   GLOBAL STATE BRIDGE
-   ============================================================ */
+window.AIDC = AIDC;
 
-window.addEventListener(
-  "aidc-state-change",
-  () => {
-    window.dispatchEvent(
-      new CustomEvent(
-        "aidc-applications-updated"
-      )
-    );
-  }
-);
-
-
-/* ============================================================
-   INITIAL ROUTE
-   ============================================================ */
-
-if (!location.hash) {
-  history.replaceState(
-    null,
-    "",
-    "#/"
-  );
-}
+applications.load();

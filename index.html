@@ -20,12 +20,12 @@
 
   <meta
     name="description"
-    content="TAB Console, the developer console for The Ace Base."
+    content="AIDC, the developer console for The Ace Base."
   >
 
   <meta
     name="application-name"
-    content="TAB Console"
+    content="AIDC"
   >
 
   <meta
@@ -33,20 +33,11 @@
     content="strict-origin-when-cross-origin"
   >
 
-  <title>TAB Console</title>
+  <title>AIDC</title>
 
-  <!-- ─────────────────────────────
+  <!-- ═══════════════════════════════════════
        Fonts
-  ───────────────────────────── -->
-
-  <!--
-    Satoshi:
-    Place the actual Satoshi font files in ./assets/fonts/
-    and define the required weights in style.css.
-
-    Instrument Serif:
-    Loaded from Google Fonts.
-  -->
+  ═══════════════════════════════════════ -->
 
   <link
     rel="preconnect"
@@ -64,9 +55,9 @@
     rel="stylesheet"
   >
 
-  <!-- ─────────────────────────────
-       Icons
-  ───────────────────────────── -->
+  <!-- ═══════════════════════════════════════
+       Icons / App Assets
+  ═══════════════════════════════════════ -->
 
   <link
     rel="icon"
@@ -79,29 +70,15 @@
     href="./assets/icon.png"
   >
 
-  <!-- ─────────────────────────────
-       Open Props
-  ───────────────────────────── -->
-
-  <link
-    rel="preconnect"
-    href="https://unpkg.com"
-    crossorigin
-  >
-
+  <!-- Hugeicons -->
   <link
     rel="stylesheet"
-    href="https://unpkg.com/open-props"
+    href="https://use.hugeicons.com/font/icons.css"
   >
 
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/open-props/normalize.min.css"
-  >
-
-  <!-- ─────────────────────────────
-       TAB Console
-  ───────────────────────────── -->
+  <!-- ═══════════════════════════════════════
+       AIDC
+  ═══════════════════════════════════════ -->
 
   <link
     rel="stylesheet"
@@ -110,9 +87,10 @@
 </head>
 
 <body>
+
   <main
     id="app"
-    aria-label="TAB Console"
+    aria-label="AIDC"
   >
     <aidc-app></aidc-app>
 
@@ -120,17 +98,24 @@
       <section class="aidc-noscript">
         <div>
           <h1>JavaScript is required</h1>
+
           <p>
-            TAB Console requires JavaScript to run.
+            AIDC requires JavaScript to run.
           </p>
         </div>
       </section>
     </noscript>
   </main>
 
+  <!--
+    Single application entry point.
+    app.js registers the AIDC components
+    from components.js.
+  -->
   <script
     type="module"
     src="./app.js"
   ></script>
+
 </body>
 </html>
