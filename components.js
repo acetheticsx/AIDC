@@ -1,4 +1,7 @@
-import { html, LitElement } from "https://cdn.jsdelivr.net/npm/lit@3/+esm";
+import {
+  html,
+  LitElement
+} from "https://cdn.jsdelivr.net/npm/lit@3/+esm";
 
 import {
   icon,
@@ -6,8 +9,6 @@ import {
   formatDate,
   shortId,
   getApplication,
-  dispatch,
-  tap,
   statusBadge,
   emptyState,
   validateRedirectUri
@@ -18,6 +19,7 @@ export function registerAIDCComponents(AIDC) {
     state,
     applications,
     redirectUris,
+    scopes,
     router,
     copyToClipboard,
     modals,
@@ -25,18 +27,26 @@ export function registerAIDCComponents(AIDC) {
     notify
   } = AIDC;
 
-  /*
-   * ------------------------------------------------------------
-   * Base component
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     BASE
+     ═══════════════════════════════════════ */
 
   class AIDCElement extends LitElement {
+    createRenderRoot() {
+      return this;
+    }
+
     constructor() {
       super();
 
-      this._onStateChange = () => {
+      this._stateListener = () => {
         this.requestUpdate();
+      };
+
+      this._keyListener = event => {
+        if (event.key === "Escape") {
+          this.handleEscape?.();
+        }
       };
     }
 
@@ -45,315 +55,481 @@ export function registerAIDCComponents(AIDC) {
 
       window.addEventListener(
         "aidc-state-change",
-        this._onStateChange
+        this._stateListener
       );
 
       window.addEventListener(
         "keydown",
-        this._handleKeydown
+        this._keyListener
       );
     }
 
     disconnectedCallback() {
       window.removeEventListener(
         "aidc-state-change",
-        this._onStateChange
+        this._stateListener
       );
 
       window.removeEventListener(
         "keydown",
-        this._handleKeydown
+        this._keyListener
       );
 
       super.disconnectedCallback();
     }
+  }
 
-    _handleKeydown = event => {
-      if (event.key === "Escape") {
-        this.handleEscape?.();
+  /* ═══════════════════════════════════════
+     SIDEBAR
+     ═══════════════════════════════════════ */
+
+  class AIDCSidebar extends AIDCElement {
+    static properties = {
+      mobileOpen: {
+        type: Boolean,
+        attribute: false
       }
     };
 
-    createRenderRoot() {
-      return this;
+    constructor() {
+      super();
+      this.mobileOpen = false;
     }
-  }
 
-  /*
-   * ------------------------------------------------------------
-   * Sidebar
-   * ------------------------------------------------------------
-   */
+    closeMobile() {
+      this.dispatchEvent(
+        new CustomEvent(
+          "aidc-close-sidebar",
+          {
+            bubbles: true,
+            composed: true
+          }
+        )
+      );
+    }
 
-  class AIDCSidebar extends AIDCElement {
     render() {
       const route = router.parse();
-      const applicationRoute = route.path === "/applications/:id";
+
+      const overviewActive =
+        route.path === "/";
+
+      const applicationsActive =
+        route.path === "/applications" ||
+        route.path === "/applications/:id";
 
       return html`
-        <aside class="sidebar">
-          <div class="sidebar-brand">
-            <img
-              class="aidc-brand-mark"
-              src="./assets/icon.png"
-              alt=""
-              width="36"
-              height="36"
-              decoding="async"
-            />
+        <aside class="aidc-sidebar">
 
-            <div class="sidebar-brand-copy">
-              <strong>AIDC</strong>
-              <span>Developer Console</span>
-            </div>
-          </div>
+          <div class="aidc-sidebar-top">
 
-          <nav class="sidebar-nav" aria-label="Primary navigation">
-            <button
-              class="nav-item ${route.path === "/" ? "active" : ""}"
-              @click=${() => router.navigate("/")}
+            <a
+              class="aidc-brand"
+              href="#/"
+              @click=${() =>
+                this.closeMobile()}
             >
-              ${icon("home-01")}
-              <span>Overview</span>
+              <img
+                class="aidc-brand-mark"
+                src="./assets/icon.png"
+                alt=""
+                width="36"
+                height="36"
+                decoding="async"
+              />
+
+              <span class="aidc-brand-copy">
+                <strong>AIDC</strong>
+                <small>Developer Console</small>
+              </span>
+            </a>
+
+            <button
+              class="aidc-mobile-close"
+              aria-label="Close navigation"
+              @click=${() =>
+                this.closeMobile()}
+            >
+              ${icon("cancel-01")}
             </button>
 
-            <button
-              class="nav-item ${
-                route.path === "/applications" || applicationRoute
+          </div>
+
+          <nav
+            class="aidc-nav"
+            aria-label="Primary navigation"
+          >
+
+            <a
+              class="aidc-nav-item ${
+                overviewActive
                   ? "active"
                   : ""
               }"
-              @click=${() => router.navigate("/applications")}
+              href="#/"
+              @click=${() =>
+                this.closeMobile()}
             >
-              ${icon("app")}
+              ${icon("home-01")}
+              <span>Overview</span>
+            </a>
+
+            <a
+              class="aidc-nav-item ${
+                applicationsActive
+                  ? "active"
+                  : ""
+              }"
+              href="#/applications"
+              @click=${() =>
+                this.closeMobile()}
+            >
+              ${icon("app-window")}
+
               <span>Applications</span>
 
-              <span class="nav-count">
+              <span class="aidc-nav-count">
                 ${state.applications.length}
               </span>
-            </button>
+            </a>
+
           </nav>
 
-          <div class="sidebar-footer">
-            <div class="connection-status">
-              <span class="connection-dot"></span>
+          <div class="aidc-sidebar-spacer"></div>
 
-              <div>
-                <strong>API connected</strong>
-                <span>AIDC API</span>
-              </div>
+          <div class="aidc-sidebar-bottom">
+
+            <div class="aidc-sidebar-meta">
+              <span class="aidc-status-dot"></span>
+              <span>API connected</span>
             </div>
 
-            <span class="sidebar-version">
-              AIDC v1
-            </span>
           </div>
+
         </aside>
       `;
     }
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Card
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     CARD
+     ═══════════════════════════════════════ */
 
   class AIDCCard extends AIDCElement {
     static properties = {
-      title: { type: String },
-      description: { type: String }
+      title: {
+        type: String
+      },
+
+      description: {
+        type: String
+      }
     };
 
     render() {
       return html`
-        <section class="card">
+        <section class="aidc-card">
+
           ${
             this.title
               ? html`
-                  <header class="card-header">
-                    <div>
-                      <h2>${this.title}</h2>
+                  <header
+                    class="aidc-card-section-header"
+                  >
+                    <h2>
+                      ${this.title}
+                    </h2>
 
-                      ${
-                        this.description
-                          ? html`<p>${this.description}</p>`
-                          : ""
-                      }
-                    </div>
+                    ${
+                      this.description
+                        ? html`
+                            <p>
+                              ${this.description}
+                            </p>
+                          `
+                        : ""
+                    }
                   </header>
                 `
               : ""
           }
 
-          <div class="card-body">
-            <slot></slot>
-          </div>
+          <slot></slot>
+
         </section>
       `;
     }
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Application row
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     APPLICATION ROW
+     ═══════════════════════════════════════ */
 
   class AIDCApplicationRow extends AIDCElement {
     static properties = {
-      application: { attribute: false }
+      application: {
+        attribute: false
+      }
     };
 
-    render() {
-      const application = this.application;
+    open() {
+      if (!this.application?.id) {
+        return;
+      }
 
-      if (!application) {
+      haptic?.(6);
+
+      router.navigate(
+        `/applications/${this.application.id}`
+      );
+    }
+
+    render() {
+      const app =
+        this.application;
+
+      if (!app) {
         return "";
       }
 
       return html`
-        <button
-          class="application-row"
-          @click=${() => {
-            haptic?.(6);
-            router.navigate(
-              `/applications/${application.id}`
-            );
+        <div
+          class="aidc-application-row"
+          role="button"
+          tabindex="0"
+          @click=${this.open}
+          @keydown=${event => {
+            if (
+              event.key === "Enter" ||
+              event.key === " "
+            ) {
+              event.preventDefault();
+              this.open();
+            }
           }}
         >
-          <div class="application-row-main">
-            <div class="application-row-icon">
-              ${icon("app")}
+
+          <div class="aidc-row-main">
+
+            <div class="aidc-row-icon">
+              ${icon("app-window")}
             </div>
 
-            <div class="application-row-copy">
-              <strong>${text(application.name)}</strong>
+            <div class="aidc-row-info">
+
+              <strong>
+                ${text(app.name)}
+              </strong>
 
               <span>
                 ${text(
-                  application.description,
+                  app.description,
                   "OIDC application"
                 )}
               </span>
 
-              <code>
-                ${shortId(application.client_id)}
-              </code>
             </div>
+
           </div>
 
-          <div class="application-row-meta">
-            ${statusBadge(application.status)}
+          <div class="aidc-row-client">
 
-            <span class="application-row-arrow">
-              ${icon("arrow-right-01")}
-            </span>
+            <code class="aidc-mono">
+              ${shortId(app.client_id)}
+            </code>
+
+            <button
+              class="aidc-icon-button"
+              title="Copy client ID"
+              aria-label="Copy client ID"
+              @click=${async event => {
+                event.stopPropagation();
+
+                const copied =
+                  await copyToClipboard(
+                    app.client_id
+                  );
+
+                if (copied) {
+                  notify(
+                    "Client ID copied"
+                  );
+                }
+              }}
+            >
+              ${icon("copy-01")}
+            </button>
+
           </div>
-        </button>
+
+          ${statusBadge(app.status)}
+
+          <button
+            class="aidc-icon-button aidc-row-open"
+            aria-label="Open application"
+            title="Open application"
+            @click=${event => {
+              event.stopPropagation();
+              this.open();
+            }}
+          >
+            ${icon("arrow-right-01")}
+          </button>
+
+        </div>
       `;
     }
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Overview page
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     OVERVIEW
+     ═══════════════════════════════════════ */
 
   class AIDCOverview extends AIDCElement {
     render() {
-      const apps = state.applications;
+      const apps =
+        state.applications;
+
+      const activeCount =
+        apps.filter(
+          app =>
+            app.status === "active"
+        ).length;
 
       return html`
-        <div class="page">
-          <header class="page-header">
+        <div class="aidc-page">
+
+          <header class="aidc-page-header">
+
             <div>
-              <span class="eyebrow">AIDC</span>
+              <span class="aidc-eyebrow">
+                AIDC
+              </span>
 
               <h1>Overview</h1>
 
               <p>
-                Manage applications connected to Ace ID.
+                Manage applications connected
+                to Ace ID.
               </p>
             </div>
 
             <button
-              class="button button-primary"
+              class="aidc-button aidc-button-primary"
               @click=${modals.openCreate}
             >
               ${icon("plus-sign")}
-              <span>Create application</span>
+
+              <span class="aidc-button-content">
+                Create application
+              </span>
             </button>
+
           </header>
 
-          <div class="stats-grid">
-            <div class="stat-card">
-              <span>Applications</span>
-              <strong>${apps.length}</strong>
+          <div class="aidc-stat-grid">
+
+            <div class="aidc-stat-card">
+
+              <div class="aidc-stat-icon">
+                ${icon("app-window")}
+              </div>
+
+              <div>
+                <span>Applications</span>
+
+                <strong>
+                  ${apps.length}
+                </strong>
+              </div>
+
             </div>
 
-            <div class="stat-card">
-              <span>Active</span>
-              <strong>
-                ${
-                  apps.filter(
-                    app => app.status === "active"
-                  ).length
-                }
-              </strong>
+            <div class="aidc-stat-card">
+
+              <div class="aidc-stat-icon">
+                ${icon("checkmark-circle-02")}
+              </div>
+
+              <div>
+                <span>Active</span>
+
+                <strong>
+                  ${activeCount}
+                </strong>
+              </div>
+
             </div>
 
-            <div class="stat-card">
-              <span>API</span>
-              <strong class="stat-status">
-                <span class="connection-dot"></span>
-                Connected
-              </strong>
+            <div class="aidc-stat-card">
+
+              <div class="aidc-stat-icon">
+                ${icon("server-stack-01")}
+              </div>
+
+              <div>
+                <span>API</span>
+
+                <strong>
+                  Connected
+                </strong>
+              </div>
+
             </div>
+
           </div>
 
-          <section class="section-block">
-            <div class="section-heading">
+          <section class="aidc-section">
+
+            <div class="aidc-section-header">
+
               <div>
-                <h2>Your applications</h2>
+                <h2>
+                  Your applications
+                </h2>
+
                 <p>
-                  OAuth and OpenID Connect applications.
+                  OAuth and OpenID Connect
+                  applications.
                 </p>
               </div>
 
-              <button
-                class="button button-secondary"
-                @click=${() => router.navigate("/applications")}
+              <a
+                class="aidc-text-button"
+                href="#/applications"
               >
                 View all
                 ${icon("arrow-right-01")}
-              </button>
+              </a>
+
             </div>
 
             ${
               apps.length
                 ? html`
-                    <div class="application-list">
+                    <div
+                      class="aidc-application-list"
+                    >
                       ${apps
                         .slice(0, 5)
                         .map(
-                          application => html`
+                          app => html`
                             <aidc-application-row
-                              .application=${application}
+                              .application=${app}
                             ></aidc-application-row>
                           `
                         )}
                     </div>
                   `
                 : emptyState({
-                    iconName: "app",
-                    title: "No applications yet",
+                    iconName: "app-window",
+                    title:
+                      "No applications yet",
                     description:
                       "Create your first AIDC application to get started.",
                     action: html`
                       <button
-                        class="button button-primary"
+                        class="aidc-button aidc-button-primary"
                         @click=${modals.openCreate}
                       >
                         ${icon("plus-sign")}
@@ -362,99 +538,188 @@ export function registerAIDCComponents(AIDC) {
                     `
                   })
             }
+
           </section>
+
         </div>
       `;
     }
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Applications page
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     APPLICATIONS
+     ═══════════════════════════════════════ */
 
   class AIDCApplications extends AIDCElement {
+    static properties = {
+      search: {
+        state: true
+      }
+    };
+
+    constructor() {
+      super();
+      this.search = "";
+    }
+
+    get filteredApplications() {
+      const query =
+        this.search
+          .trim()
+          .toLowerCase();
+
+      if (!query) {
+        return state.applications;
+      }
+
+      return state.applications.filter(
+        app =>
+          app.name
+            ?.toLowerCase()
+            .includes(query) ||
+          app.description
+            ?.toLowerCase()
+            .includes(query) ||
+          app.client_id
+            ?.toLowerCase()
+            .includes(query)
+      );
+    }
+
     render() {
+      const apps =
+        this.filteredApplications;
+
       return html`
-        <div class="page">
-          <header class="page-header">
+        <div class="aidc-page">
+
+          <header class="aidc-page-header">
+
             <div>
-              <span class="eyebrow">AIDC</span>
+              <span class="aidc-eyebrow">
+                AIDC
+              </span>
 
               <h1>Applications</h1>
 
               <p>
-                Create and manage your OAuth applications.
+                Create and manage your OAuth
+                applications.
               </p>
             </div>
 
             <button
-              class="button button-primary"
+              class="aidc-button aidc-button-primary"
               @click=${modals.openCreate}
             >
               ${icon("plus-sign")}
               Create application
             </button>
+
           </header>
 
-          <section class="section-block">
-            <div class="section-heading">
-              <div>
-                <h2>Your applications</h2>
-                <p>
-                  ${state.applications.length}
-                  ${
-                    state.applications.length === 1
-                      ? "application"
-                      : "applications"
-                  }
-                </p>
-              </div>
+          <section class="aidc-section">
+
+            <div class="aidc-toolbar">
+
+              <label class="aidc-search">
+                ${icon("search-01")}
+
+                <input
+                  type="search"
+                  placeholder="Search applications…"
+                  aria-label="Search applications"
+                  .value=${this.search}
+                  @input=${event =>
+                    (this.search =
+                      event.target.value)}
+                />
+
+                ${
+                  this.search
+                    ? html`
+                        <button
+                          class="aidc-search-clear"
+                          type="button"
+                          aria-label="Clear search"
+                          @click=${() =>
+                            (this.search =
+                              "")}
+                        >
+                          ${icon("cancel-01")}
+                        </button>
+                      `
+                    : ""
+                }
+
+              </label>
+
+              <span class="aidc-toolbar-count">
+                ${apps.length}
+
+                ${
+                  apps.length === 1
+                    ? "result"
+                    : "results"
+                }
+              </span>
+
             </div>
 
             ${
               state.loading
                 ? html`
-                    <div class="loading-state">
-                      <span class="spinner"></span>
+                    <div class="aidc-loading-card">
+                      <span
+                        class="aidc-spinner"
+                      ></span>
+
                       Loading applications…
                     </div>
                   `
-                : state.applications.length
+                : apps.length
                   ? html`
-                      <div class="application-list">
-                        ${state.applications.map(
-                          application => html`
+                      <div
+                        class="aidc-application-list"
+                      >
+                        ${apps.map(
+                          app => html`
                             <aidc-application-row
-                              .application=${application}
+                              .application=${app}
                             ></aidc-application-row>
                           `
                         )}
                       </div>
                     `
                   : emptyState({
-                      iconName: "app",
-                      title: "No applications",
+                      iconName: "app-window",
+                      title:
+                        this.search
+                          ? "No matches"
+                          : "No applications",
                       description:
-                        "Create an application to begin using AIDC."
+                        this.search
+                          ? "No applications match your search."
+                          : "Create an application to begin using AIDC."
                     })
             }
+
           </section>
+
         </div>
       `;
     }
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Application details
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     APPLICATION DETAILS
+     ═══════════════════════════════════════ */
 
   class AIDCApplicationDetails extends AIDCElement {
     static properties = {
-      applicationId: { type: String }
+      applicationId: {
+        type: String
+      }
     };
 
     constructor() {
@@ -476,84 +741,101 @@ export function registerAIDCComponents(AIDC) {
     }
 
     render() {
-      const application = this.application;
-      const section = router.applicationSection();
+      const app =
+        this.application;
 
-      if (!application) {
+      if (!app) {
         return html`
-          <div class="page">
+          <div class="aidc-page">
+
             ${emptyState({
-              iconName: "app",
-              title: "Application not found",
+              iconName: "app-window",
+              title:
+                "Application not found",
               description:
                 "This application may have been deleted or the URL is invalid.",
               action: html`
-                <button
-                  class="button button-secondary"
-                  @click=${() =>
-                    router.navigate("/applications")}
+                <a
+                  class="aidc-button aidc-button-secondary"
+                  href="#/applications"
                 >
                   ${icon("arrow-left-01")}
                   Back to applications
-                </button>
+                </a>
               `
             })}
+
           </div>
         `;
       }
 
-      return html`
-        <div class="page application-page">
-          <header class="application-header">
-            <div class="application-heading">
-              <button
-                class="icon-button"
-                aria-label="Back to applications"
-                title="Back"
-                @click=${() =>
-                  router.navigate("/applications")}
-              >
-                ${icon("arrow-left-01")}
-              </button>
+      const section =
+        router.applicationSection();
 
-              <div class="application-title-icon">
-                ${icon("app")}
+      return html`
+        <div class="aidc-page">
+
+          <div class="aidc-detail-topbar">
+
+            <a
+              class="aidc-back-link"
+              href="#/applications"
+            >
+              ${icon("arrow-left-01")}
+              Applications
+            </a>
+
+          </div>
+
+          <header class="aidc-detail-header">
+
+            <div class="aidc-detail-heading">
+
+              <div class="aidc-app-symbol large">
+                ${icon("app-window")}
               </div>
 
               <div>
-                <span class="eyebrow">
-                  OIDC Application
-                </span>
 
-                <h1>${text(application.name)}</h1>
+                <div class="aidc-detail-title-row">
+
+                  <h1>
+                    ${text(app.name)}
+                  </h1>
+
+                  ${statusBadge(
+                    app.status
+                  )}
+
+                </div>
 
                 <p>
                   ${text(
-                    application.description,
+                    app.description,
                     "No description provided."
                   )}
                 </p>
+
               </div>
+
             </div>
 
-            <div class="application-header-actions">
-              ${statusBadge(application.status)}
+            <button
+              class="aidc-danger-button"
+              @click=${() =>
+                modals.openDelete(app)}
+            >
+              ${icon("delete-02")}
+              Delete application
+            </button>
 
-              <button
-                class="button button-danger"
-                @click=${() =>
-                  modals.openDelete(application)}
-              >
-                ${icon("delete-02")}
-                Delete
-              </button>
-            </div>
           </header>
 
           <nav
-            class="tabs"
-            aria-label="Application sections"
+            class="aidc-tabs"
+            aria-label="Application settings"
           >
+
             ${this.tab(
               "overview",
               "Overview",
@@ -589,39 +871,59 @@ export function registerAIDCComponents(AIDC) {
               "Activity",
               "activity-01"
             )}
+
           </nav>
 
-          <div class="application-content">
-            ${this.renderSection(section, application)}
+          <div class="aidc-detail-content">
+            ${this.renderSection(
+              section,
+              app
+            )}
           </div>
+
         </div>
       `;
     }
 
     tab(value, label, iconName) {
       const active =
-        router.applicationSection() === value;
+        router.applicationSection() ===
+        value;
 
       return html`
-        <button
-          class="tab ${active ? "active" : ""}"
-          aria-current=${active ? "page" : "false"}
-          @click=${() =>
-            this.navigateSection(value)}
+        <a
+          class="aidc-tab ${
+            active ? "active" : ""
+          }"
+          href="#/applications/${
+            this.applicationId
+          }/${value}"
+          aria-current=${
+            active
+              ? "page"
+              : "false"
+          }
         >
           ${icon(iconName)}
           ${label}
-        </button>
+        </a>
       `;
     }
 
-    renderSection(section, application) {
+    renderSection(section, app) {
       switch (section) {
         case "redirect-uris":
           return html`
             <aidc-redirect-uris
-              .applicationId=${application.id}
+              .applicationId=${app.id}
             ></aidc-redirect-uris>
+          `;
+
+        case "scopes":
+          return html`
+            <aidc-scopes
+              .applicationId=${app.id}
+            ></aidc-scopes>
           `;
 
         case "credentials":
@@ -630,15 +932,6 @@ export function registerAIDCComponents(AIDC) {
               icon-name="key-01"
               title="Credentials"
               description="Client credentials and secret rotation will live here."
-            ></aidc-placeholder>
-          `;
-
-        case "scopes":
-          return html`
-            <aidc-placeholder
-              icon-name="shield-01"
-              title="Scopes"
-              description="Configure the permissions available to this application."
             ></aidc-placeholder>
           `;
 
@@ -664,181 +957,251 @@ export function registerAIDCComponents(AIDC) {
         default:
           return html`
             <aidc-application-overview
-              .application=${application}
+              .application=${app}
             ></aidc-application-overview>
           `;
       }
     }
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Application overview section
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     APPLICATION OVERVIEW
+     ═══════════════════════════════════════ */
 
   class AIDCApplicationOverview extends AIDCElement {
     static properties = {
-      application: { attribute: false }
+      application: {
+        attribute: false
+      }
     };
 
-    render() {
-      const app = this.application;
+    async copyClientId() {
+      const app =
+        this.application;
 
-      if (!app) return "";
+      if (!app?.client_id) {
+        return;
+      }
+
+      const copied =
+        await copyToClipboard(
+          app.client_id
+        );
+
+      if (copied) {
+        notify(
+          "Client ID copied"
+        );
+      }
+    }
+
+    render() {
+      const app =
+        this.application;
+
+      if (!app) {
+        return "";
+      }
 
       return html`
-        <div class="details-grid">
-          <section class="card">
-            <header class="card-header">
-              <div>
-                <h2>Application details</h2>
-                <p>
-                  Core information for this application.
-                </p>
-              </div>
+        <div class="aidc-detail-grid">
+
+          <section class="aidc-card">
+
+            <header
+              class="aidc-card-section-header"
+            >
+              <h2>
+                Application details
+              </h2>
+
+              <p>
+                Core information for this application.
+              </p>
             </header>
 
-            <div class="details-list">
-              <div class="detail-row">
-                <span>Client ID</span>
+            <div class="aidc-detail-fields">
 
-                <div class="detail-value technical">
-                  <code>${app.client_id}</code>
+              <div class="aidc-detail-field">
+
+                <span>
+                  Client ID
+                </span>
+
+                <div class="aidc-copy-field">
+
+                  <code class="aidc-mono">
+                    ${app.client_id}
+                  </code>
 
                   <button
-                    class="icon-button small"
-                    aria-label="Copy client ID"
+                    class="aidc-icon-button"
                     title="Copy client ID"
-                    @click=${async () => {
-                      await copyToClipboard(
-                        app.client_id
-                      );
-
-                      notify?.(
-                        "Client ID copied."
-                      );
-                    }}
+                    aria-label="Copy client ID"
+                    @click=${this.copyClientId}
                   >
                     ${icon("copy-01")}
                   </button>
+
                 </div>
+
               </div>
 
-              <div class="detail-row">
-                <span>Application ID</span>
-                <code>${app.id}</code>
+              <div class="aidc-detail-field">
+
+                <span>
+                  Application ID
+                </span>
+
+                <code class="aidc-mono">
+                  ${app.id}
+                </code>
+
               </div>
 
-              <div class="detail-row">
-                <span>Status</span>
-                ${statusBadge(app.status)}
+              <div class="aidc-detail-field">
+
+                <span>
+                  Status
+                </span>
+
+                ${statusBadge(
+                  app.status
+                )}
+
               </div>
 
-              <div class="detail-row">
-                <span>Created</span>
-                <span>${formatDate(app.created_at)}</span>
+              <div class="aidc-detail-field">
+
+                <span>
+                  Created
+                </span>
+
+                <time>
+                  ${formatDate(
+                    app.created_at
+                  )}
+                </time>
+
               </div>
 
-              <div class="detail-row">
-                <span>Last updated</span>
-                <span>${formatDate(app.updated_at)}</span>
+              <div class="aidc-detail-field">
+
+                <span>
+                  Last updated
+                </span>
+
+                <time>
+                  ${formatDate(
+                    app.updated_at
+                  )}
+                </time>
+
               </div>
+
             </div>
+
           </section>
 
-          <section class="card">
-            <header class="card-header">
-              <div>
-                <h2>Configuration</h2>
-                <p>
-                  Manage the application's OAuth settings.
-                </p>
-              </div>
+          <section class="aidc-card">
+
+            <header
+              class="aidc-card-section-header"
+            >
+              <h2>
+                Configuration
+              </h2>
+
+              <p>
+                Manage the application's OAuth settings.
+              </p>
             </header>
 
-            <div class="configuration-list">
-              <button
-                class="configuration-item"
-                @click=${() =>
-                  router.navigate(
-                    `/applications/${app.id}/redirect-uris`
-                  )}
-              >
-                <div class="configuration-icon">
-                  ${icon("link-01")}
-                </div>
+            <div class="aidc-config-list">
 
-                <div>
-                  <strong>Redirect URIs</strong>
-                  <span>
-                    Configure allowed callback URLs.
-                  </span>
-                </div>
+              ${this.configItem(
+                app.id,
+                "redirect-uris",
+                "link-01",
+                "Redirect URIs",
+                "Configure allowed callback URLs."
+              )}
 
-                ${icon("arrow-right-01")}
-              </button>
+              ${this.configItem(
+                app.id,
+                "credentials",
+                "key-01",
+                "Credentials",
+                "Manage client credentials."
+              )}
 
-              <button
-                class="configuration-item"
-                @click=${() =>
-                  router.navigate(
-                    `/applications/${app.id}/credentials`
-                  )}
-              >
-                <div class="configuration-icon">
-                  ${icon("key-01")}
-                </div>
+              ${this.configItem(
+                app.id,
+                "scopes",
+                "shield-01",
+                "Scopes",
+                "Configure requested permissions."
+              )}
 
-                <div>
-                  <strong>Credentials</strong>
-                  <span>
-                    Manage client credentials.
-                  </span>
-                </div>
-
-                ${icon("arrow-right-01")}
-              </button>
-
-              <button
-                class="configuration-item"
-                @click=${() =>
-                  router.navigate(
-                    `/applications/${app.id}/scopes`
-                  )}
-              >
-                <div class="configuration-icon">
-                  ${icon("shield-01")}
-                </div>
-
-                <div>
-                  <strong>Scopes</strong>
-                  <span>
-                    Configure requested permissions.
-                  </span>
-                </div>
-
-                ${icon("arrow-right-01")}
-              </button>
             </div>
+
           </section>
+
         </div>
+      `;
+    }
+
+    configItem(
+      id,
+      section,
+      iconName,
+      title,
+      description
+    ) {
+      return html`
+        <a
+          class="aidc-config-item"
+          href="#/applications/${id}/${section}"
+        >
+          ${icon(iconName)}
+
+          <div>
+            <strong>
+              ${title}
+            </strong>
+
+            <span>
+              ${description}
+            </span>
+          </div>
+
+          ${icon("arrow-right-01")}
+        </a>
       `;
     }
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Redirect URI section
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     REDIRECT URIS
+     ═══════════════════════════════════════ */
 
   class AIDCRedirectUris extends AIDCElement {
     static properties = {
-      applicationId: { type: String },
-      uriValue: { state: true },
-      submitting: { state: true },
-      error: { state: true }
+      applicationId: {
+        type: String
+      },
+
+      uriValue: {
+        state: true
+      },
+
+      submitting: {
+        state: true
+      },
+
+      error: {
+        state: true
+      }
     };
 
     constructor() {
@@ -855,11 +1218,13 @@ export function registerAIDCComponents(AIDC) {
         changed.has("applicationId") &&
         this.applicationId
       ) {
-        const current =
-          state.redirectUris.applicationId;
-
-        if (current !== this.applicationId) {
-          redirectUris.load(this.applicationId);
+        if (
+          state.redirectUris.applicationId !==
+          this.applicationId
+        ) {
+          redirectUris.load(
+            this.applicationId
+          );
         }
       }
     }
@@ -867,11 +1232,17 @@ export function registerAIDCComponents(AIDC) {
     async addUri(event) {
       event.preventDefault();
 
-      const validation =
-        validateRedirectUri(this.uriValue);
+      const result =
+        validateRedirectUri(
+          this.uriValue
+        );
 
-      if (!validation.valid) {
-        this.error = validation.message;
+      if (!result.valid) {
+        this.error =
+          result.message ||
+          result.error ||
+          "Invalid redirect URI.";
+
         return;
       }
 
@@ -881,212 +1252,584 @@ export function registerAIDCComponents(AIDC) {
       try {
         await redirectUris.add(
           this.applicationId,
-          validation.value
+          result.value
         );
 
         this.uriValue = "";
 
-        notify?.(
-          "Redirect URI added."
+        notify(
+          "Redirect URI added"
         );
 
         haptic?.(8);
       } catch (error) {
         this.error =
-          error?.message ||
+          error.message ||
           "Unable to add redirect URI.";
       } finally {
         this.submitting = false;
       }
     }
 
-    async removeUri(uri) {
-      if (!uri?.id) return;
+    async removeUri(item) {
+      if (!item?.id) {
+        return;
+      }
 
       try {
         await redirectUris.remove(
           this.applicationId,
-          uri.id
+          item.id
         );
 
-        notify?.(
-          "Redirect URI removed."
+        notify(
+          "Redirect URI deleted"
         );
 
         haptic?.(8);
-      } catch (error) {
-        notify?.(
-          error?.message ||
-            "Unable to remove redirect URI.",
-          "error"
+      } catch {
+        // API layer already notified.
+      }
+    }
+
+    async copyUri(uri) {
+      const copied =
+        await copyToClipboard(uri);
+
+      if (copied) {
+        notify(
+          "Redirect URI copied"
         );
       }
     }
 
     render() {
-      const items =
+      const isCurrent =
         state.redirectUris.applicationId ===
-        this.applicationId
+        this.applicationId;
+
+      const items =
+        isCurrent
           ? state.redirectUris.items
           : [];
 
       const loading =
-        state.redirectUris.loading &&
-        state.redirectUris.applicationId ===
-          this.applicationId;
+        isCurrent &&
+        state.redirectUris.loading;
 
       return html`
-        <section class="card">
-          <header class="card-header">
-            <div>
-              <h2>Redirect URIs</h2>
+        <section class="aidc-card">
 
-              <p>
-                URLs where AIDC can return users after
-                authentication.
-              </p>
-            </div>
+          <header
+            class="aidc-card-section-header"
+          >
+            <h2>
+              Redirect URIs
+            </h2>
+
+            <p>
+              URLs where AIDC can return users
+              after authentication.
+            </p>
           </header>
 
-          <div class="card-body">
-            <form
-              class="redirect-uri-form"
-              @submit=${this.addUri}
-            >
-              <div class="form-field">
-                <label for="redirect-uri">
-                  Redirect URI
-                </label>
+          <form
+            class="aidc-dialog-form"
+            @submit=${this.addUri}
+          >
 
-                <input
-                  id="redirect-uri"
-                  class="input"
-                  type="url"
-                  inputmode="url"
-                  autocomplete="off"
-                  spellcheck="false"
-                  placeholder="https://example.com/auth/callback"
-                  .value=${this.uriValue}
-                  @input=${event => {
-                    this.uriValue =
-                      event.target.value;
+            <label class="aidc-field">
 
-                    if (this.error) {
-                      this.error = "";
-                    }
-                  }}
-                  ?disabled=${this.submitting}
-                />
+              <span>
+                Redirect URI
+                <b>*</b>
+              </span>
 
-                ${
-                  this.error
-                    ? html`
-                        <span class="form-error">
-                          ${icon("alert-02")}
-                          ${this.error}
-                        </span>
-                      `
-                    : html`
-                        <span class="form-hint">
-                          HTTPS is required for production.
-                          HTTP is limited to localhost.
-                        </span>
-                      `
-                }
-              </div>
+              <input
+                type="url"
+                inputmode="url"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="https://example.com/auth/callback"
+                .value=${this.uriValue}
+                @input=${event => {
+                  this.uriValue =
+                    event.target.value;
+
+                  this.error = "";
+                }}
+                ?disabled=${this.submitting}
+              />
+
+            </label>
+
+            ${
+              this.error
+                ? html`
+                    <div class="aidc-dialog-note">
+                      ${icon("alert-02")}
+
+                      <span>
+                        ${this.error}
+                      </span>
+                    </div>
+                  `
+                : html`
+                    <div class="aidc-dialog-note">
+                      ${icon(
+                        "information-circle"
+                      )}
+
+                      <span>
+                        HTTPS is required for
+                        production. HTTP is allowed
+                        only for localhost development.
+                      </span>
+                    </div>
+                  `
+            }
+
+            <div class="aidc-dialog-actions">
 
               <button
-                class="button button-primary"
+                class="aidc-button aidc-button-primary ${
+                  this.submitting
+                    ? "is-loading"
+                    : ""
+                }"
                 type="submit"
                 ?disabled=${this.submitting}
               >
-                ${
-                  this.submitting
-                    ? html`<span class="spinner"></span>`
-                    : icon("plus-sign")
-                }
 
-                ${
-                  this.submitting
-                    ? "Adding…"
-                    : "Add URI"
-                }
+                <span class="aidc-button-content">
+                  ${icon("plus-sign")}
+                  Add URI
+                </span>
+
+                <span class="aidc-button-loading">
+                  <span class="aidc-spinner"></span>
+                  Adding…
+                </span>
+
               </button>
-            </form>
 
-            <div class="section-divider"></div>
+            </div>
+
+          </form>
+
+          <div class="aidc-detail-fields">
 
             ${
               loading
                 ? html`
-                    <div class="loading-state">
-                      <span class="spinner"></span>
+                    <div class="aidc-loading-card">
+                      <span class="aidc-spinner"></span>
                       Loading redirect URIs…
                     </div>
                   `
                 : items.length
-                  ? html`
-                      <div class="redirect-uri-list">
-                        ${items.map(
-                          uri => html`
-                            <div class="redirect-uri-row">
-                              <div class="redirect-uri-copy">
-                                ${icon("link-01")}
+                  ? items.map(
+                      item => html`
+                        <div
+                          class="aidc-detail-field"
+                        >
 
-                                <code>${uri.uri}</code>
-                              </div>
+                          <span>
+                            Redirect URI
+                          </span>
 
-                              <div class="redirect-uri-actions">
-                                <button
-                                  class="icon-button small"
-                                  title="Copy URI"
-                                  aria-label="Copy redirect URI"
-                                  @click=${async () => {
-                                    await copyToClipboard(
-                                      uri.uri
-                                    );
+                          <div
+                            class="aidc-copy-field"
+                          >
 
-                                    notify?.(
-                                      "Redirect URI copied."
-                                    );
-                                  }}
-                                >
-                                  ${icon("copy-01")}
-                                </button>
+                            <code
+                              class="aidc-mono"
+                            >
+                              ${item.uri}
+                            </code>
 
-                                <button
-                                  class="icon-button small danger"
-                                  title="Remove URI"
-                                  aria-label="Remove redirect URI"
-                                  @click=${() =>
-                                    this.removeUri(uri)}
-                                >
-                                  ${icon("delete-02")}
-                                </button>
-                              </div>
-                            </div>
-                          `
-                        )}
-                      </div>
-                    `
+                            <button
+                              class="aidc-icon-button"
+                              title="Copy URI"
+                              aria-label="Copy redirect URI"
+                              @click=${() =>
+                                this.copyUri(
+                                  item.uri
+                                )}
+                            >
+                              ${icon("copy-01")}
+                            </button>
+
+                            <button
+                              class="aidc-icon-button"
+                              title="Delete URI"
+                              aria-label="Delete redirect URI"
+                              @click=${() =>
+                                this.removeUri(
+                                  item
+                                )}
+                            >
+                              ${icon("delete-02")}
+                            </button>
+
+                          </div>
+
+                        </div>
+                      `
+                    )
                   : emptyState({
-                      iconName: "link-01",
-                      title: "No redirect URIs",
+                      iconName:
+                        "link-01",
+                      title:
+                        "No redirect URIs",
                       description:
-                        "Add at least one callback URL before using this application with OAuth."
+                        "Add a callback URL before using this application with OAuth."
                     })
             }
+
           </div>
+
         </section>
       `;
     }
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Placeholder
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     SCOPES
+     ═══════════════════════════════════════ */
+
+  class AIDCScopes extends AIDCElement {
+    static properties = {
+      applicationId: {
+        type: String
+      },
+
+      localScopes: {
+        state: true
+      }
+    };
+
+    constructor() {
+      super();
+
+      this.applicationId = null;
+      this.localScopes = [];
+    }
+
+    updated(changed) {
+      if (
+        changed.has("applicationId") &&
+        this.applicationId
+      ) {
+        if (
+          state.scopes.applicationId !==
+          this.applicationId
+        ) {
+          scopes.load(
+            this.applicationId
+          );
+        }
+      }
+
+      if (
+        state.scopes.applicationId ===
+        this.applicationId
+      ) {
+        const incoming =
+          Array.isArray(
+            state.scopes.items
+          )
+            ? state.scopes.items
+            : [];
+
+        const current =
+          this.localScopes.join("|");
+
+        const next =
+          incoming.join("|");
+
+        if (
+          current !== next &&
+          !state.scopes.saving
+        ) {
+          this.localScopes = [
+            ...incoming
+          ];
+        }
+      }
+    }
+
+    isEnabled(scope) {
+      return this.localScopes.includes(
+        scope
+      );
+    }
+
+    toggleScope(scope, event) {
+      if (scope === "openid") {
+        event.preventDefault();
+        return;
+      }
+
+      const checked =
+        event.currentTarget.checked;
+
+      const next =
+        new Set(this.localScopes);
+
+      if (checked) {
+        next.add(scope);
+      } else {
+        next.delete(scope);
+      }
+
+      next.add("openid");
+
+      this.localScopes = [
+        ...next
+      ];
+    }
+
+    async save() {
+      if (
+        !this.applicationId ||
+        state.scopes.saving
+      ) {
+        return;
+      }
+
+      try {
+        await scopes.save(
+          this.applicationId,
+          this.localScopes
+        );
+
+        notify(
+          "Scopes updated"
+        );
+
+        haptic?.(8);
+      } catch {
+        // scopes.save() already handles the error toast.
+      }
+    }
+
+    renderScope(scope) {
+      const descriptions = {
+        openid:
+          "Required for OpenID Connect identity.",
+        profile:
+          "Basic profile information.",
+        email:
+          "The user's email address."
+      };
+
+      const names = {
+        openid: "OpenID",
+        profile: "Profile",
+        email: "Email"
+      };
+
+      const required =
+        scope === "openid";
+
+      const enabled =
+        this.isEnabled(scope);
+
+      return html`
+        <label
+          class="aidc-config-item"
+        >
+
+          <div
+            class="aidc-config-value"
+          >
+
+            <div>
+
+              <strong>
+                ${names[scope] || scope}
+              </strong>
+
+              <div class="aidc-mono">
+                ${scope}
+              </div>
+
+              <p>
+                ${
+                  descriptions[scope] ||
+                  ""
+                }
+              </p>
+
+            </div>
+
+          </div>
+
+          <input
+            type="checkbox"
+            .checked=${enabled}
+            ?disabled=${required ||
+            state.scopes.saving ||
+            state.scopes.loading}
+            @change=${event =>
+              this.toggleScope(
+                scope,
+                event
+              )}
+            aria-label=${`Enable ${
+              names[scope] || scope
+            } scope`}
+          />
+
+        </label>
+      `;
+    }
+
+    render() {
+      const isCurrent =
+        state.scopes.applicationId ===
+        this.applicationId;
+
+      const loading =
+        isCurrent &&
+        state.scopes.loading;
+
+      const saving =
+        isCurrent &&
+        state.scopes.saving;
+
+      if (
+        !isCurrent &&
+        this.localScopes.length === 0
+      ) {
+        return html`
+          <section class="aidc-card">
+
+            <header
+              class="aidc-card-section-header"
+            >
+              <h2>
+                Scopes
+              </h2>
+
+              <p>
+                Configure the permissions
+                available to this application.
+              </p>
+            </header>
+
+            <div class="aidc-loading-card">
+              <span
+                class="aidc-spinner"
+              ></span>
+
+              Loading scopes…
+            </div>
+
+          </section>
+        `;
+      }
+
+      return html`
+        <section class="aidc-card">
+
+          <header
+            class="aidc-card-section-header"
+          >
+            <h2>
+              Scopes
+            </h2>
+
+            <p>
+              Configure the permissions
+              available to this application.
+            </p>
+          </header>
+
+          ${
+            loading
+              ? html`
+                  <div class="aidc-loading-card">
+                    <span
+                      class="aidc-spinner"
+                    ></span>
+
+                    Loading scopes…
+                  </div>
+                `
+              : html`
+                  <div
+                    class="aidc-config-list"
+                  >
+
+                    ${this.renderScope(
+                      "openid"
+                    )}
+
+                    ${this.renderScope(
+                      "profile"
+                    )}
+
+                    ${this.renderScope(
+                      "email"
+                    )}
+
+                  </div>
+
+                  <div
+                    class="aidc-dialog-actions"
+                  >
+
+                    <button
+                      class="aidc-button aidc-button-primary ${
+                        saving
+                          ? "is-loading"
+                          : ""
+                      }"
+                      type="button"
+                      ?disabled=${saving}
+                      @click=${this.save}
+                    >
+
+                      <span
+                        class="aidc-button-content"
+                      >
+                        ${icon(
+                          "checkmark-circle-02"
+                        )}
+
+                        ${
+                          saving
+                            ? "Saving…"
+                            : "Save changes"
+                        }
+                      </span>
+
+                      <span
+                        class="aidc-button-loading"
+                      >
+                        <span
+                          class="aidc-spinner"
+                        ></span>
+
+                        Saving…
+                      </span>
+
+                    </button>
+
+                  </div>
+                `
+          }
+
+        </section>
+      `;
+    }
+  }
+
+  /* ═══════════════════════════════════════
+     PLACEHOLDER
+     ═══════════════════════════════════════ */
 
   class AIDCPlaceholder extends AIDCElement {
     static properties = {
@@ -1094,38 +1837,67 @@ export function registerAIDCComponents(AIDC) {
         type: String,
         attribute: "icon-name"
       },
-      title: { type: String },
-      description: { type: String }
+
+      title: {
+        type: String
+      },
+
+      description: {
+        type: String
+      }
     };
 
     render() {
       return html`
-        <section class="card placeholder-card">
-          <div class="placeholder-icon">
-            ${icon(this.iconName || "settings-01")}
+        <section class="aidc-card">
+
+          <div class="aidc-placeholder">
+
+            <div
+              class="aidc-placeholder-icon"
+            >
+              ${icon(
+                this.iconName ||
+                  "settings-01"
+              )}
+            </div>
+
+            <h2>
+              ${this.title}
+            </h2>
+
+            <p>
+              ${this.description}
+            </p>
+
           </div>
 
-          <div>
-            <h2>${this.title}</h2>
-            <p>${this.description}</p>
-          </div>
         </section>
       `;
     }
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Create application dialog
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     CREATE DIALOG
+     ═══════════════════════════════════════ */
 
   class AIDCCreateDialog extends AIDCElement {
     static properties = {
-      name: { state: true },
-      description: { state: true },
-      submitting: { state: true },
-      error: { state: true }
+      name: {
+        state: true
+      },
+
+      description: {
+        state: true
+      },
+
+      submitting: {
+        state: true
+      },
+
+      error: {
+        state: true
+      }
     };
 
     constructor() {
@@ -1138,19 +1910,20 @@ export function registerAIDCComponents(AIDC) {
     }
 
     updated() {
-      if (!state.ui.createModal) {
-        return;
+      if (state.ui.createModal) {
+        requestAnimationFrame(() => {
+          this.querySelector(
+            "#aidc-create-name"
+          )?.focus();
+        });
       }
-
-      requestAnimationFrame(() => {
-        this.querySelector(
-          "#create-application-name"
-        )?.focus();
-      });
     }
 
     handleEscape() {
-      if (state.ui.createModal && !this.submitting) {
+      if (
+        state.ui.createModal &&
+        !this.submitting
+      ) {
         modals.closeCreate();
       }
     }
@@ -1158,19 +1931,23 @@ export function registerAIDCComponents(AIDC) {
     async submit(event) {
       event.preventDefault();
 
-      const name = this.name.trim();
+      const name =
+        this.name.trim();
+
       const description =
         this.description.trim();
 
       if (!name) {
         this.error =
           "Application name is required.";
+
         return;
       }
 
       if (name.length > 120) {
         this.error =
           "Application name must be 120 characters or fewer.";
+
         return;
       }
 
@@ -1189,8 +1966,8 @@ export function registerAIDCComponents(AIDC) {
 
         modals.closeCreate();
 
-        notify?.(
-          "Application created."
+        notify(
+          `${application.name} created`
         );
 
         router.navigate(
@@ -1200,7 +1977,7 @@ export function registerAIDCComponents(AIDC) {
         haptic?.(10);
       } catch (error) {
         this.error =
-          error?.message ||
+          error.message ||
           "Unable to create application.";
       } finally {
         this.submitting = false;
@@ -1214,55 +1991,76 @@ export function registerAIDCComponents(AIDC) {
 
       return html`
         <div
-          class="modal-backdrop"
+          class="aidc-dialog-backdrop"
           @click=${event => {
             if (
-              event.target === event.currentTarget &&
-              !this.submitting
+              event.target ===
+              event.currentTarget
             ) {
-              modals.closeCreate();
+              this.handleEscape();
             }
           }}
         >
+
           <section
-            class="modal"
+            class="aidc-dialog"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="create-title"
+            aria-labelledby="aidc-create-title"
           >
-            <header class="modal-header">
-              <div>
-                <span class="eyebrow">
-                  AIDC
-                </span>
 
-                <h2 id="create-title">
-                  Create application
-                </h2>
+            <header
+              class="aidc-dialog-header"
+            >
+
+              <div>
+
+                <div
+                  class="aidc-dialog-icon"
+                >
+                  ${icon("plus-sign")}
+                </div>
+
+                <div>
+
+                  <h2
+                    id="aidc-create-title"
+                  >
+                    Create application
+                  </h2>
+
+                  <p>
+                    Register a new OAuth application.
+                  </p>
+
+                </div>
+
               </div>
 
               <button
-                class="icon-button"
+                class="aidc-icon-button"
                 aria-label="Close"
-                ?disabled=${this.submitting}
                 @click=${modals.closeCreate}
               >
                 ${icon("cancel-01")}
               </button>
+
             </header>
 
             <form
-              class="modal-body"
+              class="aidc-dialog-form"
               @submit=${this.submit}
             >
-              <div class="form-field">
-                <label for="create-application-name">
+
+              <label class="aidc-field">
+
+                <span>
                   Application name
-                </label>
+                  <b>*</b>
+                </span>
 
                 <input
-                  id="create-application-name"
-                  class="input"
+                  id="aidc-create-name"
                   type="text"
                   maxlength="120"
                   autocomplete="off"
@@ -1276,21 +2074,17 @@ export function registerAIDCComponents(AIDC) {
                   }}
                   ?disabled=${this.submitting}
                 />
-              </div>
 
-              <div class="form-field">
-                <label for="create-application-description">
+              </label>
+
+              <label class="aidc-field">
+
+                <span>
                   Description
-                  <span class="optional">
-                    Optional
-                  </span>
-                </label>
+                </span>
 
                 <textarea
-                  id="create-application-description"
-                  class="input textarea"
                   maxlength="500"
-                  rows="4"
                   placeholder="What is this application used for?"
                   .value=${this.description}
                   @input=${event =>
@@ -1298,23 +2092,32 @@ export function registerAIDCComponents(AIDC) {
                       event.target.value)}
                   ?disabled=${this.submitting}
                 ></textarea>
-              </div>
+
+              </label>
 
               ${
                 this.error
                   ? html`
-                      <div class="form-error-box">
+                      <div
+                        class="aidc-dialog-note"
+                      >
                         ${icon("alert-02")}
-                        ${this.error}
+
+                        <span>
+                          ${this.error}
+                        </span>
                       </div>
                     `
                   : ""
               }
 
-              <footer class="modal-footer">
+              <div
+                class="aidc-dialog-actions"
+              >
+
                 <button
                   type="button"
-                  class="button button-secondary"
+                  class="aidc-button aidc-button-secondary"
                   ?disabled=${this.submitting}
                   @click=${modals.closeCreate}
                 >
@@ -1323,34 +2126,47 @@ export function registerAIDCComponents(AIDC) {
 
                 <button
                   type="submit"
-                  class="button button-primary"
+                  class="aidc-button aidc-button-primary ${
+                    this.submitting
+                      ? "is-loading"
+                      : ""
+                  }"
                   ?disabled=${this.submitting}
                 >
-                  ${
-                    this.submitting
-                      ? html`
-                          <span class="spinner"></span>
-                          Creating…
-                        `
-                      : html`
-                          ${icon("plus-sign")}
-                          Create application
-                        `
-                  }
+
+                  <span
+                    class="aidc-button-content"
+                  >
+                    ${icon("plus-sign")}
+                    Create application
+                  </span>
+
+                  <span
+                    class="aidc-button-loading"
+                  >
+                    <span
+                      class="aidc-spinner"
+                    ></span>
+
+                    Creating…
+                  </span>
+
                 </button>
-              </footer>
+
+              </div>
+
             </form>
+
           </section>
+
         </div>
       `;
     }
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Delete modal
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     DELETE MODAL
+     ═══════════════════════════════════════ */
 
   class AIDCDeleteModal extends AIDCElement {
     handleEscape() {
@@ -1360,138 +2176,200 @@ export function registerAIDCComponents(AIDC) {
     }
 
     render() {
-      const application =
+      const app =
         state.ui.deleteApplication;
 
-      if (!application) {
+      if (!app) {
         return "";
       }
 
       return html`
         <div
-          class="modal-backdrop"
+          class="aidc-delete-backdrop"
           @click=${event => {
             if (
-              event.target === event.currentTarget
+              event.target ===
+              event.currentTarget
             ) {
               modals.closeDelete();
             }
           }}
         >
+
           <section
-            class="modal modal-danger"
+            class="aidc-delete-modal"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="delete-title"
+            aria-labelledby="aidc-delete-title"
           >
-            <header class="modal-header">
-              <div>
-                <span class="eyebrow danger-text">
-                  Danger zone
-                </span>
 
-                <h2 id="delete-title">
-                  Delete application
-                </h2>
-              </div>
+            <div
+              class="aidc-delete-icon"
+            >
+              ${icon("delete-02")}
+            </div>
+
+            <h2
+              id="aidc-delete-title"
+            >
+              Delete application?
+            </h2>
+
+            <p>
+              This will permanently delete
+              <strong>${app.name}</strong>
+              and its configuration.
+            </p>
+
+            <div
+              class="aidc-delete-warning"
+            >
+              ${icon("alert-02")}
+
+              <span>
+                This action cannot be undone.
+              </span>
+            </div>
+
+            <div
+              class="aidc-delete-actions"
+            >
 
               <button
-                class="icon-button"
-                aria-label="Close"
+                class="aidc-button aidc-button-secondary"
                 @click=${modals.closeDelete}
               >
-                ${icon("cancel-01")}
+                Cancel
               </button>
-            </header>
 
-            <div class="modal-body">
-              <p class="modal-warning">
-                This permanently deletes
-                <strong>${application.name}</strong>
-                and its configuration.
-              </p>
+              <button
+                class="aidc-danger-button"
+                @click=${async () => {
+                  try {
+                    await modals.confirmDelete();
+                  } catch {
+                    // Error already handled.
+                  }
+                }}
+              >
+                ${icon("delete-02")}
+                Delete application
+              </button>
 
-              <p class="muted">
-                This action cannot be undone.
-              </p>
-
-              <footer class="modal-footer">
-                <button
-                  class="button button-secondary"
-                  @click=${modals.closeDelete}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  class="button button-danger"
-                  @click=${modals.confirmDelete}
-                >
-                  ${icon("delete-02")}
-                  Delete application
-                </button>
-              </footer>
             </div>
+
           </section>
+
         </div>
       `;
     }
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Toast
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     TOAST
+     ═══════════════════════════════════════ */
 
   class AIDCToast extends AIDCElement {
+    close() {
+      state.ui.notice = null;
+      AIDC.emitState();
+    }
+
     render() {
-      const notice = state.ui.notice;
+      const notice =
+        state.ui.notice;
 
       if (!notice) {
         return "";
       }
 
+      const isError =
+        notice.type === "error";
+
       return html`
         <div
-          class="toast toast-${notice.type}"
+          class="aidc-toast ${
+            isError
+              ? "aidc-toast-error"
+              : ""
+          }"
           role="status"
           aria-live="polite"
         >
-          ${icon(
-            notice.type === "error"
-              ? "alert-02"
-              : "checkmark-circle-02"
-          )}
 
-          <span>${notice.message}</span>
+          <span
+            class="aidc-toast-icon"
+          >
+            ${icon(
+              isError
+                ? "alert-02"
+                : "checkmark-circle-02"
+            )}
+          </span>
+
+          <span>
+            ${notice.message}
+          </span>
+
+          <button
+            class="aidc-toast-close"
+            aria-label="Dismiss notification"
+            @click=${this.close}
+          >
+            ${icon("cancel-01")}
+          </button>
+
         </div>
       `;
     }
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Root application
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     ROOT APP
+     ═══════════════════════════════════════ */
 
   class AIDCApp extends AIDCElement {
     static properties = {
-      mobileMenu: { state: true }
+      sidebarOpen: {
+        state: true
+      }
     };
 
     constructor() {
       super();
-      this.mobileMenu = false;
+
+      this.sidebarOpen = false;
+
+      this._closeSidebar = () => {
+        this.sidebarOpen = false;
+      };
+    }
+
+    connectedCallback() {
+      super.connectedCallback();
+
+      window.addEventListener(
+        "aidc-close-sidebar",
+        this._closeSidebar
+      );
+    }
+
+    disconnectedCallback() {
+      window.removeEventListener(
+        "aidc-close-sidebar",
+        this._closeSidebar
+      );
+
+      super.disconnectedCallback();
     }
 
     handleEscape() {
-      this.mobileMenu = false;
+      this.sidebarOpen = false;
     }
 
     renderPage() {
-      const route = router.parse();
+      const route =
+        router.parse();
 
       if (route.path === "/") {
         return html`
@@ -1499,13 +2377,19 @@ export function registerAIDCComponents(AIDC) {
         `;
       }
 
-      if (route.path === "/applications") {
+      if (
+        route.path ===
+        "/applications"
+      ) {
         return html`
           <aidc-applications></aidc-applications>
         `;
       }
 
-      if (route.path === "/applications/:id") {
+      if (
+        route.path ===
+        "/applications/:id"
+      ) {
         return html`
           <aidc-application-details
             .applicationId=${route.id}
@@ -1514,78 +2398,109 @@ export function registerAIDCComponents(AIDC) {
       }
 
       return html`
-        <div class="page">
+        <div class="aidc-page">
+
           ${emptyState({
-            iconName: "file-not-found",
-            title: "Page not found",
+            iconName:
+              "file-not-found",
+            title:
+              "Page not found",
             description:
               "The requested AIDC page does not exist.",
             action: html`
-              <button
-                class="button button-secondary"
-                @click=${() =>
-                  router.navigate("/")}
+              <a
+                class="aidc-button aidc-button-secondary"
+                href="#/"
               >
                 ${icon("arrow-left-01")}
                 Back to overview
-              </button>
+              </a>
             `
           })}
+
         </div>
       `;
     }
 
     render() {
       return html`
-        <div class="app-shell">
-          <div
-            class="mobile-overlay ${
-              this.mobileMenu ? "visible" : ""
-            }"
-            @click=${() =>
-              (this.mobileMenu = false)}
-          ></div>
+        <div
+          class="aidc-shell ${
+            this.sidebarOpen
+              ? "sidebar-open"
+              : ""
+          }"
+        >
 
-          <div
-            class="sidebar-container ${
-              this.mobileMenu ? "mobile-open" : ""
-            }"
-          >
-            <aidc-sidebar></aidc-sidebar>
+          ${
+            this.sidebarOpen
+              ? html`
+                  <button
+                    class="aidc-sidebar-overlay"
+                    aria-label="Close navigation"
+                    @click=${() =>
+                      (this.sidebarOpen =
+                        false)}
+                  ></button>
+                `
+              : ""
+          }
+
+          <div>
+            <aidc-sidebar
+              .mobileOpen=${this.sidebarOpen}
+            ></aidc-sidebar>
           </div>
 
-          <main class="main">
-            <header class="mobile-header">
+          <main class="aidc-main">
+
+            <header
+              class="aidc-mobile-header"
+            >
+
               <button
-                class="icon-button"
+                class="aidc-icon-button"
                 aria-label="Open navigation"
                 @click=${() =>
-                  (this.mobileMenu = true)}
+                  (this.sidebarOpen =
+                    true)}
               >
                 ${icon("menu-01")}
               </button>
 
-              <strong>AIDC</strong>
+              <a
+                class="aidc-mobile-brand"
+                href="#/"
+              >
+                <span>
+                  AIDC
+                </span>
+              </a>
 
-              <span></span>
+              <span
+                class="aidc-mobile-spacer"
+              ></span>
+
             </header>
 
-            ${this.renderPage()}
+            <div class="aidc-content">
+              ${this.renderPage()}
+            </div>
+
           </main>
 
           <aidc-create-dialog></aidc-create-dialog>
           <aidc-delete-modal></aidc-delete-modal>
           <aidc-toast></aidc-toast>
+
         </div>
       `;
     }
   }
 
-  /*
-   * ------------------------------------------------------------
-   * Register elements
-   * ------------------------------------------------------------
-   */
+  /* ═══════════════════════════════════════
+     REGISTER
+     ═══════════════════════════════════════ */
 
   customElements.define(
     "aidc-sidebar",
@@ -1625,6 +2540,11 @@ export function registerAIDCComponents(AIDC) {
   customElements.define(
     "aidc-redirect-uris",
     AIDCRedirectUris
+  );
+
+  customElements.define(
+    "aidc-scopes",
+    AIDCScopes
   );
 
   customElements.define(
