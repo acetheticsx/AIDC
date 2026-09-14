@@ -5,8 +5,7 @@ import { registerAIDCComponents } from "./components.js";
 ───────────────────────────────────────────── */
 
 const API_BASE =
-  window.AIDC_API_URL ||
-  "/api";
+  window.AIDC_API_URL || "/api";
 
 /* ─────────────────────────────────────────────
    State
@@ -16,12 +15,25 @@ const state = {
   applications: [],
   user: null,
   loading: false,
+
+  redirectUris: {
+    items: [],
+    loading: false,
+    applicationId: null
+  },
+
   ui: {
     notice: null,
     deleteApplication: null,
     createModal: false
   }
 };
+
+/* ─────────────────────────────────────────────
+   Internal request tracking
+───────────────────────────────────────────── */
+
+let redirectUriRequestId = 0;
 
 /* ─────────────────────────────────────────────
    Haptics
@@ -34,7 +46,6 @@ function haptic(duration = 6) {
 
   const now = Date.now();
 
-  // Prevent accidental repeated vibration.
   if (now - lastHaptic < 50) return;
 
   lastHaptic = now;
@@ -42,23 +53,20 @@ function haptic(duration = 6) {
   try {
     navigator.vibrate(duration);
   } catch {
-    // Haptics are optional.
+    // Optional browser feature.
   }
 }
 
-/*
- * Very light global button haptics.
- * This means existing components don't need
- * to manually implement vibration everywhere.
- */
 document.addEventListener(
   "pointerdown",
-  (event) => {
+  event => {
     const button = event.target.closest(
       "button, [role='button']"
     );
 
-    if (!button || button.disabled) return;
+    if (!button || button.disabled) {
+      return;
+    }
 
     haptic(6);
   },
@@ -70,15 +78,26 @@ document.addEventListener(
 ───────────────────────────────────────────── */
 
 async function request(path, options = {}) {
+  const config = {
+    ...options,
+    headers: {
+      Accept: "application/json",
+      ...(options.headers || {})
+    }
+  };
+
+  /*
+   * Only send Content-Type when
+   * a request actually contains JSON.
+   */
+  if (options.body !== undefined) {
+    config.headers["Content-Type"] =
+      "application/json";
+  }
+
   const response = await fetch(
     `${API_BASE}${path}`,
-    {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {})
-      }
-    }
+    config
   );
 
   let data = null;
@@ -92,7 +111,7 @@ async function request(path, options = {}) {
   if (!response.ok) {
     throw new Error(
       data?.error ||
-      `Request failed with status ${response.status}`
+        `Request failed with status ${response.status}`
     );
   }
 
@@ -103,7 +122,10 @@ async function request(path, options = {}) {
    Notifications
 ───────────────────────────────────────────── */
 
-function notify(message, type = "success") {
+function notify(
+  message,
+  type = "success"
+) {
   state.ui.notice = {
     id: Date.now(),
     message,
@@ -112,12 +134,15 @@ function notify(message, type = "success") {
 
   emitState();
 
-  window.clearTimeout(notify.timer);
+  window.clearTimeout(
+    notify.timer
+  );
 
-  notify.timer = window.setTimeout(() => {
-    state.ui.notice = null;
-    emitState();
-  }, 3200);
+  notify.timer =
+    window.setTimeout(() => {
+      state.ui.notice = null;
+      emitState();
+    }, 3200);
 }
 
 /* ─────────────────────────────────────────────
@@ -126,9 +151,12 @@ function notify(message, type = "success") {
 
 function emitState() {
   window.dispatchEvent(
-    new CustomEvent("aidc-state-change", {
-      detail: state
-    })
+    new CustomEvent(
+      "aidc-state-change",
+      {
+        detail: state
+      }
+    )
   );
 }
 
@@ -142,12 +170,15 @@ const applications = {
     emitState();
 
     try {
-      const data = await request(
-        "/applications"
-      );
+      const data =
+        await request(
+          "/applications"
+        );
 
       state.applications =
-        Array.isArray(data.applications)
+        Array.isArray(
+          data?.applications
+        )
           ? data.applications
           : [];
 
@@ -178,19 +209,26 @@ const applications = {
     haptic(8);
 
     try {
-      const data = await request(
-        "/applications",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            name,
-            description
-          })
-        }
-      );
+      const data =
+        await request(
+          "/applications",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              name,
+              description
+            })
+          }
+        );
 
       const application =
-        data.application;
+        data?.application;
+
+      if (!application) {
+        throw new Error(
+          "The server returned an invalid application."
+        );
+      }
 
       state.applications = [
         application,
@@ -199,10 +237,10 @@ const applications = {
 
       emitState();
 
-      notify(
-        `${application.name} created`
-      );
-
+      /*
+       * The caller owns the success toast.
+       * This prevents duplicate notifications.
+       */
       return application;
     } catch (error) {
       console.error(
@@ -221,12 +259,19 @@ const applications = {
   },
 
   async get(id) {
-    try {
-      const data = await request(
-        `/applications/${encodeURIComponent(id)}`
+    if (!id) {
+      throw new Error(
+        "Application ID is required."
       );
+    }
 
-      return data.application;
+    try {
+      const data =
+        await request(
+          `/applications/${encodeURIComponent(id)}`
+        );
+
+      return data?.application || null;
     } catch (error) {
       console.error(
         "Failed to load application:",
@@ -239,28 +284,46 @@ const applications = {
         "error"
       );
 
-      return null;
+      throw error;
     }
   },
 
-  async update(id, changes) {
+  async update(
+    id,
+    changes
+  ) {
+    if (!id) {
+      throw new Error(
+        "Application ID is required."
+      );
+    }
+
     haptic(8);
 
     try {
-      const data = await request(
-        `/applications/${encodeURIComponent(id)}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify(changes)
-        }
-      );
+      const data =
+        await request(
+          `/applications/${encodeURIComponent(id)}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify(
+              changes
+            )
+          }
+        );
 
       const updated =
-        data.application;
+        data?.application;
+
+      if (!updated) {
+        throw new Error(
+          "The server returned an invalid application."
+        );
+      }
 
       const index =
         state.applications.findIndex(
-          (application) =>
+          application =>
             application.id === id
         );
 
@@ -270,10 +333,6 @@ const applications = {
       }
 
       emitState();
-
-      notify(
-        `${updated.name} updated`
-      );
 
       return updated;
     } catch (error) {
@@ -293,32 +352,50 @@ const applications = {
   },
 
   async remove(id) {
+    if (!id) {
+      throw new Error(
+        "Application ID is required."
+      );
+    }
+
     haptic(10);
 
     try {
-      const data = await request(
-        `/applications/${encodeURIComponent(id)}`,
-        {
-          method: "DELETE"
-        }
-      );
+      const data =
+        await request(
+          `/applications/${encodeURIComponent(id)}`,
+          {
+            method: "DELETE"
+          }
+        );
 
       state.applications =
         state.applications.filter(
-          (application) =>
+          application =>
             application.id !== id
         );
+
+      /*
+       * Invalidate any redirect URI
+       * request currently associated
+       * with this application.
+       */
+      redirectUriRequestId++;
+
+      state.redirectUris = {
+        items: [],
+        loading: false,
+        applicationId: null
+      };
 
       state.ui.deleteApplication =
         null;
 
       emitState();
 
-      notify(
-        `${data.application.name} deleted`
+      return (
+        data?.application || null
       );
-
-      return true;
     } catch (error) {
       console.error(
         "Failed to delete application:",
@@ -328,6 +405,277 @@ const applications = {
       notify(
         error.message ||
           "Failed to delete application",
+        "error"
+      );
+
+      throw error;
+    }
+  },
+
+  find(id) {
+    if (!id) return null;
+
+    return (
+      state.applications.find(
+        application =>
+          application.id === id
+      ) || null
+    );
+  }
+};
+
+/* ─────────────────────────────────────────────
+   Redirect URIs
+───────────────────────────────────────────── */
+
+const redirectUris = {
+  async load(applicationId) {
+    /*
+     * Every load gets a unique request ID.
+     * Only the latest request may mutate
+     * redirect URI state.
+     */
+    const requestId =
+      ++redirectUriRequestId;
+
+    if (!applicationId) {
+      state.redirectUris = {
+        items: [],
+        loading: false,
+        applicationId: null
+      };
+
+      emitState();
+
+      return [];
+    }
+
+    /*
+     * Keep existing items when loading the
+     * same application. This prevents the UI
+     * from flashing an empty state.
+     */
+    const sameApplication =
+      state.redirectUris
+        .applicationId ===
+      applicationId;
+
+    state.redirectUris = {
+      items: sameApplication
+        ? state.redirectUris.items
+        : [],
+      loading: true,
+      applicationId
+    };
+
+    emitState();
+
+    try {
+      const data =
+        await request(
+          `/applications/${encodeURIComponent(
+            applicationId
+          )}/redirect-uris`
+        );
+
+      /*
+       * Ignore stale responses.
+       */
+      if (
+        requestId !==
+        redirectUriRequestId
+      ) {
+        return [];
+      }
+
+      const items =
+        Array.isArray(
+          data?.redirect_uris
+        )
+          ? data.redirect_uris
+          : [];
+
+      state.redirectUris = {
+        items,
+        loading: false,
+        applicationId
+      };
+
+      emitState();
+
+      return items;
+    } catch (error) {
+      /*
+       * Ignore errors belonging to
+       * stale requests too.
+       */
+      if (
+        requestId !==
+        redirectUriRequestId
+      ) {
+        return [];
+      }
+
+      console.error(
+        "Failed to load redirect URIs:",
+        error
+      );
+
+      state.redirectUris = {
+        items: [],
+        loading: false,
+        applicationId
+      };
+
+      notify(
+        error.message ||
+          "Failed to load redirect URIs",
+        "error"
+      );
+
+      emitState();
+
+      return [];
+    }
+  },
+
+  async add(
+    applicationId,
+    uri
+  ) {
+    if (!applicationId) {
+      throw new Error(
+        "Application ID is required."
+      );
+    }
+
+    if (
+      typeof uri !== "string" ||
+      !uri.trim()
+    ) {
+      throw new Error(
+        "Redirect URI is required."
+      );
+    }
+
+    haptic(8);
+
+    try {
+      const data =
+        await request(
+          `/applications/${encodeURIComponent(
+            applicationId
+          )}/redirect-uris`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              uri: uri.trim()
+            })
+          }
+        );
+
+      const redirectUri =
+        data?.redirect_uri;
+
+      if (!redirectUri) {
+        throw new Error(
+          "The server returned an invalid redirect URI."
+        );
+      }
+
+      /*
+       * Only modify the currently displayed
+       * application's data.
+       */
+      if (
+        state.redirectUris
+          .applicationId ===
+        applicationId
+      ) {
+        state.redirectUris.items = [
+          ...state.redirectUris.items,
+          redirectUri
+        ];
+      }
+
+      emitState();
+
+      return redirectUri;
+    } catch (error) {
+      console.error(
+        "Failed to add redirect URI:",
+        error
+      );
+
+      /*
+       * The UI caller decides whether and
+       * where to display the success state.
+       */
+      notify(
+        error.message ||
+          "Failed to add redirect URI",
+        "error"
+      );
+
+      throw error;
+    }
+  },
+
+  async remove(
+    applicationId,
+    redirectUriId
+  ) {
+    if (!applicationId) {
+      throw new Error(
+        "Application ID is required."
+      );
+    }
+
+    if (!redirectUriId) {
+      throw new Error(
+        "Redirect URI ID is required."
+      );
+    }
+
+    haptic(10);
+
+    try {
+      await request(
+        `/applications/${encodeURIComponent(
+          applicationId
+        )}/redirect-uris/${encodeURIComponent(
+          redirectUriId
+        )}`,
+        {
+          method: "DELETE"
+        }
+      );
+
+      if (
+        state.redirectUris
+          .applicationId ===
+        applicationId
+      ) {
+        state.redirectUris.items =
+          state.redirectUris.items.filter(
+            item =>
+              item.id !==
+              redirectUriId
+          );
+      }
+
+      emitState();
+
+      return true;
+    } catch (error) {
+      console.error(
+        "Failed to delete redirect URI:",
+        error
+      );
+
+      notify(
+        error.message ||
+          "Failed to delete redirect URI",
         "error"
       );
 
@@ -352,11 +700,15 @@ function parseHash() {
     };
   }
 
-  const parts = hash
-    .split("/")
-    .filter(Boolean);
+  const parts =
+    hash
+      .split("/")
+      .filter(Boolean);
 
-  if (parts[0] === "applications") {
+  if (
+    parts[0] ===
+    "applications"
+  ) {
     if (!parts[1]) {
       return {
         path: "/applications"
@@ -367,12 +719,14 @@ function parseHash() {
       path: "/applications/:id",
       id: parts[1],
       section:
-        parts[2] || "overview"
+        parts[2] ||
+        "overview"
     };
   }
 
   return {
-    path: `/${parts[0]}`
+    path:
+      `/${parts[0]}`
   };
 }
 
@@ -383,9 +737,10 @@ function navigate(path) {
       : `#${path}`;
 
   if (
-    window.location.hash === normalized
+    window.location.hash ===
+    normalized
   ) {
-    emitState();
+    handleRouteChange();
     return;
   }
 
@@ -394,11 +749,17 @@ function navigate(path) {
 }
 
 function routeIs(path) {
-  return parseHash().path === path;
+  return (
+    parseHash().path ===
+    path
+  );
 }
 
 function applicationId() {
-  return parseHash().id || null;
+  return (
+    parseHash().id ||
+    null
+  );
 }
 
 function applicationSection() {
@@ -408,11 +769,76 @@ function applicationSection() {
   );
 }
 
+/* ─────────────────────────────────────────────
+   Route handling
+───────────────────────────────────────────── */
+
+let lastRouteKey = "";
+
+function handleRouteChange() {
+  const route =
+    parseHash();
+
+  const routeKey = [
+    route.path,
+    route.id || "",
+    route.section || ""
+  ].join("|");
+
+  /*
+   * Do not reload data if this exact route
+   * has already been processed.
+   */
+  if (
+    routeKey ===
+    lastRouteKey
+  ) {
+    emitState();
+    return;
+  }
+
+  lastRouteKey =
+    routeKey;
+
+  /*
+   * Redirect URI data is feature-specific.
+   * Only load it when the corresponding
+   * section is active.
+   */
+  if (
+    route.path ===
+      "/applications/:id" &&
+    route.id &&
+    route.section ===
+      "redirect-uris"
+  ) {
+    redirectUris.load(
+      route.id
+    );
+  }
+
+  /*
+   * If we leave Redirect URIs,
+   * invalidate any in-flight request.
+   */
+  if (
+    !(
+      route.path ===
+        "/applications/:id" &&
+      route.id &&
+      route.section ===
+        "redirect-uris"
+    )
+  ) {
+    redirectUriRequestId++;
+  }
+
+  emitState();
+}
+
 window.addEventListener(
   "hashchange",
-  () => {
-    emitState();
-  }
+  handleRouteChange
 );
 
 /* ─────────────────────────────────────────────
@@ -420,17 +846,23 @@ window.addEventListener(
 ───────────────────────────────────────────── */
 
 function openCreateModal() {
-  state.ui.createModal = true;
+  state.ui.createModal =
+    true;
+
   haptic(8);
   emitState();
 }
 
 function closeCreateModal() {
-  state.ui.createModal = false;
+  state.ui.createModal =
+    false;
+
   emitState();
 }
 
-function openDeleteModal(application) {
+function openDeleteModal(
+  application
+) {
   if (!application) return;
 
   state.ui.deleteApplication =
@@ -453,15 +885,28 @@ async function confirmDeleteApplication() {
 
   if (!application) return;
 
-  await applications.remove(
-    application.id
-  );
+  try {
+    await applications.remove(
+      application.id
+    );
 
-  if (
-    applicationId() ===
-    application.id
-  ) {
-    navigate("/applications");
+    notify(
+      `${application.name} deleted`
+    );
+
+    if (
+      applicationId() ===
+      application.id
+    ) {
+      navigate(
+        "/applications"
+      );
+    }
+  } catch {
+    /*
+     * applications.remove()
+     * already handled the error.
+     */
   }
 }
 
@@ -469,8 +914,15 @@ async function confirmDeleteApplication() {
    Clipboard
 ───────────────────────────────────────────── */
 
-async function copyToClipboard(text) {
-  if (!text) return false;
+async function copyToClipboard(
+  value
+) {
+  if (!value) {
+    return false;
+  }
+
+  const valueToCopy =
+    String(value);
 
   try {
     if (
@@ -478,11 +930,10 @@ async function copyToClipboard(text) {
       window.isSecureContext
     ) {
       await navigator.clipboard.writeText(
-        text
+        valueToCopy
       );
 
       haptic(6);
-      notify("Copied to clipboard");
 
       return true;
     }
@@ -492,9 +943,13 @@ async function copyToClipboard(text) {
 
   try {
     const textarea =
-      document.createElement("textarea");
+      document.createElement(
+        "textarea"
+      );
 
-    textarea.value = text;
+    textarea.value =
+      valueToCopy;
+
     textarea.setAttribute(
       "readonly",
       ""
@@ -502,12 +957,21 @@ async function copyToClipboard(text) {
 
     textarea.style.position =
       "fixed";
-    textarea.style.opacity = "0";
+
+    textarea.style.top =
+      "0";
+
+    textarea.style.left =
+      "0";
+
+    textarea.style.opacity =
+      "0";
 
     document.body.appendChild(
       textarea
     );
 
+    textarea.focus();
     textarea.select();
 
     const copied =
@@ -519,82 +983,12 @@ async function copyToClipboard(text) {
 
     if (copied) {
       haptic(6);
-      notify("Copied to clipboard");
     }
 
     return copied;
   } catch {
-    notify(
-      "Unable to copy",
-      "error"
-    );
-
     return false;
   }
-}
-
-/* ─────────────────────────────────────────────
-   IDs
-───────────────────────────────────────────── */
-
-function generateId() {
-  if (
-    typeof crypto !== "undefined" &&
-    crypto.randomUUID
-  ) {
-    return crypto.randomUUID();
-  }
-
-  return (
-    Date.now().toString(36) +
-    Math.random()
-      .toString(36)
-      .slice(2)
-  );
-}
-
-function generateClientId() {
-  if (
-    typeof crypto !== "undefined" &&
-    crypto.getRandomValues
-  ) {
-    const bytes =
-      new Uint8Array(24);
-
-    crypto.getRandomValues(bytes);
-
-    return (
-      "aidc_" +
-      Array.from(bytes)
-        .map((byte) =>
-          byte
-            .toString(16)
-            .padStart(2, "0")
-        )
-        .join("")
-    );
-  }
-
-  return (
-    "aidc_" +
-    Math.random()
-      .toString(36)
-      .slice(2) +
-    Date.now().toString(36)
-  );
-}
-
-/* ─────────────────────────────────────────────
-   Helpers
-───────────────────────────────────────────── */
-
-function findApplication(id) {
-  return (
-    state.applications.find(
-      (application) =>
-        application.id === id
-    ) || null
-  );
 }
 
 /* ─────────────────────────────────────────────
@@ -608,6 +1002,8 @@ const AIDC = {
 
   applications,
 
+  redirectUris,
+
   router: {
     navigate,
     parse: parseHash,
@@ -617,9 +1013,7 @@ const AIDC = {
   },
 
   utils: {
-    generateId,
-    generateClientId,
-    findApplication
+    findApplication: applications.find
   },
 
   haptic,
@@ -629,11 +1023,18 @@ const AIDC = {
   copyToClipboard,
 
   modals: {
-    openCreate: openCreateModal,
-    closeCreate: closeCreateModal,
+    openCreate:
+      openCreateModal,
 
-    openDelete: openDeleteModal,
-    closeDelete: closeDeleteModal,
+    closeCreate:
+      closeCreateModal,
+
+    openDelete:
+      openDeleteModal,
+
+    closeDelete:
+      closeDeleteModal,
+
     confirmDelete:
       confirmDeleteApplication
   },
@@ -642,15 +1043,28 @@ const AIDC = {
 };
 
 /* ─────────────────────────────────────────────
-   Register Lit components
+   Register components
 ───────────────────────────────────────────── */
 
-registerAIDCComponents(AIDC);
+registerAIDCComponents(
+  AIDC
+);
 
 /* ─────────────────────────────────────────────
-   Initial data
+   Initialisation
 ───────────────────────────────────────────── */
 
 window.AIDC = AIDC;
 
-applications.load();
+/*
+ * Load applications first.
+ *
+ * Route handling is performed exactly once
+ * after the initial application data is ready.
+ * This prevents duplicate redirect URI requests
+ * on direct deep links.
+ */
+applications.load().finally(() => {
+  lastRouteKey = "";
+  handleRouteChange();
+});
