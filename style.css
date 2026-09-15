@@ -506,6 +506,51 @@ aidc-app {
   font-size: 12px;
 }
 
+.aidc-sidebar-user {
+  display: flex;
+  align-items: center;
+
+  min-width: 0;
+
+  gap: 8px;
+}
+
+.aidc-sidebar-user-info {
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+
+  flex: 1;
+}
+
+.aidc-sidebar-user-info strong {
+  overflow: hidden;
+
+  color:
+    var(--aidc-text);
+
+  font-size: 12px;
+  font-weight: 650;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aidc-sidebar-user-info span {
+  margin-top: 2px;
+
+  overflow: hidden;
+
+  color:
+    var(--aidc-muted);
+
+  font-size: 10px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .aidc-sidebar-version {
   color:
     var(--aidc-disabled);

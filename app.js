@@ -7,6 +7,8 @@ import { api } from "./api.js";
 
 const APP_NAME = "AIDC";
 
+const LOGIN_PATH = "/auth/login";
+
 const SUPPORTED_SCOPES = Object.freeze([
   "openid",
   "profile",
@@ -19,13 +21,10 @@ const SUPPORTED_SCOPES = Object.freeze([
 
 const state = {
   /*
-   * Placeholder for the Ace ID session.
-   * Populated once the auth milestone lands.
+   * Populated by auth.bootstrap() before any
+   * application data is loaded.
    */
-  auth: {
-    user: null,
-    status: "unknown"
-  },
+  user: null,
 
   applications: [],
   applicationsError: null,
@@ -58,11 +57,14 @@ const state = {
 let redirectUriRequestId = 0;
 let scopeRequestId = 0;
 
-/*
- * In-flight guard so concurrent applications.load()
- * calls share a single request.
- */
 let applicationsLoadPromise = null;
+
+/*
+ * Set once the auth-required redirect has been
+ * triggered, so a burst of parallel 401s does
+ * not fire it repeatedly.
+ */
+let authRedirecting = false;
 
 /* ─────────────────────────────────────────────
    Haptics
@@ -133,12 +135,6 @@ function notify(message, type = "success") {
    Error Handling
 ───────────────────────────────────────────── */
 
-/*
- * Single funnel for API failures. Logs, notifies,
- * and — once auth is wired up — fires an
- * `aidc-auth-required` event on 401/403 so the
- * app can redirect to login.
- */
 function handleError(error, fallbackMessage) {
   console.error(fallbackMessage, error);
 
@@ -146,14 +142,17 @@ function handleError(error, fallbackMessage) {
     error?.status === 401 ||
     error?.status === 403
   ) {
-    window.dispatchEvent(
-      new CustomEvent("aidc-auth-required", {
-        detail: {
-          status: error.status,
-          message: error.message
-        }
-      })
-    );
+    requireAuth();
+  }
+
+  /*
+   * Never show "Authentication required" as a
+   * toast — we're already redirecting the user
+   * to Ace ID, and a toast that fades while the
+   * browser navigates away is just visual noise.
+   */
+  if (error?.status === 401) {
+    return;
   }
 
   notify(
@@ -163,6 +162,96 @@ function handleError(error, fallbackMessage) {
     "error"
   );
 }
+
+/* ─────────────────────────────────────────────
+   Auth
+───────────────────────────────────────────── */
+
+function requireAuth() {
+  if (authRedirecting) {
+    return;
+  }
+
+  authRedirecting = true;
+
+  window.location.replace(LOGIN_PATH);
+}
+
+window.addEventListener(
+  "aidc-auth-required",
+  () => {
+    requireAuth();
+  }
+);
+
+const auth = {
+  /*
+   * Called once at startup. Fetches /api/me.
+   * On success, populates state.user and resolves.
+   * On 401, redirects to /auth/login and never resolves.
+   */
+  async bootstrap() {
+    try {
+      const data = await api.auth.me();
+
+      state.user = data?.user || null;
+
+      emitState();
+
+      return state.user;
+    } catch (error) {
+      if (error?.status === 401) {
+        requireAuth();
+
+        /*
+         * Return a promise that never resolves so
+         * the caller's .then() does not run. The
+         * page is being torn down anyway.
+         */
+        return new Promise(() => {});
+      }
+
+      /*
+       * Something other than 401 (network error,
+       * 500, etc.). Surface it and give up booting
+       * the app rather than hiding the failure.
+       */
+      notify(
+        error?.message ||
+          "Unable to verify session.",
+        "error"
+      );
+
+      throw error;
+    }
+  },
+
+  async logout() {
+    try {
+      const data = await api.auth.logout();
+
+      /*
+       * Clear local state before leaving.
+       */
+      state.user = null;
+
+      emitState();
+
+      if (data?.logout_url) {
+        window.location.replace(data.logout_url);
+      } else {
+        window.location.replace("/");
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+
+      notify(
+        error?.message || "Failed to sign out.",
+        "error"
+      );
+    }
+  }
+};
 
 /* ─────────────────────────────────────────────
    State Bridge
@@ -182,9 +271,6 @@ function emitState() {
 
 const applications = {
   async load() {
-    /*
-     * If a load is already in flight, share it.
-     */
     if (applicationsLoadPromise) {
       return applicationsLoadPromise;
     }
@@ -235,8 +321,7 @@ const applications = {
           description
         });
 
-      const application =
-        data?.application;
+      const application = data?.application;
 
       if (!application) {
         throw new Error(
@@ -270,8 +355,7 @@ const applications = {
     }
 
     try {
-      const data =
-        await api.applications.get(id);
+      const data = await api.applications.get(id);
 
       return data?.application || null;
     } catch (error) {
@@ -294,14 +378,12 @@ const applications = {
     haptic(8);
 
     try {
-      const data =
-        await api.applications.update(
-          id,
-          changes
-        );
+      const data = await api.applications.update(
+        id,
+        changes
+      );
 
-      const updated =
-        data?.application;
+      const updated = data?.application;
 
       if (!updated) {
         throw new Error(
@@ -311,13 +393,11 @@ const applications = {
 
       const index =
         state.applications.findIndex(
-          application =>
-            application.id === id
+          application => application.id === id
         );
 
       if (index !== -1) {
-        state.applications[index] =
-          updated;
+        state.applications[index] = updated;
       }
 
       emitState();
@@ -343,13 +423,11 @@ const applications = {
     haptic(10);
 
     try {
-      const data =
-        await api.applications.remove(id);
+      const data = await api.applications.remove(id);
 
       state.applications =
         state.applications.filter(
-          application =>
-            application.id !== id
+          application => application.id !== id
         );
 
       redirectUriRequestId++;
@@ -391,8 +469,7 @@ const applications = {
 
     return (
       state.applications.find(
-        application =>
-          application.id === id
+        application => application.id === id
       ) || null
     );
   }
@@ -404,8 +481,7 @@ const applications = {
 
 const redirectUris = {
   async load(applicationId) {
-    const requestId =
-      ++redirectUriRequestId;
+    const requestId = ++redirectUriRequestId;
 
     if (!applicationId) {
       state.redirectUris = {
@@ -435,21 +511,17 @@ const redirectUris = {
 
     try {
       const data =
-        await api.redirectUris.list(
-          applicationId
-        );
+        await api.redirectUris.list(applicationId);
 
-      if (
-        requestId !==
-        redirectUriRequestId
-      ) {
+      if (requestId !== redirectUriRequestId) {
         return [];
       }
 
-      const items =
-        Array.isArray(data?.redirect_uris)
-          ? data.redirect_uris
-          : [];
+      const items = Array.isArray(
+        data?.redirect_uris
+      )
+        ? data.redirect_uris
+        : [];
 
       state.redirectUris = {
         items,
@@ -461,10 +533,7 @@ const redirectUris = {
 
       return items;
     } catch (error) {
-      if (
-        requestId !==
-        redirectUriRequestId
-      ) {
+      if (requestId !== redirectUriRequestId) {
         return [];
       }
 
@@ -492,26 +561,19 @@ const redirectUris = {
       );
     }
 
-    if (
-      typeof uri !== "string" ||
-      !uri.trim()
-    ) {
-      throw new Error(
-        "Redirect URI is required."
-      );
+    if (typeof uri !== "string" || !uri.trim()) {
+      throw new Error("Redirect URI is required.");
     }
 
     haptic(8);
 
     try {
-      const data =
-        await api.redirectUris.add(
-          applicationId,
-          uri.trim()
-        );
+      const data = await api.redirectUris.add(
+        applicationId,
+        uri.trim()
+      );
 
-      const redirectUri =
-        data?.redirect_uri;
+      const redirectUri = data?.redirect_uri;
 
       if (!redirectUri) {
         throw new Error(
@@ -542,10 +604,7 @@ const redirectUris = {
     }
   },
 
-  async remove(
-    applicationId,
-    redirectUriId
-  ) {
+  async remove(applicationId, redirectUriId) {
     if (!applicationId) {
       throw new Error(
         "Application ID is required."
@@ -572,8 +631,7 @@ const redirectUris = {
       ) {
         state.redirectUris.items =
           state.redirectUris.items.filter(
-            item =>
-              item.id !== redirectUriId
+            item => item.id !== redirectUriId
           );
       }
 
@@ -597,8 +655,7 @@ const redirectUris = {
 
 const scopes = {
   async load(applicationId) {
-    const requestId =
-      ++scopeRequestId;
+    const requestId = ++scopeRequestId;
 
     if (!applicationId) {
       state.scopes = {
@@ -614,8 +671,7 @@ const scopes = {
     }
 
     const sameApplication =
-      state.scopes.applicationId ===
-      applicationId;
+      state.scopes.applicationId === applicationId;
 
     state.scopes = {
       items: sameApplication
@@ -630,39 +686,23 @@ const scopes = {
 
     try {
       const data =
-        await api.scopes.list(
-          applicationId
-        );
+        await api.scopes.list(applicationId);
 
-      if (
-        requestId !==
-        scopeRequestId
-      ) {
+      if (requestId !== scopeRequestId) {
         return [];
       }
 
-      const received =
-        Array.isArray(data?.scopes)
-          ? data.scopes
-          : [];
+      const received = Array.isArray(data?.scopes)
+        ? data.scopes
+        : [];
 
       const items = [
         ...new Set(
           received
-            .filter(
-              scope =>
-                typeof scope ===
-                "string"
-            )
-            .map(scope =>
-              scope
-                .trim()
-                .toLowerCase()
-            )
+            .filter(scope => typeof scope === "string")
+            .map(scope => scope.trim().toLowerCase())
             .filter(scope =>
-              SUPPORTED_SCOPES.includes(
-                scope
-              )
+              SUPPORTED_SCOPES.includes(scope)
             )
         )
       ];
@@ -678,10 +718,7 @@ const scopes = {
 
       return items;
     } catch (error) {
-      if (
-        requestId !==
-        scopeRequestId
-      ) {
+      if (requestId !== scopeRequestId) {
         return [];
       }
 
@@ -711,35 +748,21 @@ const scopes = {
     }
 
     if (!Array.isArray(scopeList)) {
-      throw new Error(
-        "Scopes must be an array."
-      );
+      throw new Error("Scopes must be an array.");
     }
 
     const normalized = [
       ...new Set(
         scopeList
-          .filter(
-            scope =>
-              typeof scope ===
-              "string"
-          )
-          .map(scope =>
-            scope
-              .trim()
-              .toLowerCase()
-          )
+          .filter(scope => typeof scope === "string")
+          .map(scope => scope.trim().toLowerCase())
           .filter(Boolean)
       )
     ];
 
-    const invalid =
-      normalized.filter(
-        scope =>
-          !SUPPORTED_SCOPES.includes(
-            scope
-          )
-      );
+    const invalid = normalized.filter(
+      scope => !SUPPORTED_SCOPES.includes(scope)
+    );
 
     if (invalid.length > 0) {
       throw new Error(
@@ -747,9 +770,7 @@ const scopes = {
       );
     }
 
-    if (
-      !normalized.includes("openid")
-    ) {
+    if (!normalized.includes("openid")) {
       throw new Error(
         "The openid scope is required."
       );
@@ -761,41 +782,28 @@ const scopes = {
     emitState();
 
     try {
-      const data =
-        await api.scopes.update(
-          applicationId,
-          normalized
-        );
+      const data = await api.scopes.update(
+        applicationId,
+        normalized
+      );
 
-      const saved =
-        Array.isArray(data?.scopes)
-          ? data.scopes
-          : normalized;
+      const saved = Array.isArray(data?.scopes)
+        ? data.scopes
+        : normalized;
 
       const items = [
         ...new Set(
           saved
-            .filter(
-              scope =>
-                typeof scope ===
-                "string"
-            )
-            .map(scope =>
-              scope
-                .trim()
-                .toLowerCase()
-            )
+            .filter(scope => typeof scope === "string")
+            .map(scope => scope.trim().toLowerCase())
             .filter(scope =>
-              SUPPORTED_SCOPES.includes(
-                scope
-              )
+              SUPPORTED_SCOPES.includes(scope)
             )
         )
       ];
 
       if (
-        state.scopes.applicationId ===
-        applicationId
+        state.scopes.applicationId === applicationId
       ) {
         state.scopes.items = items;
       }
@@ -833,9 +841,7 @@ const credentials = {
 
     try {
       const data =
-        await api.credentials.list(
-          applicationId
-        );
+        await api.credentials.list(applicationId);
 
       return Array.isArray(data?.credentials)
         ? data.credentials
@@ -861,9 +867,7 @@ const credentials = {
 
     try {
       const data =
-        await api.credentials.rotate(
-          applicationId
-        );
+        await api.credentials.rotate(applicationId);
 
       if (!data?.credential?.secret) {
         throw new Error(
@@ -946,11 +950,10 @@ const branding = {
     }
 
     try {
-      const data =
-        await api.branding.update(
-          applicationId,
-          payload
-        );
+      const data = await api.branding.update(
+        applicationId,
+        payload
+      );
 
       notify("Branding saved");
 
@@ -977,11 +980,10 @@ const activity = {
     }
 
     try {
-      const data =
-        await api.activity.list(
-          applicationId,
-          limit
-        );
+      const data = await api.activity.list(
+        applicationId,
+        limit
+      );
 
       return Array.isArray(data?.events)
         ? data.events
@@ -1002,66 +1004,46 @@ const activity = {
 ───────────────────────────────────────────── */
 
 function parseHash() {
-  const hash =
-    window.location.hash
-      .replace(/^#\/?/, "")
-      .replace(/\/+$/, "");
+  const hash = window.location.hash
+    .replace(/^#\/?/, "")
+    .replace(/\/+$/, "");
 
   if (!hash) {
-    return {
-      path: "/"
-    };
+    return { path: "/" };
   }
 
-  const parts =
-    hash
-      .split("/")
-      .filter(Boolean);
+  const parts = hash.split("/").filter(Boolean);
 
   if (parts[0] === "applications") {
     if (!parts[1]) {
-      return {
-        path: "/applications"
-      };
+      return { path: "/applications" };
     }
 
     return {
       path: "/applications/:id",
       id: parts[1],
-      section:
-        parts[2] ||
-        "overview"
+      section: parts[2] || "overview"
     };
   }
 
-  return {
-    path: `/${parts[0]}`
-  };
+  return { path: `/${parts[0]}` };
 }
 
 function navigate(path) {
-  const normalized =
-    path.startsWith("#")
-      ? path
-      : `#${path}`;
+  const normalized = path.startsWith("#")
+    ? path
+    : `#${path}`;
 
-  if (
-    window.location.hash ===
-    normalized
-  ) {
+  if (window.location.hash === normalized) {
     handleRouteChange();
     return;
   }
 
-  window.location.hash =
-    normalized;
+  window.location.hash = normalized;
 }
 
 function routeIs(path) {
-  return (
-    parseHash().path ===
-    path
-  );
+  return parseHash().path === path;
 }
 
 function applicationId() {
@@ -1069,10 +1051,7 @@ function applicationId() {
 }
 
 function applicationSection() {
-  return (
-    parseHash().section ||
-    "overview"
-  );
+  return parseHash().section || "overview";
 }
 
 /* ─────────────────────────────────────────────
@@ -1093,11 +1072,9 @@ function updateDocumentTitle() {
   }
 
   if (route.path === "/applications/:id") {
-    const app =
-      applications.find(route.id);
+    const app = applications.find(route.id);
 
-    const section =
-      route.section || "overview";
+    const section = route.section || "overview";
 
     const label =
       section.charAt(0).toUpperCase() +
@@ -1120,8 +1097,7 @@ function updateDocumentTitle() {
 let lastRouteKey = "";
 
 function handleRouteChange() {
-  const route =
-    parseHash();
+  const route = parseHash();
 
   const routeKey = [
     route.path,
@@ -1129,52 +1105,36 @@ function handleRouteChange() {
     route.section || ""
   ].join("|");
 
-  if (
-    routeKey ===
-    lastRouteKey
-  ) {
+  if (routeKey === lastRouteKey) {
     emitState();
     return;
   }
 
-  lastRouteKey =
-    routeKey;
+  lastRouteKey = routeKey;
 
-  /*
-   * Close any modals when the route actually
-   * changes — otherwise a delete-confirmation
-   * can linger after the user has navigated away.
-   */
   state.ui.createModal = false;
   state.ui.deleteApplication = null;
 
   const isApplicationRoute =
-    route.path ===
-      "/applications/:id" &&
+    route.path === "/applications/:id" &&
     Boolean(route.id);
 
   const isRedirectRoute =
     isApplicationRoute &&
-    route.section ===
-      "redirect-uris";
+    route.section === "redirect-uris";
 
   const isScopesRoute =
     isApplicationRoute &&
-    route.section ===
-      "scopes";
+    route.section === "scopes";
 
   if (isRedirectRoute) {
-    redirectUris.load(
-      route.id
-    );
+    redirectUris.load(route.id);
   } else {
     redirectUriRequestId++;
   }
 
   if (isScopesRoute) {
-    scopes.load(
-      route.id
-    );
+    scopes.load(route.id);
   } else {
     scopeRequestId++;
   }
@@ -1209,41 +1169,31 @@ function openDeleteModal(application) {
     return;
   }
 
-  state.ui.deleteApplication =
-    application;
+  state.ui.deleteApplication = application;
 
   haptic(8);
   emitState();
 }
 
 function closeDeleteModal() {
-  state.ui.deleteApplication =
-    null;
+  state.ui.deleteApplication = null;
 
   emitState();
 }
 
 async function confirmDeleteApplication() {
-  const application =
-    state.ui.deleteApplication;
+  const application = state.ui.deleteApplication;
 
   if (!application) {
     return;
   }
 
   try {
-    await applications.remove(
-      application.id
-    );
+    await applications.remove(application.id);
 
-    notify(
-      `${application.name} deleted`
-    );
+    notify(`${application.name} deleted`);
 
-    if (
-      applicationId() ===
-      application.id
-    ) {
+    if (applicationId() === application.id) {
       navigate("/applications");
     }
   } catch {
@@ -1260,17 +1210,14 @@ async function copyToClipboard(value) {
     return false;
   }
 
-  const valueToCopy =
-    String(value);
+  const valueToCopy = String(value);
 
   try {
     if (
       navigator.clipboard &&
       window.isSecureContext
     ) {
-      await navigator.clipboard.writeText(
-        valueToCopy
-      );
+      await navigator.clipboard.writeText(valueToCopy);
 
       haptic(6);
 
@@ -1282,41 +1229,24 @@ async function copyToClipboard(value) {
 
   try {
     const textarea =
-      document.createElement(
-        "textarea"
-      );
+      document.createElement("textarea");
 
-    textarea.value =
-      valueToCopy;
+    textarea.value = valueToCopy;
 
-    textarea.setAttribute(
-      "readonly",
-      ""
-    );
+    textarea.setAttribute("readonly", "");
 
-    textarea.style.position =
-      "fixed";
+    textarea.style.position = "fixed";
+    textarea.style.top = "0";
+    textarea.style.left = "0";
+    textarea.style.opacity = "0";
 
-    textarea.style.top =
-      "0";
-
-    textarea.style.left =
-      "0";
-
-    textarea.style.opacity =
-      "0";
-
-    document.body.appendChild(
-      textarea
-    );
+    document.body.appendChild(textarea);
 
     textarea.focus();
     textarea.select();
 
     const copied =
-      document.execCommand(
-        "copy"
-      );
+      document.execCommand("copy");
 
     textarea.remove();
 
@@ -1334,11 +1264,6 @@ async function copyToClipboard(value) {
    Public AIDC API
 ───────────────────────────────────────────── */
 
-/*
- * Reload applications and re-run the current route.
- * Useful as a retry action when the initial
- * applications load failed.
- */
 async function reload() {
   await applications.load();
 
@@ -1348,6 +1273,8 @@ async function reload() {
 
 const AIDC = {
   state,
+
+  auth,
 
   applications,
 
@@ -1370,11 +1297,8 @@ const AIDC = {
   },
 
   utils: {
-    findApplication:
-      applications.find,
-
-    supportedScopes:
-      scopes.supported
+    findApplication: applications.find,
+    supportedScopes: scopes.supported
   },
 
   haptic,
@@ -1388,20 +1312,11 @@ const AIDC = {
   copyToClipboard,
 
   modals: {
-    openCreate:
-      openCreateModal,
-
-    closeCreate:
-      closeCreateModal,
-
-    openDelete:
-      openDeleteModal,
-
-    closeDelete:
-      closeDeleteModal,
-
-    confirmDelete:
-      confirmDeleteApplication
+    openCreate: openCreateModal,
+    closeCreate: closeCreateModal,
+    openDelete: openDeleteModal,
+    closeDelete: closeDeleteModal,
+    confirmDelete: confirmDeleteApplication
   },
 
   emitState
@@ -1419,7 +1334,14 @@ window.AIDC = AIDC;
    Initialisation
 ───────────────────────────────────────────── */
 
-applications.load().finally(() => {
-  lastRouteKey = "";
-  handleRouteChange();
+/*
+ * Verify the session before doing anything else.
+ * Only after /api/me succeeds do we load data and
+ * run the initial route.
+ */
+auth.bootstrap().then(() => {
+  applications.load().finally(() => {
+    lastRouteKey = "";
+    handleRouteChange();
+  });
 });

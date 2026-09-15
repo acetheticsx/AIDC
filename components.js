@@ -200,14 +200,60 @@ export function registerAIDCComponents(AIDC) {
 
           <div class="aidc-sidebar-spacer"></div>
 
-          <div class="aidc-sidebar-bottom">
+<div class="aidc-sidebar-bottom">
 
-            <div class="aidc-sidebar-meta">
-              <span class="aidc-status-dot"></span>
-              <span>API connected</span>
+  ${
+    state.user
+      ? html`
+          <div
+            class="aidc-sidebar-user"
+          >
+            <div
+              class="aidc-sidebar-user-info"
+            >
+              <strong>
+                ${text(
+                  state.user.name ||
+                    state.user.email ||
+                    "Signed in"
+                )}
+              </strong>
+
+              ${
+                state.user.email &&
+                state.user.name
+                  ? html`
+                      <span>
+                        ${state.user.email}
+                      </span>
+                    `
+                  : ""
+              }
             </div>
 
+            <button
+              class="aidc-icon-button"
+              type="button"
+              aria-label="Sign out"
+              title="Sign out"
+              @click=${() =>
+                AIDC.auth.logout()}
+            >
+              ${icon("logout-01")}
+            </button>
           </div>
+        `
+      : html`
+          <div class="aidc-sidebar-meta">
+            <span
+              class="aidc-status-dot"
+            ></span>
+            <span>Connecting…</span>
+          </div>
+        `
+  }
+
+</div>
 
         </aside>
       `;

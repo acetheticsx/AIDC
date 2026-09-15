@@ -1,13 +1,47 @@
 const API_BASE = window.AIDC_API_URL || "/api";
 
+function readCookie(name) {
+  const escaped = name.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+
+  const match = document.cookie.match(
+    new RegExp("(?:^|; )" + escaped + "=([^;]*)")
+  );
+
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function request(path, options = {}) {
+  const method = (
+    options.method || "GET"
+  ).toUpperCase();
+
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+
+  /*
+   * Double-submit CSRF: echo the value of the
+   * aidc_csrf cookie back as a header. The server
+   * compares them with timingSafeEqual.
+   */
+  if (
+    !["GET", "HEAD", "OPTIONS"].includes(method)
+  ) {
+    const csrf = readCookie("aidc_csrf");
+
+    if (csrf) {
+      headers["X-CSRF-Token"] = csrf;
+    }
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    }
+    headers
   });
 
   let data = null;
@@ -20,11 +54,28 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     const error = new Error(
-      data?.error || `Request failed with status ${response.status}.`
+      data?.error ||
+        `Request failed with status ${response.status}.`
     );
 
     error.status = response.status;
     error.data = data;
+
+    /*
+     * Let the app layer know it should redirect
+     * to /auth/login. Doing this here means every
+     * API caller gets the behaviour for free.
+     */
+    if (response.status === 401) {
+      window.dispatchEvent(
+        new CustomEvent("aidc-auth-required", {
+          detail: {
+            status: response.status,
+            message: error.message
+          }
+        })
+      );
+    }
 
     throw error;
   }
@@ -37,6 +88,18 @@ function id(value) {
 }
 
 export const api = {
+  auth: {
+    me() {
+      return request("/me");
+    },
+
+    logout() {
+      return request("/auth/logout", {
+        method: "POST"
+      });
+    }
+  },
+
   applications: {
     list() {
       return request("/applications");
@@ -122,9 +185,7 @@ export const api = {
     rotate(applicationId) {
       return request(
         `/applications/${id(applicationId)}/credentials/rotate`,
-        {
-          method: "POST"
-        }
+        { method: "POST" }
       );
     },
 
@@ -133,9 +194,7 @@ export const api = {
         `/applications/${id(applicationId)}/credentials/${id(
           credentialId
         )}`,
-        {
-          method: "DELETE"
-        }
+        { method: "DELETE" }
       );
     }
   },
