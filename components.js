@@ -20,6 +20,9 @@ export function registerAIDCComponents(AIDC) {
     applications,
     redirectUris,
     scopes,
+    credentials,
+    branding,
+    activity,
     router,
     copyToClipboard,
     modals,
@@ -923,6 +926,13 @@ export function registerAIDCComponents(AIDC) {
 
     renderSection(section, app) {
       switch (section) {
+        case "credentials":
+          return html`
+            <aidc-credentials
+              .applicationId=${app.id}
+            ></aidc-credentials>
+          `;
+
         case "redirect-uris":
           return html`
             <aidc-redirect-uris
@@ -937,31 +947,18 @@ export function registerAIDCComponents(AIDC) {
             ></aidc-scopes>
           `;
 
-        case "credentials":
-          return html`
-            <aidc-placeholder
-              icon-name="key-01"
-              title="Credentials"
-              description="Client credentials and secret rotation will live here."
-            ></aidc-placeholder>
-          `;
-
         case "branding":
           return html`
-            <aidc-placeholder
-              icon-name="paint-board"
-              title="Branding"
-              description="Configure the identity and presentation shown during authentication."
-            ></aidc-placeholder>
+            <aidc-branding
+              .applicationId=${app.id}
+            ></aidc-branding>
           `;
 
         case "activity":
           return html`
-            <aidc-placeholder
-              icon-name="activity-01"
-              title="Activity"
-              description="Authentication activity and audit events will appear here."
-            ></aidc-placeholder>
+            <aidc-activity
+              .applicationId=${app.id}
+            ></aidc-activity>
           `;
 
         case "overview":
@@ -1850,6 +1847,725 @@ export function registerAIDCComponents(AIDC) {
   }
 
   /* ═══════════════════════════════════════
+     CREDENTIALS
+     ═══════════════════════════════════════ */
+
+  class AIDCCredentials extends AIDCElement {
+    static properties = {
+      applicationId: {
+        type: String
+      },
+
+      credentials: {
+        state: true
+      },
+
+      loading: {
+        state: true
+      },
+
+      rotating: {
+        state: true
+      },
+
+      secret: {
+        state: true
+      }
+    };
+
+    constructor() {
+      super();
+
+      this.applicationId = null;
+      this.credentials = [];
+      this.loading = false;
+      this.rotating = false;
+      this.secret = "";
+    }
+
+    updated(changed) {
+      /*
+       * Clear the one-time secret on app
+       * switch. Doing this here — and not in
+       * load() — means rotate() → load() does
+       * not wipe the secret that was just
+       * displayed.
+       */
+      if (changed.has("applicationId")) {
+        this.secret = "";
+      }
+
+      if (
+        changed.has("applicationId") &&
+        this.applicationId
+      ) {
+        this.load();
+      }
+    }
+
+    async load() {
+      const applicationId =
+        this.applicationId;
+
+      if (!applicationId) {
+        return;
+      }
+
+      this.loading = true;
+
+      try {
+        const result =
+          await credentials.list(applicationId);
+
+        if (this.applicationId !== applicationId) {
+          return;
+        }
+
+        this.credentials = result;
+      } finally {
+        if (this.applicationId === applicationId) {
+          this.loading = false;
+        }
+      }
+    }
+
+    async rotate() {
+      if (this.rotating) {
+        return;
+      }
+
+      const confirmed = window.confirm(
+        "Rotate the client secret? The current secret will be revoked."
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      this.rotating = true;
+
+      try {
+        const credential =
+          await credentials.rotate(
+            this.applicationId
+          );
+
+        this.secret = credential.secret;
+
+        await this.load();
+      } finally {
+        this.rotating = false;
+      }
+    }
+
+    async revoke(item) {
+      if (!item?.id) {
+        return;
+      }
+
+      const confirmed = window.confirm(
+        "Revoke this client secret?"
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      await credentials.revoke(
+        this.applicationId,
+        item.id
+      );
+
+      await this.load();
+    }
+
+    async copySecret() {
+      if (!this.secret) {
+        return;
+      }
+
+      const copied =
+        await copyToClipboard(this.secret);
+
+      if (copied) {
+        notify("Client secret copied");
+      }
+    }
+
+    render() {
+      return html`
+        <section class="aidc-card">
+
+          <header
+            class="aidc-card-section-header"
+          >
+            <h2>Credentials</h2>
+
+            <p>
+              Manage the credentials used by this
+              OAuth application.
+            </p>
+          </header>
+
+          ${
+            this.secret
+              ? html`
+                  <div class="aidc-dialog-note">
+                    ${icon("alert-02")}
+
+                    <span>
+                      This secret is shown once.
+                      Store it securely before
+                      leaving this page.
+                    </span>
+                  </div>
+
+                  <div class="aidc-detail-field">
+                    <span>New client secret</span>
+
+                    <div class="aidc-copy-field">
+                      <code class="aidc-mono">
+                        ${this.secret}
+                      </code>
+
+                      <button
+                        class="aidc-icon-button"
+                        type="button"
+                        aria-label="Copy client secret"
+                        title="Copy client secret"
+                        @click=${this.copySecret}
+                      >
+                        ${icon("copy-01")}
+                      </button>
+                    </div>
+                  </div>
+                `
+              : ""
+          }
+
+          ${
+            this.loading
+              ? html`
+                  <div class="aidc-loading-card">
+                    <span class="aidc-spinner"></span>
+                    Loading credentials…
+                  </div>
+                `
+              : html`
+                  <div class="aidc-detail-fields">
+                    ${
+                      this.credentials.length
+                        ? this.credentials.map(
+                            item => html`
+                              <div
+                                class="aidc-detail-field"
+                              >
+                                <span>
+                                  Client secret
+                                </span>
+
+                                <div>
+                                  <code class="aidc-mono">
+                                    ${item.secret_prefix}••••••••
+                                  </code>
+
+                                  ${
+                                    item.revoked_at
+                                      ? html`
+                                          <span
+                                            class="aidc-status aidc-status-disabled"
+                                          >
+                                            <span
+                                              class="aidc-status-dot"
+                                            ></span>
+                                            Revoked
+                                          </span>
+                                        `
+                                      : html`
+                                          <span
+                                            class="aidc-status aidc-status-active"
+                                          >
+                                            <span
+                                              class="aidc-status-dot"
+                                            ></span>
+                                            Active
+                                          </span>
+                                        `
+                                  }
+                                </div>
+
+                                <small>
+                                  Created
+                                  ${formatDate(
+                                    item.created_at
+                                  )}
+                                </small>
+
+                                ${
+                                  !item.revoked_at
+                                    ? html`
+                                        <button
+                                          class="aidc-danger-button"
+                                          type="button"
+                                          @click=${() =>
+                                            this.revoke(
+                                              item
+                                            )}
+                                        >
+                                          ${icon(
+                                            "delete-02"
+                                          )}
+                                          Revoke
+                                        </button>
+                                      `
+                                    : ""
+                                }
+                              </div>
+                            `
+                          )
+                        : emptyState({
+                            iconName: "key-01",
+                            title:
+                              "No credentials",
+                            description:
+                              "Generate a client secret to authenticate this application."
+                          })
+                    }
+                  </div>
+
+                  <div class="aidc-dialog-actions">
+                    <button
+                      class="aidc-button aidc-button-primary ${
+                        this.rotating
+                          ? "is-loading"
+                          : ""
+                      }"
+                      type="button"
+                      ?disabled=${this.loading ||
+                      this.rotating}
+                      @click=${this.rotate}
+                    >
+                      <span class="aidc-button-content">
+                        ${icon("refresh-01")}
+                        ${
+                          this.credentials.length
+                            ? "Rotate secret"
+                            : "Generate secret"
+                        }
+                      </span>
+
+                      <span class="aidc-button-loading">
+                        <span
+                          class="aidc-spinner"
+                        ></span>
+                        Rotating…
+                      </span>
+                    </button>
+                  </div>
+                `
+          }
+
+        </section>
+      `;
+    }
+  }
+
+  /* ═══════════════════════════════════════
+     BRANDING
+     ═══════════════════════════════════════ */
+
+  class AIDCBranding extends AIDCElement {
+    static properties = {
+      applicationId: {
+        type: String
+      },
+
+      displayName: {
+        state: true
+      },
+
+      logoUrl: {
+        state: true
+      },
+
+      accentColor: {
+        state: true
+      },
+
+      loading: {
+        state: true
+      },
+
+      saving: {
+        state: true
+      }
+    };
+
+    constructor() {
+      super();
+
+      this.applicationId = null;
+      this.displayName = "";
+      this.logoUrl = "";
+      this.accentColor = "";
+      this.loading = true;
+      this.saving = false;
+    }
+
+    updated(changed) {
+      /*
+       * Reset displayed fields on app switch
+       * so the previous app's branding never
+       * lingers while the new one loads.
+       */
+      if (changed.has("applicationId")) {
+        this.displayName = "";
+        this.logoUrl = "";
+        this.accentColor = "";
+      }
+
+      if (
+        changed.has("applicationId") &&
+        this.applicationId
+      ) {
+        this.load();
+      }
+    }
+
+    async load() {
+      const applicationId =
+        this.applicationId;
+
+      if (!applicationId) {
+        return;
+      }
+
+      this.loading = true;
+
+      try {
+        const data =
+          await branding.get(applicationId);
+
+        if (this.applicationId !== applicationId) {
+          return;
+        }
+
+        this.displayName =
+          data?.display_name || "";
+        this.logoUrl =
+          data?.logo_url || "";
+        this.accentColor =
+          data?.accent_color || "";
+      } finally {
+        if (this.applicationId === applicationId) {
+          this.loading = false;
+        }
+      }
+    }
+
+    async save() {
+      if (this.saving) {
+        return;
+      }
+
+      this.saving = true;
+
+      try {
+        await branding.update(
+          this.applicationId,
+          {
+            display_name:
+              this.displayName.trim() || null,
+            logo_url:
+              this.logoUrl.trim() || null,
+            accent_color:
+              this.accentColor.trim() || null
+          }
+        );
+      } finally {
+        this.saving = false;
+      }
+    }
+
+    render() {
+      if (this.loading) {
+        return html`
+          <section class="aidc-card">
+            <div class="aidc-loading-card">
+              <span class="aidc-spinner"></span>
+              Loading branding…
+            </div>
+          </section>
+        `;
+      }
+
+      return html`
+        <section class="aidc-card">
+
+          <header
+            class="aidc-card-section-header"
+          >
+            <h2>Branding</h2>
+
+            <p>
+              Configure the identity and
+              presentation shown during
+              authentication.
+            </p>
+          </header>
+
+          <div class="aidc-dialog-form">
+
+            <label class="aidc-field">
+              <span>Display name</span>
+
+              <input
+                type="text"
+                maxlength="120"
+                autocomplete="off"
+                .value=${this.displayName}
+                @input=${event =>
+                  (this.displayName =
+                    event.target.value)}
+                placeholder="Your application"
+              />
+            </label>
+
+            <label class="aidc-field">
+              <span>Logo URL</span>
+
+              <input
+                type="url"
+                inputmode="url"
+                autocomplete="url"
+                .value=${this.logoUrl}
+                @input=${event =>
+                  (this.logoUrl =
+                    event.target.value)}
+                placeholder="https://example.com/logo.png"
+              />
+            </label>
+
+            <label class="aidc-field">
+              <span>Accent color</span>
+
+              <input
+                type="text"
+                maxlength="32"
+                autocomplete="off"
+                spellcheck="false"
+                .value=${this.accentColor}
+                @input=${event =>
+                  (this.accentColor =
+                    event.target.value)}
+                placeholder="#111111"
+              />
+            </label>
+
+            <div class="aidc-dialog-actions">
+              <button
+                class="aidc-button aidc-button-primary ${
+                  this.saving
+                    ? "is-loading"
+                    : ""
+                }"
+                type="button"
+                ?disabled=${this.saving}
+                @click=${this.save}
+              >
+                <span class="aidc-button-content">
+                  ${icon("checkmark-circle-02")}
+                  ${
+                    this.saving
+                      ? "Saving…"
+                      : "Save changes"
+                  }
+                </span>
+
+                <span class="aidc-button-loading">
+                  <span class="aidc-spinner"></span>
+                  Saving…
+                </span>
+              </button>
+            </div>
+
+          </div>
+
+        </section>
+      `;
+    }
+  }
+
+  /* ═══════════════════════════════════════
+     ACTIVITY
+     ═══════════════════════════════════════ */
+
+  class AIDCActivity extends AIDCElement {
+    static properties = {
+      applicationId: {
+        type: String
+      },
+
+      events: {
+        state: true
+      },
+
+      loading: {
+        state: true
+      }
+    };
+
+    constructor() {
+      super();
+
+      this.applicationId = null;
+      this.events = [];
+      this.loading = true;
+    }
+
+    updated(changed) {
+      /*
+       * Reset event list on app switch so the
+       * previous app's events do not linger.
+       */
+      if (changed.has("applicationId")) {
+        this.events = [];
+      }
+
+      if (
+        changed.has("applicationId") &&
+        this.applicationId
+      ) {
+        this.load();
+      }
+    }
+
+    async load() {
+      const applicationId =
+        this.applicationId;
+
+      if (!applicationId) {
+        return;
+      }
+
+      this.loading = true;
+
+      try {
+        const events =
+          await activity.list(applicationId);
+
+        if (this.applicationId !== applicationId) {
+          return;
+        }
+
+        this.events = events;
+      } finally {
+        if (this.applicationId === applicationId) {
+          this.loading = false;
+        }
+      }
+    }
+
+    labelFor(type) {
+      const labels = {
+        "credential.rotated":
+          "Client secret rotated",
+        "credential.revoked":
+          "Client secret revoked",
+        "branding.updated":
+          "Branding updated"
+      };
+
+      return labels[type] || type;
+    }
+
+    render() {
+      return html`
+        <section class="aidc-card">
+
+          <header
+            class="aidc-card-section-header"
+          >
+            <h2>Activity</h2>
+
+            <p>
+              Authentication and application
+              events.
+            </p>
+          </header>
+
+          ${
+            this.loading
+              ? html`
+                  <div class="aidc-loading-card">
+                    <span class="aidc-spinner"></span>
+                    Loading activity…
+                  </div>
+                `
+              : this.events.length
+                ? html`
+                    <div class="aidc-detail-fields">
+                      ${this.events.map(
+                        event => html`
+                          <div
+                            class="aidc-detail-field"
+                          >
+                            <div>
+                              <strong>
+                                ${this.labelFor(
+                                  event.event_type
+                                )}
+                              </strong>
+
+                              ${
+                                event.success
+                                  ? html`
+                                      <span
+                                        class="aidc-status aidc-status-active"
+                                      >
+                                        <span
+                                          class="aidc-status-dot"
+                                        ></span>
+                                        Success
+                                      </span>
+                                    `
+                                  : html`
+                                      <span
+                                        class="aidc-status aidc-status-disabled"
+                                      >
+                                        <span
+                                          class="aidc-status-dot"
+                                        ></span>
+                                        Failed
+                                      </span>
+                                    `
+                              }
+                            </div>
+
+                            <time>
+                              ${formatDate(
+                                event.created_at
+                              )}
+                            </time>
+                          </div>
+                        `
+                      )}
+                    </div>
+                  `
+                : emptyState({
+                    iconName: "activity-01",
+                    title: "No activity yet",
+                    description:
+                      "Authentication and audit events will appear here."
+                  })
+          }
+
+        </section>
+      `;
+    }
+  }
+
+  /* ═══════════════════════════════════════
      PLACEHOLDER
      ═══════════════════════════════════════ */
 
@@ -1930,13 +2646,6 @@ export function registerAIDCComponents(AIDC) {
       this.submitting = false;
       this.error = "";
 
-      /*
-       * Tracks whether the modal was open on
-       * the previous render, so the name
-       * field is only focused when the modal
-       * *transitions* to open — not on every
-       * reactive update.
-       */
       this._wasOpen = false;
     }
 
@@ -2580,6 +3289,21 @@ export function registerAIDCComponents(AIDC) {
   customElements.define(
     "aidc-scopes",
     AIDCScopes
+  );
+
+  customElements.define(
+    "aidc-credentials",
+    AIDCCredentials
+  );
+
+  customElements.define(
+    "aidc-branding",
+    AIDCBranding
+  );
+
+  customElements.define(
+    "aidc-activity",
+    AIDCActivity
   );
 
   customElements.define(

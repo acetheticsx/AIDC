@@ -44,6 +44,23 @@ function generateClientId() {
   return `aidc_${crypto.randomBytes(24).toString("hex")}`;
 }
 
+function generateClientSecret() {
+  return `aidcs_${crypto
+    .randomBytes(32)
+    .toString("base64url")}`;
+}
+
+function hashSecret(secret) {
+  return crypto
+    .createHash("sha256")
+    .update(secret)
+    .digest("hex");
+}
+
+function secretPrefix(secret) {
+  return secret.slice(0, 18);
+}
+
 function isValidUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value
@@ -118,6 +135,69 @@ function validateRedirectUri(value) {
     valid: true,
     uri
   };
+}
+
+function validateBranding(payload) {
+  const {
+    display_name,
+    logo_url,
+    accent_color
+  } = payload ?? {};
+
+  if (
+    display_name !== undefined &&
+    display_name !== null &&
+    (
+      typeof display_name !== "string" ||
+      display_name.length > 120
+    )
+  ) {
+    return "Display name must be 120 characters or fewer";
+  }
+
+  if (
+    logo_url !== undefined &&
+    logo_url !== null &&
+    logo_url !== ""
+  ) {
+    if (
+      typeof logo_url !== "string" ||
+      logo_url.length > 2048
+    ) {
+      return "Logo URL is invalid";
+    }
+
+    try {
+      const parsed = new URL(logo_url);
+
+      if (
+        !["https:", "http:"].includes(
+          parsed.protocol
+        ) ||
+        parsed.username ||
+        parsed.password
+      ) {
+        return "Logo URL must be a valid HTTP or HTTPS URL";
+      }
+    } catch {
+      return "Logo URL must be a valid URL";
+    }
+  }
+
+  if (
+    accent_color !== undefined &&
+    accent_color !== null &&
+    accent_color !== ""
+  ) {
+    if (
+      typeof accent_color !== "string" ||
+      !/^#[0-9a-f]{6}$/i.test(accent_color)
+    ) {
+      return "Accent color must be a hex color such as #111111";
+    }
+  }
+
+  return null;
 }
 
 /*
@@ -660,18 +740,6 @@ app.delete(
 
 /*
  * Scopes
- *
- * Requires the following table in the public schema:
- *
- *   CREATE TABLE IF NOT EXISTS public.application_scopes (
- *     application_id uuid NOT NULL
- *       REFERENCES public.applications(id) ON DELETE CASCADE,
- *     scope text NOT NULL,
- *     PRIMARY KEY (application_id, scope)
- *   );
- *
- * If your schema stores scopes differently (JSONB column,
- * text[] column, etc.), adapt the two queries below.
  */
 
 /*
@@ -841,6 +909,500 @@ app.put(
 );
 
 /*
+ * ═══════════════════════════════════════════
+ * Credentials
+ * ═══════════════════════════════════════════
+ */
+
+/*
+ * GET /api/applications/:id/credentials
+ *
+ * Never returns the plaintext secret.
+ */
+app.get(
+  "/api/applications/:id/credentials",
+  async (req, res) => {
+    const { id } = req.params;
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({
+        error: "Invalid application ID"
+      });
+    }
+
+    try {
+      const result = await pool.query(
+        `
+        SELECT
+          id,
+          application_id,
+          secret_prefix,
+          created_at,
+          last_used_at,
+          revoked_at
+        FROM public.application_credentials
+        WHERE application_id = $1
+        ORDER BY created_at DESC
+        `,
+        [id]
+      );
+
+      res.json({
+        credentials: result.rows
+      });
+    } catch (error) {
+      console.error(
+        "GET credentials:",
+        error
+      );
+
+      res.status(500).json({
+        error: "Failed to fetch credentials"
+      });
+    }
+  }
+);
+
+/*
+ * POST /api/applications/:id/credentials/rotate
+ *
+ * Revokes any active credential, generates a new
+ * one, and returns the plaintext secret exactly
+ * once. The secret is never stored in plaintext.
+ */
+app.post(
+  "/api/applications/:id/credentials/rotate",
+  async (req, res) => {
+    const { id } = req.params;
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({
+        error: "Invalid application ID"
+      });
+    }
+
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const application = await client.query(
+        `
+        SELECT id
+        FROM public.applications
+        WHERE id = $1
+        `,
+        [id]
+      );
+
+      if (!application.rows.length) {
+        await client.query("ROLLBACK");
+
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
+      await client.query(
+        `
+        UPDATE public.application_credentials
+        SET revoked_at = now()
+        WHERE application_id = $1
+          AND revoked_at IS NULL
+        `,
+        [id]
+      );
+
+      const secret = generateClientSecret();
+
+      const result = await client.query(
+        `
+        INSERT INTO public.application_credentials
+          (application_id, secret_hash, secret_prefix)
+        VALUES
+          ($1, $2, $3)
+        RETURNING
+          id,
+          application_id,
+          secret_prefix,
+          created_at,
+          last_used_at,
+          revoked_at
+        `,
+        [
+          id,
+          hashSecret(secret),
+          secretPrefix(secret)
+        ]
+      );
+
+      await client.query(
+        `
+        INSERT INTO public.application_activity
+          (application_id, event_type, success, metadata)
+        VALUES
+          ($1, 'credential.rotated', true, '{}'::jsonb)
+        `,
+        [id]
+      );
+
+      await client.query("COMMIT");
+
+      res.status(201).json({
+        credential: {
+          ...result.rows[0],
+          secret
+        }
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+
+      console.error(
+        "POST credential rotation:",
+        error
+      );
+
+      res.status(500).json({
+        error: "Failed to rotate credentials"
+      });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/*
+ * DELETE /api/applications/:id/credentials/:credentialId
+ *
+ * Revokes the given credential and records the
+ * audit event atomically.
+ */
+app.delete(
+  "/api/applications/:id/credentials/:credentialId",
+  async (req, res) => {
+    const { id, credentialId } = req.params;
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({
+        error: "Invalid application ID"
+      });
+    }
+
+    if (!isValidUuid(credentialId)) {
+      return res.status(400).json({
+        error: "Invalid credential ID"
+      });
+    }
+
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const result = await client.query(
+        `
+        UPDATE public.application_credentials
+        SET revoked_at = now()
+        WHERE id = $1
+          AND application_id = $2
+          AND revoked_at IS NULL
+        RETURNING
+          id,
+          application_id,
+          revoked_at
+        `,
+        [credentialId, id]
+      );
+
+      if (!result.rows.length) {
+        await client.query("ROLLBACK");
+
+        return res.status(404).json({
+          error: "Active credential not found"
+        });
+      }
+
+      await client.query(
+        `
+        INSERT INTO public.application_activity
+          (application_id, event_type, success, metadata)
+        VALUES
+          ($1, 'credential.revoked', true, '{}'::jsonb)
+        `,
+        [id]
+      );
+
+      await client.query("COMMIT");
+
+      res.json({
+        deleted: true,
+        credential: result.rows[0]
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+
+      console.error(
+        "DELETE credential:",
+        error
+      );
+
+      res.status(500).json({
+        error: "Failed to revoke credential"
+      });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/*
+ * ═══════════════════════════════════════════
+ * Branding
+ * ═══════════════════════════════════════════
+ */
+
+/*
+ * GET /api/applications/:id/branding
+ */
+app.get(
+  "/api/applications/:id/branding",
+  async (req, res) => {
+    const { id } = req.params;
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({
+        error: "Invalid application ID"
+      });
+    }
+
+    try {
+      const result = await pool.query(
+        `
+        SELECT
+          application_id,
+          display_name,
+          logo_url,
+          accent_color,
+          updated_at
+        FROM public.application_branding
+        WHERE application_id = $1
+        `,
+        [id]
+      );
+
+      res.json({
+        branding:
+          result.rows[0] || {
+            application_id: id,
+            display_name: null,
+            logo_url: null,
+            accent_color: null,
+            updated_at: null
+          }
+      });
+    } catch (error) {
+      console.error(
+        "GET branding:",
+        error
+      );
+
+      res.status(500).json({
+        error: "Failed to fetch branding"
+      });
+    }
+  }
+);
+
+/*
+ * PUT /api/applications/:id/branding
+ */
+app.put(
+  "/api/applications/:id/branding",
+  async (req, res) => {
+    const { id } = req.params;
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({
+        error: "Invalid application ID"
+      });
+    }
+
+    const validation = validateBranding(
+      req.body
+    );
+
+    if (validation) {
+      return res.status(400).json({
+        error: validation
+      });
+    }
+
+    const {
+      display_name = null,
+      logo_url = null,
+      accent_color = null
+    } = req.body ?? {};
+
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const application = await client.query(
+        `
+        SELECT id
+        FROM public.applications
+        WHERE id = $1
+        `,
+        [id]
+      );
+
+      if (!application.rows.length) {
+        await client.query("ROLLBACK");
+
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
+      const result = await client.query(
+        `
+        INSERT INTO public.application_branding
+          (
+            application_id,
+            display_name,
+            logo_url,
+            accent_color,
+            updated_at
+          )
+        VALUES
+          ($1, $2, $3, $4, now())
+        ON CONFLICT (application_id)
+        DO UPDATE SET
+          display_name = EXCLUDED.display_name,
+          logo_url = EXCLUDED.logo_url,
+          accent_color = EXCLUDED.accent_color,
+          updated_at = now()
+        RETURNING
+          application_id,
+          display_name,
+          logo_url,
+          accent_color,
+          updated_at
+        `,
+        [
+          id,
+          typeof display_name === "string"
+            ? display_name.trim() || null
+            : null,
+          typeof logo_url === "string"
+            ? logo_url.trim() || null
+            : null,
+          typeof accent_color === "string"
+            ? accent_color.trim() || null
+            : null
+        ]
+      );
+
+      await client.query(
+        `
+        INSERT INTO public.application_activity
+          (application_id, event_type, success, metadata)
+        VALUES
+          ($1, 'branding.updated', true, '{}'::jsonb)
+        `,
+        [id]
+      );
+
+      await client.query("COMMIT");
+
+      res.json({
+        branding: result.rows[0]
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+
+      console.error(
+        "PUT branding:",
+        error
+      );
+
+      res.status(500).json({
+        error: "Failed to update branding"
+      });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/*
+ * ═══════════════════════════════════════════
+ * Activity
+ * ═══════════════════════════════════════════
+ */
+
+/*
+ * GET /api/applications/:id/activity
+ */
+app.get(
+  "/api/applications/:id/activity",
+  async (req, res) => {
+    const { id } = req.params;
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({
+        error: "Invalid application ID"
+      });
+    }
+
+    const requestedLimit = Number.parseInt(
+      req.query.limit,
+      10
+    );
+
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(
+          Math.max(requestedLimit, 1),
+          100
+        )
+      : 50;
+
+    try {
+      const result = await pool.query(
+        `
+        SELECT
+          id,
+          application_id,
+          event_type,
+          success,
+          metadata,
+          created_at
+        FROM public.application_activity
+        WHERE application_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2
+        `,
+        [id, limit]
+      );
+
+      res.json({
+        events: result.rows
+      });
+    } catch (error) {
+      console.error(
+        "GET activity:",
+        error
+      );
+
+      res.status(500).json({
+        error: "Failed to fetch activity"
+      });
+    }
+  }
+);
+
+/*
  * Frontend
  *
  * Explicitly serve only the frontend files.
@@ -860,10 +1422,10 @@ app.get("/app.js", (req, res) => {
 });
 
 /*
- * api.js is imported by app.js. Without this route the
- * browser receives a 404 for the import and the whole
- * module graph aborts — which is why the page appeared
- * blank.
+ * api.js is imported by app.js. Without this route
+ * the browser receives a 404 for the import and
+ * the whole module graph aborts — which is why the
+ * page appeared blank.
  */
 app.get("/api.js", (req, res) => {
   res.sendFile(

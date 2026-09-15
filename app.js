@@ -811,6 +811,218 @@ const scopes = {
 };
 
 /* ─────────────────────────────────────────────
+   Credentials
+───────────────────────────────────────────── */
+
+const credentials = {
+  async list(applicationId) {
+    if (!applicationId) {
+      return [];
+    }
+
+    try {
+      const data =
+        await api.credentials.list(
+          applicationId
+        );
+
+      return Array.isArray(data?.credentials)
+        ? data.credentials
+        : [];
+    } catch (error) {
+      console.error(
+        "Failed to load credentials:",
+        error
+      );
+
+      notify(
+        error.message ||
+          "Failed to load credentials",
+        "error"
+      );
+
+      return [];
+    }
+  },
+
+  async rotate(applicationId) {
+    if (!applicationId) {
+      throw new Error(
+        "Application ID is required."
+      );
+    }
+
+    haptic(10);
+
+    try {
+      const data =
+        await api.credentials.rotate(
+          applicationId
+        );
+
+      if (!data?.credential?.secret) {
+        throw new Error(
+          "The server did not return the new client secret."
+        );
+      }
+
+      notify("Client secret rotated");
+
+      return data.credential;
+    } catch (error) {
+      console.error(
+        "Failed to rotate credentials:",
+        error
+      );
+
+      notify(
+        error.message ||
+          "Failed to rotate credentials",
+        "error"
+      );
+
+      throw error;
+    }
+  },
+
+  async revoke(applicationId, credentialId) {
+    if (!applicationId || !credentialId) {
+      throw new Error(
+        "Credential information is required."
+      );
+    }
+
+    haptic(10);
+
+    try {
+      await api.credentials.revoke(
+        applicationId,
+        credentialId
+      );
+
+      notify("Client secret revoked");
+
+      return true;
+    } catch (error) {
+      console.error(
+        "Failed to revoke credentials:",
+        error
+      );
+
+      notify(
+        error.message ||
+          "Failed to revoke credentials",
+        "error"
+      );
+
+      throw error;
+    }
+  }
+};
+
+/* ─────────────────────────────────────────────
+   Branding
+───────────────────────────────────────────── */
+
+const branding = {
+  async get(applicationId) {
+    if (!applicationId) {
+      return null;
+    }
+
+    try {
+      const data =
+        await api.branding.get(applicationId);
+
+      return data?.branding || null;
+    } catch (error) {
+      console.error(
+        "Failed to load branding:",
+        error
+      );
+
+      notify(
+        error.message ||
+          "Failed to load branding",
+        "error"
+      );
+
+      return null;
+    }
+  },
+
+  async update(applicationId, payload) {
+    if (!applicationId) {
+      throw new Error(
+        "Application ID is required."
+      );
+    }
+
+    try {
+      const data =
+        await api.branding.update(
+          applicationId,
+          payload
+        );
+
+      notify("Branding saved");
+
+      return data?.branding || null;
+    } catch (error) {
+      console.error(
+        "Failed to save branding:",
+        error
+      );
+
+      notify(
+        error.message ||
+          "Failed to save branding",
+        "error"
+      );
+
+      throw error;
+    }
+  }
+};
+
+/* ─────────────────────────────────────────────
+   Activity
+───────────────────────────────────────────── */
+
+const activity = {
+  async list(applicationId, limit = 50) {
+    if (!applicationId) {
+      return [];
+    }
+
+    try {
+      const data =
+        await api.activity.list(
+          applicationId,
+          limit
+        );
+
+      return Array.isArray(data?.events)
+        ? data.events
+        : [];
+    } catch (error) {
+      console.error(
+        "Failed to load activity:",
+        error
+      );
+
+      notify(
+        error.message ||
+          "Failed to load activity",
+        "error"
+      );
+
+      return [];
+    }
+  }
+};
+
+/* ─────────────────────────────────────────────
    Router
 ───────────────────────────────────────────── */
 
@@ -1108,6 +1320,12 @@ const AIDC = {
   redirectUris,
 
   scopes,
+
+  credentials,
+
+  branding,
+
+  activity,
 
   router: {
     navigate,

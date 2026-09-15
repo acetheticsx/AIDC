@@ -3,6 +3,7 @@ const API_BASE = window.AIDC_API_URL || "/api";
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {})
@@ -105,10 +106,64 @@ export const api = {
         `/applications/${id(applicationId)}/scopes`,
         {
           method: "PUT",
-          body: JSON.stringify({
-            scopes
-          })
+          body: JSON.stringify({ scopes })
         }
+      );
+    }
+  },
+
+  credentials: {
+    list(applicationId) {
+      return request(
+        `/applications/${id(applicationId)}/credentials`
+      );
+    },
+
+    rotate(applicationId) {
+      return request(
+        `/applications/${id(applicationId)}/credentials/rotate`,
+        {
+          method: "POST"
+        }
+      );
+    },
+
+    revoke(applicationId, credentialId) {
+      return request(
+        `/applications/${id(applicationId)}/credentials/${id(
+          credentialId
+        )}`,
+        {
+          method: "DELETE"
+        }
+      );
+    }
+  },
+
+  branding: {
+    get(applicationId) {
+      return request(
+        `/applications/${id(applicationId)}/branding`
+      );
+    },
+
+    update(applicationId, payload) {
+      return request(
+        `/applications/${id(applicationId)}/branding`,
+        {
+          method: "PUT",
+          body: JSON.stringify(payload)
+        }
+      );
+    }
+  },
+
+  activity: {
+    list(applicationId, limit = 50) {
+      return request(
+        `/applications/${id(applicationId)}/activity?limit=${encodeURIComponent(
+          limit
+        )}`
       );
     }
   }
