@@ -170,6 +170,39 @@ async function tryLoadDiscovery() {
       );
     }
 
+    /*
+     * Every advertised endpoint must share the
+     * issuer's origin. This catches misconfigured
+     * proxies that terminate TLS without setting
+     * X-Forwarded-Proto, which would silently
+     * downgrade the token endpoint and JWKS URI
+     * to plaintext.
+     */
+    const issuerOrigin = new URL(ISSUER).origin;
+
+    for (const field of [
+      "authorization_endpoint",
+      "token_endpoint",
+      "jwks_uri",
+      "end_session_endpoint"
+    ]) {
+      let endpointOrigin;
+
+      try {
+        endpointOrigin = new URL(doc[field]).origin;
+      } catch {
+        throw new Error(
+          `discovery ${field} is not a valid URL: ${doc[field]}`
+        );
+      }
+
+      if (endpointOrigin !== issuerOrigin) {
+        throw new Error(
+          `discovery ${field} origin mismatch: expected "${issuerOrigin}", got "${endpointOrigin}"`
+        );
+      }
+    }
+
     discoveryState.doc = doc;
     discoveryState.jwks = createRemoteJWKSet(
       new URL(doc.jwks_uri)
