@@ -49,9 +49,8 @@ if (!PUBLIC_ORIGIN) {
 }
 
 /*
- * IS_PRODUCTION is derived from the public origin, not
- * from NODE_ENV. One source of truth; nothing to forget
- * to set on the deploy target.
+ * IS_PRODUCTION is derived from the public origin,
+ * not from NODE_ENV. One source of truth.
  */
 const IS_PRODUCTION = !/^http:\/\/(localhost|127\.0\.0\.1)/.test(
   PUBLIC_ORIGIN
@@ -72,8 +71,8 @@ const POST_LOGOUT_URL = `${PUBLIC_ORIGIN}/`;
 
 /*
  * Known OAuth error codes. Never reflect the raw
- * query parameter — it is attacker-controlled and
- * Express does not escape string bodies.
+ * query parameter — Express does not escape string
+ * bodies, and the parameter is attacker-controlled.
  */
 const OAUTH_ERROR_MESSAGES = {
   access_denied:
@@ -102,59 +101,102 @@ const pool = new Pool({
 });
 
 /*
- * OIDC discovery (fail-fast at boot)
+ * OIDC discovery
+ *
+ * Loaded lazily and retried in the background.
+ * AIDC must be able to boot even when Ace ID is
+ * temporarily unreachable, otherwise a routine
+ * Ace ID blip blocks AIDC deploys.
  */
-async function loadDiscovery() {
-  const url = `${ISSUER}/.well-known/openid-configuration`;
+const discoveryState = {
+  status: "loading", // "loading" | "ready" | "failed"
+  doc: null,
+  jwks: null,
+  lastError: null,
+  lastAttemptAt: 0
+};
 
-  const response = await fetch(url);
+const DISCOVERY_RETRY_MS = 30_000;
+const DISCOVERY_TIMEOUT_MS = 10_000;
 
-  if (!response.ok) {
-    throw new Error(
-      `OIDC discovery failed: ${response.status} ${response.statusText}`
+async function tryLoadDiscovery() {
+  discoveryState.lastAttemptAt = Date.now();
+
+  try {
+    const controller = new AbortController();
+
+    const timer = setTimeout(
+      () => controller.abort(),
+      DISCOVERY_TIMEOUT_MS
     );
-  }
 
-  const doc = await response.json();
+    let doc;
 
-  for (const field of [
-    "issuer",
-    "authorization_endpoint",
-    "token_endpoint",
-    "jwks_uri",
-    "end_session_endpoint"
-  ]) {
-    if (!doc[field]) {
+    try {
+      const url = `${ISSUER}/.well-known/openid-configuration`;
+
+      const response = await fetch(url, {
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `discovery responded ${response.status} ${response.statusText}`
+        );
+      }
+
+      doc = await response.json();
+    } finally {
+      clearTimeout(timer);
+    }
+
+    for (const field of [
+      "issuer",
+      "authorization_endpoint",
+      "token_endpoint",
+      "jwks_uri",
+      "end_session_endpoint"
+    ]) {
+      if (!doc[field]) {
+        throw new Error(
+          `discovery missing required field: ${field}`
+        );
+      }
+    }
+
+    if (doc.issuer !== ISSUER) {
       throw new Error(
-        `OIDC discovery missing required field: ${field}`
+        `issuer mismatch: discovery="${doc.issuer}" env="${ISSUER}"`
       );
     }
-  }
 
-  if (doc.issuer !== ISSUER) {
-    throw new Error(
-      `OIDC issuer mismatch. Discovery says "${doc.issuer}", environment says "${ISSUER}".`
+    discoveryState.doc = doc;
+    discoveryState.jwks = createRemoteJWKSet(
+      new URL(doc.jwks_uri)
+    );
+    discoveryState.status = "ready";
+    discoveryState.lastError = null;
+
+    console.log(
+      `OIDC discovery ready. issuer=${doc.issuer}`
+    );
+  } catch (error) {
+    discoveryState.status = "failed";
+    discoveryState.lastError = error.message;
+
+    console.error(
+      "OIDC discovery failed:",
+      error.message
     );
   }
-
-  return doc;
 }
 
-let discovery;
+await tryLoadDiscovery();
 
-try {
-  discovery = await loadDiscovery();
-} catch (error) {
-  console.error(
-    "Failed to load OIDC discovery:",
-    error.message
-  );
-  process.exit(1);
-}
-
-const JWKS = createRemoteJWKSet(
-  new URL(discovery.jwks_uri)
-);
+setInterval(
+  tryLoadDiscovery,
+  DISCOVERY_RETRY_MS
+).unref();
 
 /*
  * Middleware
@@ -621,6 +663,25 @@ async function requireAuth(req, res, next) {
 }
 
 /*
+ * requireDiscovery
+ *
+ * Guard for auth routes. Returns 503 while
+ * discovery has not yet succeeded, so the frontend
+ * can show a clean "Ace ID is unavailable" message
+ * instead of a stack trace.
+ */
+function requireDiscovery(req, res, next) {
+  if (discoveryState.status === "ready") {
+    return next();
+  }
+
+  res.status(503).json({
+    error: "Ace ID is not currently reachable",
+    detail: discoveryState.lastError || null
+  });
+}
+
+/*
  * ═══════════════════════════════════════════
  * Auth routes
  * ═══════════════════════════════════════════
@@ -629,273 +690,286 @@ async function requireAuth(req, res, next) {
 /*
  * GET /auth/login
  */
-app.get("/auth/login", (req, res) => {
-  const state = randomToken(32);
-  const codeVerifier = randomToken(32);
+app.get(
+  "/auth/login",
+  requireDiscovery,
+  (req, res) => {
+    const state = randomToken(32);
+    const codeVerifier = randomToken(32);
 
-  const codeChallenge = crypto
-    .createHash("sha256")
-    .update(codeVerifier)
-    .digest("base64url");
+    const codeChallenge = crypto
+      .createHash("sha256")
+      .update(codeVerifier)
+      .digest("base64url");
 
-  const params = new URLSearchParams({
-    response_type: "code",
-    client_id: CLIENT_ID,
-    redirect_uri: CALLBACK_URL,
-    scope: "openid profile email",
-    state,
-    code_challenge: codeChallenge,
-    code_challenge_method: "S256"
-  });
-
-  const cookies = [
-    serializeCookie(OAUTH_STATE_COOKIE, state, {
-      maxAge: OAUTH_TTL_MS,
-      path: "/auth"
-    }),
-    serializeCookie(
-      OAUTH_VERIFIER_COOKIE,
-      codeVerifier,
-      {
-        maxAge: OAUTH_TTL_MS,
-        path: "/auth"
-      }
-    )
-  ];
-
-  res.set("Set-Cookie", cookies);
-
-  res.redirect(
-    `${discovery.authorization_endpoint}?${params.toString()}`
-  );
-});
-
-/*
- * GET /auth/callback
- */
-app.get("/auth/callback", async (req, res) => {
-  const { code, state, error: oauthError } = req.query;
-
-  const expectedState = getCookie(
-    req,
-    OAUTH_STATE_COOKIE
-  );
-
-  const codeVerifier = getCookie(
-    req,
-    OAUTH_VERIFIER_COOKIE
-  );
-
-  const clearOauthCookies = [
-    clearCookie(OAUTH_STATE_COOKIE, "/auth"),
-    clearCookie(OAUTH_VERIFIER_COOKIE, "/auth")
-  ];
-
-  /*
-   * Do not reflect oauthError back to the browser.
-   * Map known codes to fixed, safe strings.
-   */
-  if (oauthError) {
-    res.set("Set-Cookie", clearOauthCookies);
-
-    const message =
-      OAUTH_ERROR_MESSAGES[oauthError] ||
-      "Authorization failed";
-
-    return res
-      .status(400)
-      .type("text")
-      .send(message);
-  }
-
-  if (!code || typeof code !== "string") {
-    res.set("Set-Cookie", clearOauthCookies);
-
-    return res
-      .status(400)
-      .type("text")
-      .send("Missing authorization code");
-  }
-
-  if (
-    !expectedState ||
-    !state ||
-    !safeEqual(expectedState, state)
-  ) {
-    res.set("Set-Cookie", clearOauthCookies);
-
-    return res
-      .status(400)
-      .type("text")
-      .send("Invalid state parameter");
-  }
-
-  if (!codeVerifier) {
-    res.set("Set-Cookie", clearOauthCookies);
-
-    return res
-      .status(400)
-      .type("text")
-      .send("Missing PKCE verifier");
-  }
-
-  try {
-    const basic = Buffer.from(
-      `${CLIENT_ID}:${CLIENT_SECRET}`
-    ).toString("base64");
-
-    const body = new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: CLIENT_ID,
       redirect_uri: CALLBACK_URL,
-      code_verifier: codeVerifier
-    });
-
-    const tokenResponse = await fetch(
-      discovery.token_endpoint,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/x-www-form-urlencoded",
-          Authorization: `Basic ${basic}`
-        },
-        body
-      }
-    );
-
-    if (!tokenResponse.ok) {
-      const text = await tokenResponse.text();
-
-      console.error(
-        "Token exchange failed:",
-        tokenResponse.status,
-        text
-      );
-
-      res.set("Set-Cookie", clearOauthCookies);
-
-      return res
-        .status(502)
-        .type("text")
-        .send("Token exchange failed");
-    }
-
-    const tokens = await tokenResponse.json();
-
-    if (!tokens.id_token) {
-      res.set("Set-Cookie", clearOauthCookies);
-
-      return res
-        .status(502)
-        .type("text")
-        .send("No ID token returned");
-    }
-
-    const { payload } = await jwtVerify(
-      tokens.id_token,
-      JWKS,
-      {
-        issuer: ISSUER,
-        audience: CLIENT_ID
-      }
-    );
-
-    /*
-     * Validate the subject before it goes into a
-     * uuid column. A non-UUID sub means something on
-     * the provider side changed and we would rather
-     * fail cleanly than corrupt the sessions table.
-     */
-    if (
-      typeof payload.sub !== "string" ||
-      !isValidUuid(payload.sub)
-    ) {
-      res.set("Set-Cookie", clearOauthCookies);
-
-      console.error(
-        "ID token sub is not a UUID:",
-        payload.sub
-      );
-
-      return res
-        .status(502)
-        .type("text")
-        .send("Invalid identity subject");
-    }
-
-    const session = await createSession({
-      developerId: payload.sub,
-      email: payload.email || null,
-      name:
-        payload.name ||
-        payload.preferred_username ||
-        null
+      scope: "openid profile email",
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256"
     });
 
     const cookies = [
-      ...clearOauthCookies,
+      serializeCookie(OAUTH_STATE_COOKIE, state, {
+        maxAge: OAUTH_TTL_MS,
+        path: "/auth"
+      }),
       serializeCookie(
-        SESSION_COOKIE,
-        session.token,
+        OAUTH_VERIFIER_COOKIE,
+        codeVerifier,
         {
-          maxAge: SESSION_TTL_MS,
-          httpOnly: true,
-          path: "/"
+          maxAge: OAUTH_TTL_MS,
+          path: "/auth"
         }
-      ),
-      serializeCookie(CSRF_COOKIE, session.csrfToken, {
-        maxAge: SESSION_TTL_MS,
-        httpOnly: false,
-        path: "/"
-      })
+      )
     ];
 
     res.set("Set-Cookie", cookies);
 
-    res.redirect("/");
-  } catch (error) {
-    console.error("Callback failed:", error);
-
-    res.set("Set-Cookie", clearOauthCookies);
-
-    res
-      .status(500)
-      .type("text")
-      .send("Authentication failed");
+    res.redirect(
+      `${discoveryState.doc.authorization_endpoint}?${params.toString()}`
+    );
   }
-});
+);
+
+/*
+ * GET /auth/callback
+ */
+app.get(
+  "/auth/callback",
+  requireDiscovery,
+  async (req, res) => {
+    const { code, state, error: oauthError } = req.query;
+
+    const expectedState = getCookie(
+      req,
+      OAUTH_STATE_COOKIE
+    );
+
+    const codeVerifier = getCookie(
+      req,
+      OAUTH_VERIFIER_COOKIE
+    );
+
+    const clearOauthCookies = [
+      clearCookie(OAUTH_STATE_COOKIE, "/auth"),
+      clearCookie(OAUTH_VERIFIER_COOKIE, "/auth")
+    ];
+
+    /*
+     * Do not reflect oauthError back to the browser.
+     * Map known codes to fixed, safe strings.
+     */
+    if (oauthError) {
+      res.set("Set-Cookie", clearOauthCookies);
+
+      const message =
+        OAUTH_ERROR_MESSAGES[oauthError] ||
+        "Authorization failed";
+
+      return res
+        .status(400)
+        .type("text")
+        .send(message);
+    }
+
+    if (!code || typeof code !== "string") {
+      res.set("Set-Cookie", clearOauthCookies);
+
+      return res
+        .status(400)
+        .type("text")
+        .send("Missing authorization code");
+    }
+
+    if (
+      !expectedState ||
+      !state ||
+      !safeEqual(expectedState, state)
+    ) {
+      res.set("Set-Cookie", clearOauthCookies);
+
+      return res
+        .status(400)
+        .type("text")
+        .send("Invalid state parameter");
+    }
+
+    if (!codeVerifier) {
+      res.set("Set-Cookie", clearOauthCookies);
+
+      return res
+        .status(400)
+        .type("text")
+        .send("Missing PKCE verifier");
+    }
+
+    try {
+      const basic = Buffer.from(
+        `${CLIENT_ID}:${CLIENT_SECRET}`
+      ).toString("base64");
+
+      const body = new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: CALLBACK_URL,
+        code_verifier: codeVerifier
+      });
+
+      const tokenResponse = await fetch(
+        discoveryState.doc.token_endpoint,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/x-www-form-urlencoded",
+            Authorization: `Basic ${basic}`
+          },
+          body
+        }
+      );
+
+      if (!tokenResponse.ok) {
+        const text = await tokenResponse.text();
+
+        console.error(
+          "Token exchange failed:",
+          tokenResponse.status,
+          text
+        );
+
+        res.set("Set-Cookie", clearOauthCookies);
+
+        return res
+          .status(502)
+          .type("text")
+          .send("Token exchange failed");
+      }
+
+      const tokens = await tokenResponse.json();
+
+      if (!tokens.id_token) {
+        res.set("Set-Cookie", clearOauthCookies);
+
+        return res
+          .status(502)
+          .type("text")
+          .send("No ID token returned");
+      }
+
+      const { payload } = await jwtVerify(
+        tokens.id_token,
+        discoveryState.jwks,
+        {
+          issuer: ISSUER,
+          audience: CLIENT_ID
+        }
+      );
+
+      /*
+       * Validate the subject before it goes into a
+       * uuid column. A non-UUID sub means something
+       * on the provider side changed and we would
+       * rather fail cleanly than corrupt the
+       * sessions table.
+       */
+      if (
+        typeof payload.sub !== "string" ||
+        !isValidUuid(payload.sub)
+      ) {
+        res.set("Set-Cookie", clearOauthCookies);
+
+        console.error(
+          "ID token sub is not a UUID:",
+          payload.sub
+        );
+
+        return res
+          .status(502)
+          .type("text")
+          .send("Invalid identity subject");
+      }
+
+      const session = await createSession({
+        developerId: payload.sub,
+        email: payload.email || null,
+        name:
+          payload.name ||
+          payload.preferred_username ||
+          null
+      });
+
+      const cookies = [
+        ...clearOauthCookies,
+        serializeCookie(
+          SESSION_COOKIE,
+          session.token,
+          {
+            maxAge: SESSION_TTL_MS,
+            httpOnly: true,
+            path: "/"
+          }
+        ),
+        serializeCookie(CSRF_COOKIE, session.csrfToken, {
+          maxAge: SESSION_TTL_MS,
+          httpOnly: false,
+          path: "/"
+        })
+      ];
+
+      res.set("Set-Cookie", cookies);
+
+      res.redirect("/");
+    } catch (error) {
+      console.error("Callback failed:", error);
+
+      res.set("Set-Cookie", clearOauthCookies);
+
+      res
+        .status(500)
+        .type("text")
+        .send("Authentication failed");
+    }
+  }
+);
 
 /*
  * POST /auth/logout
  */
-app.post("/auth/logout", async (req, res) => {
-  const token = getCookie(req, SESSION_COOKIE);
+app.post(
+  "/auth/logout",
+  requireDiscovery,
+  async (req, res) => {
+    const token = getCookie(req, SESSION_COOKIE);
 
-  if (token) {
-    try {
-      await deleteSession(token);
-    } catch (error) {
-      console.error("Failed to delete session:", error);
+    if (token) {
+      try {
+        await deleteSession(token);
+      } catch (error) {
+        console.error("Failed to delete session:", error);
+      }
     }
+
+    const cookies = [
+      clearCookie(SESSION_COOKIE, "/"),
+      clearCookie(CSRF_COOKIE, "/")
+    ];
+
+    res.set("Set-Cookie", cookies);
+
+    const endSessionUrl =
+      `${discoveryState.doc.end_session_endpoint}` +
+      `?client_id=${encodeURIComponent(CLIENT_ID)}` +
+      `&post_logout_redirect_uri=${encodeURIComponent(
+        POST_LOGOUT_URL
+      )}`;
+
+    res.json({ logout_url: endSessionUrl });
   }
-
-  const cookies = [
-    clearCookie(SESSION_COOKIE, "/"),
-    clearCookie(CSRF_COOKIE, "/")
-  ];
-
-  res.set("Set-Cookie", cookies);
-
-  const endSessionUrl =
-    `${discovery.end_session_endpoint}` +
-    `?client_id=${encodeURIComponent(CLIENT_ID)}` +
-    `&post_logout_redirect_uri=${encodeURIComponent(
-      POST_LOGOUT_URL
-    )}`;
-
-  res.json({ logout_url: endSessionUrl });
-});
+);
 
 /*
  * GET /api/me
@@ -916,23 +990,31 @@ app.get("/api/me", requireAuth, (req, res) => {
  * ═══════════════════════════════════════════
  */
 app.get("/api/health", async (req, res) => {
+  let database = "connected";
+
   try {
     await pool.query("SELECT 1");
-
-    res.json({
-      ok: true,
-      service: "AIDC API",
-      database: "connected"
-    });
   } catch (error) {
     console.error("Health check failed:", error);
-
-    res.status(503).json({
-      ok: false,
-      service: "AIDC API",
-      database: "disconnected"
-    });
+    database = "disconnected";
   }
+
+  const ok =
+    database === "connected" &&
+    discoveryState.status === "ready";
+
+  res.status(ok ? 200 : 503).json({
+    ok,
+    service: "AIDC API",
+    database,
+    discovery: {
+      status: discoveryState.status,
+      issuer: discoveryState.doc?.issuer || null,
+      last_error: discoveryState.lastError,
+      last_attempt_at:
+        discoveryState.lastAttemptAt || null
+    }
+  });
 });
 
 /*
@@ -2282,8 +2364,11 @@ const server = app.listen(
   () => {
     console.log(`AIDC running on port ${PORT}`);
     console.log(`Public origin: ${PUBLIC_ORIGIN}`);
-    console.log(`OIDC issuer: ${discovery.issuer}`);
+    console.log(`OIDC issuer: ${ISSUER}`);
     console.log(`OIDC client: ${CLIENT_ID}`);
+    console.log(
+      `OIDC discovery: ${discoveryState.status}`
+    );
     console.log(
       `Cookies: Secure=${IS_PRODUCTION}, SameSite=Lax`
     );
