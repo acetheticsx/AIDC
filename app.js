@@ -2,8 +2,10 @@ import { registerAIDCComponents } from "./components.js";
 import { api } from "./api.js";
 
 /* ─────────────────────────────────────────────
-   Supported Scopes
+   Constants
 ───────────────────────────────────────────── */
+
+const APP_NAME = "AIDC";
 
 const SUPPORTED_SCOPES = Object.freeze([
   "openid",
@@ -16,8 +18,17 @@ const SUPPORTED_SCOPES = Object.freeze([
 ───────────────────────────────────────────── */
 
 const state = {
+  /*
+   * Placeholder for the Ace ID session.
+   * Populated once the auth milestone lands.
+   */
+  auth: {
+    user: null,
+    status: "unknown"
+  },
+
   applications: [],
-  user: null,
+  applicationsError: null,
   loading: false,
 
   redirectUris: {
@@ -46,6 +57,12 @@ const state = {
 
 let redirectUriRequestId = 0;
 let scopeRequestId = 0;
+
+/*
+ * In-flight guard so concurrent applications.load()
+ * calls share a single request.
+ */
+let applicationsLoadPromise = null;
 
 /* ─────────────────────────────────────────────
    Haptics
@@ -93,6 +110,8 @@ document.addEventListener(
    Notifications
 ───────────────────────────────────────────── */
 
+let noticeTimer = null;
+
 function notify(message, type = "success") {
   state.ui.notice = {
     id: Date.now(),
@@ -102,12 +121,47 @@ function notify(message, type = "success") {
 
   emitState();
 
-  window.clearTimeout(notify.timer);
+  window.clearTimeout(noticeTimer);
 
-  notify.timer = window.setTimeout(() => {
+  noticeTimer = window.setTimeout(() => {
     state.ui.notice = null;
     emitState();
   }, 3200);
+}
+
+/* ─────────────────────────────────────────────
+   Error Handling
+───────────────────────────────────────────── */
+
+/*
+ * Single funnel for API failures. Logs, notifies,
+ * and — once auth is wired up — fires an
+ * `aidc-auth-required` event on 401/403 so the
+ * app can redirect to login.
+ */
+function handleError(error, fallbackMessage) {
+  console.error(fallbackMessage, error);
+
+  if (
+    error?.status === 401 ||
+    error?.status === 403
+  ) {
+    window.dispatchEvent(
+      new CustomEvent("aidc-auth-required", {
+        detail: {
+          status: error.status,
+          message: error.message
+        }
+      })
+    );
+  }
+
+  notify(
+    error?.message ||
+      fallbackMessage ||
+      "Something went wrong.",
+    "error"
+  );
 }
 
 /* ─────────────────────────────────────────────
@@ -128,36 +182,47 @@ function emitState() {
 
 const applications = {
   async load() {
+    /*
+     * If a load is already in flight, share it.
+     */
+    if (applicationsLoadPromise) {
+      return applicationsLoadPromise;
+    }
+
     state.loading = true;
+    state.applicationsError = null;
     emitState();
 
-    try {
-      const data =
-        await api.applications.list();
+    applicationsLoadPromise = (async () => {
+      try {
+        const data =
+          await api.applications.list();
 
-      state.applications =
-        Array.isArray(data?.applications)
-          ? data.applications
-          : [];
+        state.applications =
+          Array.isArray(data?.applications)
+            ? data.applications
+            : [];
 
-      return state.applications;
-    } catch (error) {
-      console.error(
-        "Failed to load applications:",
-        error
-      );
+        return state.applications;
+      } catch (error) {
+        handleError(
+          error,
+          "Failed to load applications"
+        );
 
-      notify(
-        error.message ||
-          "Failed to load applications",
-        "error"
-      );
+        state.applicationsError =
+          error?.message ||
+          "Failed to load applications";
 
-      return [];
-    } finally {
-      state.loading = false;
-      emitState();
-    }
+        return [];
+      } finally {
+        state.loading = false;
+        applicationsLoadPromise = null;
+        emitState();
+      }
+    })();
+
+    return applicationsLoadPromise;
   },
 
   async create({ name, description = "" }) {
@@ -188,15 +253,9 @@ const applications = {
 
       return application;
     } catch (error) {
-      console.error(
-        "Failed to create application:",
-        error
-      );
-
-      notify(
-        error.message ||
-          "Failed to create application",
-        "error"
+      handleError(
+        error,
+        "Failed to create application"
       );
 
       throw error;
@@ -216,15 +275,9 @@ const applications = {
 
       return data?.application || null;
     } catch (error) {
-      console.error(
-        "Failed to load application:",
-        error
-      );
-
-      notify(
-        error.message ||
-          "Failed to load application",
-        "error"
+      handleError(
+        error,
+        "Failed to load application"
       );
 
       throw error;
@@ -271,15 +324,9 @@ const applications = {
 
       return updated;
     } catch (error) {
-      console.error(
-        "Failed to update application:",
-        error
-      );
-
-      notify(
-        error.message ||
-          "Failed to update application",
-        "error"
+      handleError(
+        error,
+        "Failed to update application"
       );
 
       throw error;
@@ -328,15 +375,9 @@ const applications = {
 
       return data?.application || null;
     } catch (error) {
-      console.error(
-        "Failed to delete application:",
-        error
-      );
-
-      notify(
-        error.message ||
-          "Failed to delete application",
-        "error"
+      handleError(
+        error,
+        "Failed to delete application"
       );
 
       throw error;
@@ -427,9 +468,9 @@ const redirectUris = {
         return [];
       }
 
-      console.error(
-        "Failed to load redirect URIs:",
-        error
+      handleError(
+        error,
+        "Failed to load redirect URIs"
       );
 
       state.redirectUris = {
@@ -437,12 +478,6 @@ const redirectUris = {
         loading: false,
         applicationId
       };
-
-      notify(
-        error.message ||
-          "Failed to load redirect URIs",
-        "error"
-      );
 
       emitState();
 
@@ -498,15 +533,9 @@ const redirectUris = {
 
       return redirectUri;
     } catch (error) {
-      console.error(
-        "Failed to add redirect URI:",
-        error
-      );
-
-      notify(
-        error.message ||
-          "Failed to add redirect URI",
-        "error"
+      handleError(
+        error,
+        "Failed to add redirect URI"
       );
 
       throw error;
@@ -552,15 +581,9 @@ const redirectUris = {
 
       return true;
     } catch (error) {
-      console.error(
-        "Failed to delete redirect URI:",
-        error
-      );
-
-      notify(
-        error.message ||
-          "Failed to delete redirect URI",
-        "error"
+      handleError(
+        error,
+        "Failed to delete redirect URI"
       );
 
       throw error;
@@ -662,9 +685,9 @@ const scopes = {
         return [];
       }
 
-      console.error(
-        "Failed to load scopes:",
-        error
+      handleError(
+        error,
+        "Failed to load scopes"
       );
 
       state.scopes = {
@@ -673,12 +696,6 @@ const scopes = {
         saving: false,
         applicationId
       };
-
-      notify(
-        error.message ||
-          "Failed to load scopes",
-        "error"
-      );
 
       emitState();
 
@@ -787,15 +804,9 @@ const scopes = {
 
       return items;
     } catch (error) {
-      console.error(
-        "Failed to save scopes:",
-        error
-      );
-
-      notify(
-        error.message ||
-          "Failed to save scopes",
-        "error"
+      handleError(
+        error,
+        "Failed to save scopes"
       );
 
       throw error;
@@ -830,15 +841,9 @@ const credentials = {
         ? data.credentials
         : [];
     } catch (error) {
-      console.error(
-        "Failed to load credentials:",
-        error
-      );
-
-      notify(
-        error.message ||
-          "Failed to load credentials",
-        "error"
+      handleError(
+        error,
+        "Failed to load credentials"
       );
 
       return [];
@@ -870,15 +875,9 @@ const credentials = {
 
       return data.credential;
     } catch (error) {
-      console.error(
-        "Failed to rotate credentials:",
-        error
-      );
-
-      notify(
-        error.message ||
-          "Failed to rotate credentials",
-        "error"
+      handleError(
+        error,
+        "Failed to rotate credentials"
       );
 
       throw error;
@@ -904,15 +903,9 @@ const credentials = {
 
       return true;
     } catch (error) {
-      console.error(
-        "Failed to revoke credentials:",
-        error
-      );
-
-      notify(
-        error.message ||
-          "Failed to revoke credentials",
-        "error"
+      handleError(
+        error,
+        "Failed to revoke credentials"
       );
 
       throw error;
@@ -936,15 +929,9 @@ const branding = {
 
       return data?.branding || null;
     } catch (error) {
-      console.error(
-        "Failed to load branding:",
-        error
-      );
-
-      notify(
-        error.message ||
-          "Failed to load branding",
-        "error"
+      handleError(
+        error,
+        "Failed to load branding"
       );
 
       return null;
@@ -969,15 +956,9 @@ const branding = {
 
       return data?.branding || null;
     } catch (error) {
-      console.error(
-        "Failed to save branding:",
-        error
-      );
-
-      notify(
-        error.message ||
-          "Failed to save branding",
-        "error"
+      handleError(
+        error,
+        "Failed to save branding"
       );
 
       throw error;
@@ -1006,15 +987,9 @@ const activity = {
         ? data.events
         : [];
     } catch (error) {
-      console.error(
-        "Failed to load activity:",
-        error
-      );
-
-      notify(
-        error.message ||
-          "Failed to load activity",
-        "error"
+      handleError(
+        error,
+        "Failed to load activity"
       );
 
       return [];
@@ -1101,6 +1076,44 @@ function applicationSection() {
 }
 
 /* ─────────────────────────────────────────────
+   Document Title
+───────────────────────────────────────────── */
+
+function updateDocumentTitle() {
+  const route = parseHash();
+
+  if (route.path === "/") {
+    document.title = `Overview · ${APP_NAME}`;
+    return;
+  }
+
+  if (route.path === "/applications") {
+    document.title = `Applications · ${APP_NAME}`;
+    return;
+  }
+
+  if (route.path === "/applications/:id") {
+    const app =
+      applications.find(route.id);
+
+    const section =
+      route.section || "overview";
+
+    const label =
+      section.charAt(0).toUpperCase() +
+      section.slice(1);
+
+    document.title = app
+      ? `${app.name} · ${label} · ${APP_NAME}`
+      : `${label} · ${APP_NAME}`;
+
+    return;
+  }
+
+  document.title = APP_NAME;
+}
+
+/* ─────────────────────────────────────────────
    Route Handling
 ───────────────────────────────────────────── */
 
@@ -1126,6 +1139,14 @@ function handleRouteChange() {
 
   lastRouteKey =
     routeKey;
+
+  /*
+   * Close any modals when the route actually
+   * changes — otherwise a delete-confirmation
+   * can linger after the user has navigated away.
+   */
+  state.ui.createModal = false;
+  state.ui.deleteApplication = null;
 
   const isApplicationRoute =
     route.path ===
@@ -1158,6 +1179,7 @@ function handleRouteChange() {
     scopeRequestId++;
   }
 
+  updateDocumentTitle();
   emitState();
 }
 
@@ -1312,6 +1334,18 @@ async function copyToClipboard(value) {
    Public AIDC API
 ───────────────────────────────────────────── */
 
+/*
+ * Reload applications and re-run the current route.
+ * Useful as a retry action when the initial
+ * applications load failed.
+ */
+async function reload() {
+  await applications.load();
+
+  lastRouteKey = "";
+  handleRouteChange();
+}
+
 const AIDC = {
   state,
 
@@ -1346,6 +1380,10 @@ const AIDC = {
   haptic,
 
   notify,
+
+  handleError,
+
+  reload,
 
   copyToClipboard,
 

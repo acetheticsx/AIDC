@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const { Pool } = pg;
 
@@ -14,15 +15,84 @@ const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 
 /*
- * Supabase PostgreSQL
+ * Environment
  */
-if (!process.env.DATABASE_URL) {
+const DATABASE_URL = process.env.DATABASE_URL;
+const ISSUER = process.env.ACE_ID_ISSUER;
+const CLIENT_ID = process.env.ACE_ID_CLIENT_ID;
+const CLIENT_SECRET = process.env.ACE_ID_CLIENT_SECRET;
+const PUBLIC_ORIGIN = process.env.AIDC_PUBLIC_ORIGIN;
+
+if (!DATABASE_URL) {
   console.error("Missing DATABASE_URL environment variable.");
   process.exit(1);
 }
 
+if (!ISSUER) {
+  console.error("Missing ACE_ID_ISSUER environment variable.");
+  process.exit(1);
+}
+
+if (!CLIENT_ID) {
+  console.error("Missing ACE_ID_CLIENT_ID environment variable.");
+  process.exit(1);
+}
+
+if (!CLIENT_SECRET) {
+  console.error("Missing ACE_ID_CLIENT_SECRET environment variable.");
+  process.exit(1);
+}
+
+if (!PUBLIC_ORIGIN) {
+  console.error("Missing AIDC_PUBLIC_ORIGIN environment variable.");
+  process.exit(1);
+}
+
+/*
+ * IS_PRODUCTION is derived from the public origin, not
+ * from NODE_ENV. One source of truth; nothing to forget
+ * to set on the deploy target.
+ */
+const IS_PRODUCTION = !/^http:\/\/(localhost|127\.0\.0\.1)/.test(
+  PUBLIC_ORIGIN
+);
+
+const SESSION_COOKIE = "aidc_session";
+const CSRF_COOKIE = "aidc_csrf";
+const OAUTH_STATE_COOKIE = "aidc_oauth_state";
+const OAUTH_VERIFIER_COOKIE = "aidc_oauth_verifier";
+
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const OAUTH_TTL_MS = 10 * 60 * 1000;             // 10 minutes
+
+const CALLBACK_PATH = "/auth/callback";
+
+const CALLBACK_URL = `${PUBLIC_ORIGIN}${CALLBACK_PATH}`;
+const POST_LOGOUT_URL = `${PUBLIC_ORIGIN}/`;
+
+/*
+ * Known OAuth error codes. Never reflect the raw
+ * query parameter — it is attacker-controlled and
+ * Express does not escape string bodies.
+ */
+const OAUTH_ERROR_MESSAGES = {
+  access_denied:
+    "You declined to authorize AIDC.",
+  invalid_request:
+    "The authorization request was malformed.",
+  invalid_scope:
+    "The requested scopes are not available.",
+  server_error:
+    "Ace ID encountered an error.",
+  temporarily_unavailable:
+    "Ace ID is temporarily unavailable."
+};
+
+/*
+ * Supabase PostgreSQL
+ */
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
   },
@@ -30,6 +100,61 @@ const pool = new Pool({
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 10_000
 });
+
+/*
+ * OIDC discovery (fail-fast at boot)
+ */
+async function loadDiscovery() {
+  const url = `${ISSUER}/.well-known/openid-configuration`;
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(
+      `OIDC discovery failed: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const doc = await response.json();
+
+  for (const field of [
+    "issuer",
+    "authorization_endpoint",
+    "token_endpoint",
+    "jwks_uri",
+    "end_session_endpoint"
+  ]) {
+    if (!doc[field]) {
+      throw new Error(
+        `OIDC discovery missing required field: ${field}`
+      );
+    }
+  }
+
+  if (doc.issuer !== ISSUER) {
+    throw new Error(
+      `OIDC issuer mismatch. Discovery says "${doc.issuer}", environment says "${ISSUER}".`
+    );
+  }
+
+  return doc;
+}
+
+let discovery;
+
+try {
+  discovery = await loadDiscovery();
+} catch (error) {
+  console.error(
+    "Failed to load OIDC discovery:",
+    error.message
+  );
+  process.exit(1);
+}
+
+const JWKS = createRemoteJWKSet(
+  new URL(discovery.jwks_uri)
+);
 
 /*
  * Middleware
@@ -59,6 +184,115 @@ function hashSecret(secret) {
 
 function secretPrefix(secret) {
   return secret.slice(0, 18);
+}
+
+function randomToken(bytes = 32) {
+  return crypto
+    .randomBytes(bytes)
+    .toString("base64url");
+}
+
+function hashToken(token) {
+  return crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+}
+
+function safeEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") {
+    return false;
+  }
+
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+
+  if (bufA.length !== bufB.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+function parseCookies(header) {
+  const out = {};
+
+  if (!header) {
+    return out;
+  }
+
+  for (const part of header.split(";")) {
+    const idx = part.indexOf("=");
+
+    if (idx === -1) {
+      continue;
+    }
+
+    const key = part.slice(0, idx).trim();
+    const value = part.slice(idx + 1).trim();
+
+    try {
+      out[key] = decodeURIComponent(value);
+    } catch {
+      /*
+       * Malformed percent-encoding. Do not throw from
+       * inside authentication middleware.
+       */
+      out[key] = "";
+    }
+  }
+
+  return out;
+}
+
+function getCookie(req, name) {
+  return parseCookies(req.headers.cookie)[name];
+}
+
+function serializeCookie(
+  name,
+  value,
+  {
+    maxAge,
+    httpOnly = true,
+    sameSite = "Lax",
+    path: cookiePath = "/"
+  } = {}
+) {
+  const parts = [
+    `${name}=${encodeURIComponent(value)}`,
+    `Path=${cookiePath}`,
+    `SameSite=${sameSite}`
+  ];
+
+  if (httpOnly) {
+    parts.push("HttpOnly");
+  }
+
+  if (IS_PRODUCTION) {
+    parts.push("Secure");
+  }
+
+  if (typeof maxAge === "number") {
+    parts.push(`Max-Age=${Math.floor(maxAge / 1000)}`);
+  }
+
+  return parts.join("; ");
+}
+
+function clearCookie(name, cookiePath = "/") {
+  const parts = [
+    `${name}=`,
+    `Path=${cookiePath}`,
+    "Max-Age=0",
+    "SameSite=Lax"
+  ];
+
+  if (IS_PRODUCTION) {
+    parts.push("Secure");
+  }
+
+  return parts.join("; ");
 }
 
 function isValidUuid(value) {
@@ -200,13 +434,486 @@ function validateBranding(payload) {
   return null;
 }
 
-/*
- * Supported scopes (shared by the scopes endpoints below)
- */
 const SUPPORTED_SCOPES = ["openid", "profile", "email"];
 
 /*
- * Health
+ * Sessions
+ */
+async function createSession({
+  developerId,
+  email,
+  name
+}) {
+  const token = randomToken(32);
+  const csrfToken = randomToken(32);
+  const tokenHash = hashToken(token);
+
+  const expiresAt = new Date(
+    Date.now() + SESSION_TTL_MS
+  );
+
+  await pool.query(
+    `
+    INSERT INTO public.sessions
+      (token_hash, developer_id, email, name, csrf_token, expires_at)
+    VALUES
+      ($1, $2, $3, $4, $5, $6)
+    `,
+    [
+      tokenHash,
+      developerId,
+      email,
+      name,
+      csrfToken,
+      expiresAt
+    ]
+  );
+
+  return {
+    token,
+    csrfToken,
+    expiresAt
+  };
+}
+
+async function deleteSession(token) {
+  if (!token) {
+    return;
+  }
+
+  await pool.query(
+    `
+    DELETE FROM public.sessions
+    WHERE token_hash = $1
+    `,
+    [hashToken(token)]
+  );
+}
+
+/*
+ * Session cleanup. Runs hourly; deletes rows whose
+ * expires_at has passed. Without this the sessions
+ * table grows without bound.
+ */
+async function purgeExpiredSessions() {
+  try {
+    const result = await pool.query(
+      `
+      DELETE FROM public.sessions
+      WHERE expires_at < now()
+      `
+    );
+
+    if (result.rowCount > 0) {
+      console.log(
+        `Purged ${result.rowCount} expired session(s).`
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Failed to purge expired sessions:",
+      error
+    );
+  }
+}
+
+/*
+ * requireAuth
+ *
+ * Resolves the session, attaches req.developer and
+ * req.session, and enforces CSRF on writes.
+ */
+async function requireAuth(req, res, next) {
+  const token = getCookie(req, SESSION_COOKIE);
+
+  if (!token) {
+    return res.status(401).json({
+      error: "Authentication required"
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        token_hash,
+        developer_id,
+        email,
+        name,
+        csrf_token,
+        expires_at
+      FROM public.sessions
+      WHERE token_hash = $1
+      `,
+      [hashToken(token)]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        error: "Authentication required"
+      });
+    }
+
+    const session = result.rows[0];
+
+    if (new Date(session.expires_at) <= new Date()) {
+      await deleteSession(token);
+
+      return res.status(401).json({
+        error: "Session expired"
+      });
+    }
+
+    req.developer = {
+      id: session.developer_id,
+      email: session.email,
+      name: session.name
+    };
+
+    req.session = session;
+
+    /*
+     * CSRF on state-changing requests.
+     */
+    if (
+      !["GET", "HEAD", "OPTIONS"].includes(req.method)
+    ) {
+      const headerToken =
+        req.get("X-CSRF-Token");
+
+      if (
+        !headerToken ||
+        !safeEqual(headerToken, session.csrf_token)
+      ) {
+        return res.status(403).json({
+          error: "Invalid CSRF token"
+        });
+      }
+    }
+
+    /*
+     * Touch last_seen_at. Fire-and-forget.
+     */
+    pool
+      .query(
+        `
+        UPDATE public.sessions
+        SET last_seen_at = now()
+        WHERE token_hash = $1
+        `,
+        [session.token_hash]
+      )
+      .catch(error => {
+        console.error(
+          "Failed to update session last_seen_at:",
+          error
+        );
+      });
+
+    next();
+  } catch (error) {
+    console.error("Session verification failed:", error);
+
+    res.status(500).json({
+      error: "Failed to verify session"
+    });
+  }
+}
+
+/*
+ * ═══════════════════════════════════════════
+ * Auth routes
+ * ═══════════════════════════════════════════
+ */
+
+/*
+ * GET /auth/login
+ */
+app.get("/auth/login", (req, res) => {
+  const state = randomToken(32);
+  const codeVerifier = randomToken(32);
+
+  const codeChallenge = crypto
+    .createHash("sha256")
+    .update(codeVerifier)
+    .digest("base64url");
+
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: CLIENT_ID,
+    redirect_uri: CALLBACK_URL,
+    scope: "openid profile email",
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256"
+  });
+
+  const cookies = [
+    serializeCookie(OAUTH_STATE_COOKIE, state, {
+      maxAge: OAUTH_TTL_MS,
+      path: "/auth"
+    }),
+    serializeCookie(
+      OAUTH_VERIFIER_COOKIE,
+      codeVerifier,
+      {
+        maxAge: OAUTH_TTL_MS,
+        path: "/auth"
+      }
+    )
+  ];
+
+  res.set("Set-Cookie", cookies);
+
+  res.redirect(
+    `${discovery.authorization_endpoint}?${params.toString()}`
+  );
+});
+
+/*
+ * GET /auth/callback
+ */
+app.get("/auth/callback", async (req, res) => {
+  const { code, state, error: oauthError } = req.query;
+
+  const expectedState = getCookie(
+    req,
+    OAUTH_STATE_COOKIE
+  );
+
+  const codeVerifier = getCookie(
+    req,
+    OAUTH_VERIFIER_COOKIE
+  );
+
+  const clearOauthCookies = [
+    clearCookie(OAUTH_STATE_COOKIE, "/auth"),
+    clearCookie(OAUTH_VERIFIER_COOKIE, "/auth")
+  ];
+
+  /*
+   * Do not reflect oauthError back to the browser.
+   * Map known codes to fixed, safe strings.
+   */
+  if (oauthError) {
+    res.set("Set-Cookie", clearOauthCookies);
+
+    const message =
+      OAUTH_ERROR_MESSAGES[oauthError] ||
+      "Authorization failed";
+
+    return res
+      .status(400)
+      .type("text")
+      .send(message);
+  }
+
+  if (!code || typeof code !== "string") {
+    res.set("Set-Cookie", clearOauthCookies);
+
+    return res
+      .status(400)
+      .type("text")
+      .send("Missing authorization code");
+  }
+
+  if (
+    !expectedState ||
+    !state ||
+    !safeEqual(expectedState, state)
+  ) {
+    res.set("Set-Cookie", clearOauthCookies);
+
+    return res
+      .status(400)
+      .type("text")
+      .send("Invalid state parameter");
+  }
+
+  if (!codeVerifier) {
+    res.set("Set-Cookie", clearOauthCookies);
+
+    return res
+      .status(400)
+      .type("text")
+      .send("Missing PKCE verifier");
+  }
+
+  try {
+    const basic = Buffer.from(
+      `${CLIENT_ID}:${CLIENT_SECRET}`
+    ).toString("base64");
+
+    const body = new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: CALLBACK_URL,
+      code_verifier: codeVerifier
+    });
+
+    const tokenResponse = await fetch(
+      discovery.token_endpoint,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/x-www-form-urlencoded",
+          Authorization: `Basic ${basic}`
+        },
+        body
+      }
+    );
+
+    if (!tokenResponse.ok) {
+      const text = await tokenResponse.text();
+
+      console.error(
+        "Token exchange failed:",
+        tokenResponse.status,
+        text
+      );
+
+      res.set("Set-Cookie", clearOauthCookies);
+
+      return res
+        .status(502)
+        .type("text")
+        .send("Token exchange failed");
+    }
+
+    const tokens = await tokenResponse.json();
+
+    if (!tokens.id_token) {
+      res.set("Set-Cookie", clearOauthCookies);
+
+      return res
+        .status(502)
+        .type("text")
+        .send("No ID token returned");
+    }
+
+    const { payload } = await jwtVerify(
+      tokens.id_token,
+      JWKS,
+      {
+        issuer: ISSUER,
+        audience: CLIENT_ID
+      }
+    );
+
+    /*
+     * Validate the subject before it goes into a
+     * uuid column. A non-UUID sub means something on
+     * the provider side changed and we would rather
+     * fail cleanly than corrupt the sessions table.
+     */
+    if (
+      typeof payload.sub !== "string" ||
+      !isValidUuid(payload.sub)
+    ) {
+      res.set("Set-Cookie", clearOauthCookies);
+
+      console.error(
+        "ID token sub is not a UUID:",
+        payload.sub
+      );
+
+      return res
+        .status(502)
+        .type("text")
+        .send("Invalid identity subject");
+    }
+
+    const session = await createSession({
+      developerId: payload.sub,
+      email: payload.email || null,
+      name:
+        payload.name ||
+        payload.preferred_username ||
+        null
+    });
+
+    const cookies = [
+      ...clearOauthCookies,
+      serializeCookie(
+        SESSION_COOKIE,
+        session.token,
+        {
+          maxAge: SESSION_TTL_MS,
+          httpOnly: true,
+          path: "/"
+        }
+      ),
+      serializeCookie(CSRF_COOKIE, session.csrfToken, {
+        maxAge: SESSION_TTL_MS,
+        httpOnly: false,
+        path: "/"
+      })
+    ];
+
+    res.set("Set-Cookie", cookies);
+
+    res.redirect("/");
+  } catch (error) {
+    console.error("Callback failed:", error);
+
+    res.set("Set-Cookie", clearOauthCookies);
+
+    res
+      .status(500)
+      .type("text")
+      .send("Authentication failed");
+  }
+});
+
+/*
+ * POST /auth/logout
+ */
+app.post("/auth/logout", async (req, res) => {
+  const token = getCookie(req, SESSION_COOKIE);
+
+  if (token) {
+    try {
+      await deleteSession(token);
+    } catch (error) {
+      console.error("Failed to delete session:", error);
+    }
+  }
+
+  const cookies = [
+    clearCookie(SESSION_COOKIE, "/"),
+    clearCookie(CSRF_COOKIE, "/")
+  ];
+
+  res.set("Set-Cookie", cookies);
+
+  const endSessionUrl =
+    `${discovery.end_session_endpoint}` +
+    `?client_id=${encodeURIComponent(CLIENT_ID)}` +
+    `&post_logout_redirect_uri=${encodeURIComponent(
+      POST_LOGOUT_URL
+    )}`;
+
+  res.json({ logout_url: endSessionUrl });
+});
+
+/*
+ * GET /api/me
+ */
+app.get("/api/me", requireAuth, (req, res) => {
+  res.json({
+    user: {
+      id: req.developer.id,
+      email: req.developer.email,
+      name: req.developer.name
+    }
+  });
+});
+
+/*
+ * ═══════════════════════════════════════════
+ * Health (public)
+ * ═══════════════════════════════════════════
  */
 app.get("/api/health", async (req, res) => {
   try {
@@ -229,323 +936,348 @@ app.get("/api/health", async (req, res) => {
 });
 
 /*
+ * ═══════════════════════════════════════════
  * Applications
+ * ═══════════════════════════════════════════
  */
 
-/*
- * GET /api/applications
- */
-app.get("/api/applications", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT
-        id,
-        name,
-        description,
-        client_id,
-        status,
-        created_at,
-        updated_at
-      FROM public.applications
-      ORDER BY created_at DESC
-    `);
+app.get(
+  "/api/applications",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `
+        SELECT
+          id,
+          name,
+          description,
+          client_id,
+          status,
+          created_at,
+          updated_at
+        FROM public.applications
+        WHERE owner_id = $1
+        ORDER BY created_at DESC
+        `,
+        [req.developer.id]
+      );
 
-    res.json({
-      applications: result.rows
-    });
-  } catch (error) {
-    console.error("GET /api/applications:", error);
+      res.json({
+        applications: result.rows
+      });
+    } catch (error) {
+      console.error("GET /api/applications:", error);
 
-    res.status(500).json({
-      error: "Failed to fetch applications"
-    });
-  }
-});
-
-/*
- * POST /api/applications
- */
-app.post("/api/applications", async (req, res) => {
-  const {
-    name,
-    description = ""
-  } = req.body ?? {};
-
-  if (
-    typeof name !== "string" ||
-    !name.trim()
-  ) {
-    return res.status(400).json({
-      error: "Application name is required"
-    });
-  }
-
-  if (typeof description !== "string") {
-    return res.status(400).json({
-      error: "Description must be a string"
-    });
-  }
-
-  const applicationName = name.trim();
-  const applicationDescription = description.trim();
-  const clientId = generateClientId();
-
-  try {
-    const result = await pool.query(
-      `
-      INSERT INTO public.applications
-        (name, description, client_id)
-      VALUES
-        ($1, $2, $3)
-      RETURNING
-        id,
-        name,
-        description,
-        client_id,
-        status,
-        created_at,
-        updated_at
-      `,
-      [
-        applicationName,
-        applicationDescription,
-        clientId
-      ]
-    );
-
-    res.status(201).json({
-      application: result.rows[0]
-    });
-  } catch (error) {
-    console.error("POST /api/applications:", error);
-
-    if (error?.code === "23505") {
-      return res.status(409).json({
-        error: "An application with that name already exists"
+      res.status(500).json({
+        error: "Failed to fetch applications"
       });
     }
-
-    res.status(500).json({
-      error: "Failed to create application"
-    });
   }
-});
+);
 
-/*
- * GET /api/applications/:id
- */
-app.get("/api/applications/:id", async (req, res) => {
-  const { id } = req.params;
+app.post(
+  "/api/applications",
+  requireAuth,
+  async (req, res) => {
+    const {
+      name,
+      description = ""
+    } = req.body ?? {};
 
-  if (!isValidUuid(id)) {
-    return res.status(400).json({
-      error: "Invalid application ID"
-    });
-  }
-
-  try {
-    const result = await pool.query(
-      `
-      SELECT
-        id,
-        name,
-        description,
-        client_id,
-        status,
-        created_at,
-        updated_at
-      FROM public.applications
-      WHERE id = $1
-      `,
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        error: "Application not found"
-      });
-    }
-
-    res.json({
-      application: result.rows[0]
-    });
-  } catch (error) {
-    console.error("GET /api/applications/:id:", error);
-
-    res.status(500).json({
-      error: "Failed to fetch application"
-    });
-  }
-});
-
-/*
- * PATCH /api/applications/:id
- */
-app.patch("/api/applications/:id", async (req, res) => {
-  const { id } = req.params;
-
-  if (!isValidUuid(id)) {
-    return res.status(400).json({
-      error: "Invalid application ID"
-    });
-  }
-
-  const {
-    name,
-    description,
-    status
-  } = req.body ?? {};
-
-  if (
-    name !== undefined &&
-    (
+    if (
       typeof name !== "string" ||
       !name.trim()
-    )
-  ) {
-    return res.status(400).json({
-      error: "Application name cannot be empty"
-    });
-  }
-
-  if (
-    description !== undefined &&
-    typeof description !== "string"
-  ) {
-    return res.status(400).json({
-      error: "Description must be a string"
-    });
-  }
-
-  if (
-    status !== undefined &&
-    !["active", "disabled"].includes(status)
-  ) {
-    return res.status(400).json({
-      error: "Invalid application status"
-    });
-  }
-
-  if (
-    name === undefined &&
-    description === undefined &&
-    status === undefined
-  ) {
-    return res.status(400).json({
-      error: "No fields to update"
-    });
-  }
-
-  try {
-    const result = await pool.query(
-      `
-      UPDATE public.applications
-      SET
-        name = COALESCE($1, name),
-        description = COALESCE($2, description),
-        status = COALESCE($3, status),
-        updated_at = now()
-      WHERE id = $4
-      RETURNING
-        id,
-        name,
-        description,
-        client_id,
-        status,
-        created_at,
-        updated_at
-      `,
-      [
-        name !== undefined ? name.trim() : null,
-        description !== undefined
-          ? description.trim()
-          : null,
-        status ?? null,
-        id
-      ]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        error: "Application not found"
+    ) {
+      return res.status(400).json({
+        error: "Application name is required"
       });
     }
 
-    res.json({
-      application: result.rows[0]
-    });
-  } catch (error) {
-    console.error("PATCH /api/applications/:id:", error);
-
-    if (error?.code === "23505") {
-      return res.status(409).json({
-        error: "An application with that name already exists"
+    if (typeof description !== "string") {
+      return res.status(400).json({
+        error: "Description must be a string"
       });
     }
 
-    res.status(500).json({
-      error: "Failed to update application"
-    });
+    const applicationName = name.trim();
+    const applicationDescription = description.trim();
+    const clientId = generateClientId();
+
+    try {
+      const result = await pool.query(
+        `
+        INSERT INTO public.applications
+          (name, description, client_id, owner_id)
+        VALUES
+          ($1, $2, $3, $4)
+        RETURNING
+          id,
+          name,
+          description,
+          client_id,
+          status,
+          created_at,
+          updated_at
+        `,
+        [
+          applicationName,
+          applicationDescription,
+          clientId,
+          req.developer.id
+        ]
+      );
+
+      res.status(201).json({
+        application: result.rows[0]
+      });
+    } catch (error) {
+      console.error("POST /api/applications:", error);
+
+      if (error?.code === "23505") {
+        return res.status(409).json({
+          error: "An application with that name already exists"
+        });
+      }
+
+      res.status(500).json({
+        error: "Failed to create application"
+      });
+    }
   }
-});
+);
+
+app.get(
+  "/api/applications/:id",
+  requireAuth,
+  async (req, res) => {
+    const { id } = req.params;
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({
+        error: "Invalid application ID"
+      });
+    }
+
+    try {
+      const result = await pool.query(
+        `
+        SELECT
+          id,
+          name,
+          description,
+          client_id,
+          status,
+          created_at,
+          updated_at
+        FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        `,
+        [id, req.developer.id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
+      res.json({
+        application: result.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        "GET /api/applications/:id:",
+        error
+      );
+
+      res.status(500).json({
+        error: "Failed to fetch application"
+      });
+    }
+  }
+);
+
+app.patch(
+  "/api/applications/:id",
+  requireAuth,
+  async (req, res) => {
+    const { id } = req.params;
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({
+        error: "Invalid application ID"
+      });
+    }
+
+    const {
+      name,
+      description,
+      status
+    } = req.body ?? {};
+
+    if (
+      name !== undefined &&
+      (
+        typeof name !== "string" ||
+        !name.trim()
+      )
+    ) {
+      return res.status(400).json({
+        error: "Application name cannot be empty"
+      });
+    }
+
+    if (
+      description !== undefined &&
+      typeof description !== "string"
+    ) {
+      return res.status(400).json({
+        error: "Description must be a string"
+      });
+    }
+
+    if (
+      status !== undefined &&
+      !["active", "disabled"].includes(status)
+    ) {
+      return res.status(400).json({
+        error: "Invalid application status"
+      });
+    }
+
+    if (
+      name === undefined &&
+      description === undefined &&
+      status === undefined
+    ) {
+      return res.status(400).json({
+        error: "No fields to update"
+      });
+    }
+
+    try {
+      const result = await pool.query(
+        `
+        UPDATE public.applications
+        SET
+          name = COALESCE($1, name),
+          description = COALESCE($2, description),
+          status = COALESCE($3, status),
+          updated_at = now()
+        WHERE id = $4
+          AND owner_id = $5
+        RETURNING
+          id,
+          name,
+          description,
+          client_id,
+          status,
+          created_at,
+          updated_at
+        `,
+        [
+          name !== undefined ? name.trim() : null,
+          description !== undefined
+            ? description.trim()
+            : null,
+          status ?? null,
+          id,
+          req.developer.id
+        ]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
+      res.json({
+        application: result.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        "PATCH /api/applications/:id:",
+        error
+      );
+
+      if (error?.code === "23505") {
+        return res.status(409).json({
+          error: "An application with that name already exists"
+        });
+      }
+
+      res.status(500).json({
+        error: "Failed to update application"
+      });
+    }
+  }
+);
+
+app.delete(
+  "/api/applications/:id",
+  requireAuth,
+  async (req, res) => {
+    const { id } = req.params;
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({
+        error: "Invalid application ID"
+      });
+    }
+
+    try {
+      const result = await pool.query(
+        `
+        DELETE FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        RETURNING
+          id,
+          name,
+          description,
+          client_id,
+          status,
+          created_at,
+          updated_at
+        `,
+        [id, req.developer.id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
+      res.json({
+        deleted: true,
+        application: result.rows[0]
+      });
+    } catch (error) {
+      console.error(
+        "DELETE /api/applications/:id:",
+        error
+      );
+
+      res.status(500).json({
+        error: "Failed to delete application"
+      });
+    }
+  }
+);
 
 /*
- * DELETE /api/applications/:id
- */
-app.delete("/api/applications/:id", async (req, res) => {
-  const { id } = req.params;
-
-  if (!isValidUuid(id)) {
-    return res.status(400).json({
-      error: "Invalid application ID"
-    });
-  }
-
-  try {
-    const result = await pool.query(
-      `
-      DELETE FROM public.applications
-      WHERE id = $1
-      RETURNING
-        id,
-        name,
-        description,
-        client_id,
-        status,
-        created_at,
-        updated_at
-      `,
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        error: "Application not found"
-      });
-    }
-
-    res.json({
-      deleted: true,
-      application: result.rows[0]
-    });
-  } catch (error) {
-    console.error("DELETE /api/applications/:id:", error);
-
-    res.status(500).json({
-      error: "Failed to delete application"
-    });
-  }
-});
-
-/*
+ * ═══════════════════════════════════════════
  * Redirect URIs
+ * ═══════════════════════════════════════════
  */
 
-/*
- * GET /api/applications/:id/redirect-uris
- */
 app.get(
   "/api/applications/:id/redirect-uris",
+  requireAuth,
   async (req, res) => {
     const { id } = req.params;
 
@@ -561,8 +1293,9 @@ app.get(
         SELECT id
         FROM public.applications
         WHERE id = $1
+          AND owner_id = $2
         `,
-        [id]
+        [id, req.developer.id]
       );
 
       if (application.rows.length === 0) {
@@ -601,11 +1334,9 @@ app.get(
   }
 );
 
-/*
- * POST /api/applications/:id/redirect-uris
- */
 app.post(
   "/api/applications/:id/redirect-uris",
+  requireAuth,
   async (req, res) => {
     const { id } = req.params;
     const { uri } = req.body ?? {};
@@ -630,8 +1361,9 @@ app.post(
         SELECT id
         FROM public.applications
         WHERE id = $1
+          AND owner_id = $2
         `,
-        [id]
+        [id, req.developer.id]
       );
 
       if (application.rows.length === 0) {
@@ -677,11 +1409,9 @@ app.post(
   }
 );
 
-/*
- * DELETE /api/applications/:id/redirect-uris/:uriId
- */
 app.delete(
   "/api/applications/:id/redirect-uris/:uriId",
+  requireAuth,
   async (req, res) => {
     const {
       id,
@@ -701,6 +1431,22 @@ app.delete(
     }
 
     try {
+      const application = await pool.query(
+        `
+        SELECT id
+        FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        `,
+        [id, req.developer.id]
+      );
+
+      if (application.rows.length === 0) {
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
       const result = await pool.query(
         `
         DELETE FROM public.redirect_uris
@@ -739,14 +1485,14 @@ app.delete(
 );
 
 /*
+ * ═══════════════════════════════════════════
  * Scopes
+ * ═══════════════════════════════════════════
  */
 
-/*
- * GET /api/applications/:id/scopes
- */
 app.get(
   "/api/applications/:id/scopes",
+  requireAuth,
   async (req, res) => {
     const { id } = req.params;
 
@@ -762,8 +1508,9 @@ app.get(
         SELECT id
         FROM public.applications
         WHERE id = $1
+          AND owner_id = $2
         `,
-        [id]
+        [id, req.developer.id]
       );
 
       if (application.rows.length === 0) {
@@ -798,11 +1545,9 @@ app.get(
   }
 );
 
-/*
- * PUT /api/applications/:id/scopes
- */
 app.put(
   "/api/applications/:id/scopes",
+  requireAuth,
   async (req, res) => {
     const { id } = req.params;
     const { scopes } = req.body ?? {};
@@ -854,8 +1599,9 @@ app.put(
         SELECT id
         FROM public.applications
         WHERE id = $1
+          AND owner_id = $2
         `,
-        [id]
+        [id, req.developer.id]
       );
 
       if (application.rows.length === 0) {
@@ -914,13 +1660,9 @@ app.put(
  * ═══════════════════════════════════════════
  */
 
-/*
- * GET /api/applications/:id/credentials
- *
- * Never returns the plaintext secret.
- */
 app.get(
   "/api/applications/:id/credentials",
+  requireAuth,
   async (req, res) => {
     const { id } = req.params;
 
@@ -931,6 +1673,22 @@ app.get(
     }
 
     try {
+      const application = await pool.query(
+        `
+        SELECT id
+        FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        `,
+        [id, req.developer.id]
+      );
+
+      if (application.rows.length === 0) {
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
       const result = await pool.query(
         `
         SELECT
@@ -951,10 +1709,7 @@ app.get(
         credentials: result.rows
       });
     } catch (error) {
-      console.error(
-        "GET credentials:",
-        error
-      );
+      console.error("GET credentials:", error);
 
       res.status(500).json({
         error: "Failed to fetch credentials"
@@ -963,15 +1718,9 @@ app.get(
   }
 );
 
-/*
- * POST /api/applications/:id/credentials/rotate
- *
- * Revokes any active credential, generates a new
- * one, and returns the plaintext secret exactly
- * once. The secret is never stored in plaintext.
- */
 app.post(
   "/api/applications/:id/credentials/rotate",
+  requireAuth,
   async (req, res) => {
     const { id } = req.params;
 
@@ -991,8 +1740,9 @@ app.post(
         SELECT id
         FROM public.applications
         WHERE id = $1
+          AND owner_id = $2
         `,
-        [id]
+        [id, req.developer.id]
       );
 
       if (!application.rows.length) {
@@ -1071,14 +1821,9 @@ app.post(
   }
 );
 
-/*
- * DELETE /api/applications/:id/credentials/:credentialId
- *
- * Revokes the given credential and records the
- * audit event atomically.
- */
 app.delete(
   "/api/applications/:id/credentials/:credentialId",
+  requireAuth,
   async (req, res) => {
     const { id, credentialId } = req.params;
 
@@ -1098,6 +1843,24 @@ app.delete(
 
     try {
       await client.query("BEGIN");
+
+      const application = await client.query(
+        `
+        SELECT id
+        FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        `,
+        [id, req.developer.id]
+      );
+
+      if (!application.rows.length) {
+        await client.query("ROLLBACK");
+
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
 
       const result = await client.query(
         `
@@ -1141,10 +1904,7 @@ app.delete(
     } catch (error) {
       await client.query("ROLLBACK");
 
-      console.error(
-        "DELETE credential:",
-        error
-      );
+      console.error("DELETE credential:", error);
 
       res.status(500).json({
         error: "Failed to revoke credential"
@@ -1161,11 +1921,9 @@ app.delete(
  * ═══════════════════════════════════════════
  */
 
-/*
- * GET /api/applications/:id/branding
- */
 app.get(
   "/api/applications/:id/branding",
+  requireAuth,
   async (req, res) => {
     const { id } = req.params;
 
@@ -1176,6 +1934,22 @@ app.get(
     }
 
     try {
+      const application = await pool.query(
+        `
+        SELECT id
+        FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        `,
+        [id, req.developer.id]
+      );
+
+      if (application.rows.length === 0) {
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
       const result = await pool.query(
         `
         SELECT
@@ -1201,10 +1975,7 @@ app.get(
           }
       });
     } catch (error) {
-      console.error(
-        "GET branding:",
-        error
-      );
+      console.error("GET branding:", error);
 
       res.status(500).json({
         error: "Failed to fetch branding"
@@ -1213,11 +1984,9 @@ app.get(
   }
 );
 
-/*
- * PUT /api/applications/:id/branding
- */
 app.put(
   "/api/applications/:id/branding",
+  requireAuth,
   async (req, res) => {
     const { id } = req.params;
 
@@ -1227,9 +1996,7 @@ app.put(
       });
     }
 
-    const validation = validateBranding(
-      req.body
-    );
+    const validation = validateBranding(req.body);
 
     if (validation) {
       return res.status(400).json({
@@ -1253,8 +2020,9 @@ app.put(
         SELECT id
         FROM public.applications
         WHERE id = $1
+          AND owner_id = $2
         `,
-        [id]
+        [id, req.developer.id]
       );
 
       if (!application.rows.length) {
@@ -1322,10 +2090,7 @@ app.put(
     } catch (error) {
       await client.query("ROLLBACK");
 
-      console.error(
-        "PUT branding:",
-        error
-      );
+      console.error("PUT branding:", error);
 
       res.status(500).json({
         error: "Failed to update branding"
@@ -1342,11 +2107,9 @@ app.put(
  * ═══════════════════════════════════════════
  */
 
-/*
- * GET /api/applications/:id/activity
- */
 app.get(
   "/api/applications/:id/activity",
+  requireAuth,
   async (req, res) => {
     const { id } = req.params;
 
@@ -1369,6 +2132,22 @@ app.get(
       : 50;
 
     try {
+      const application = await pool.query(
+        `
+        SELECT id
+        FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        `,
+        [id, req.developer.id]
+      );
+
+      if (application.rows.length === 0) {
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
       const result = await pool.query(
         `
         SELECT
@@ -1390,10 +2169,7 @@ app.get(
         events: result.rows
       });
     } catch (error) {
-      console.error(
-        "GET activity:",
-        error
-      );
+      console.error("GET activity:", error);
 
       res.status(500).json({
         error: "Failed to fetch activity"
@@ -1405,16 +2181,6 @@ app.get(
 /*
  * ═══════════════════════════════════════════
  * Frontend
- *
- * Explicitly serve only the frontend files.
- * The server/ directory itself is not exposed.
- *
- * Every static asset is served with
- * Cache-Control: no-store so that a plain
- * browser refresh always fetches the current
- * file. During development this is what you
- * want — otherwise a stale components.js can
- * shadow code changes for hours.
  * ═══════════════════════════════════════════
  */
 
@@ -1426,47 +2192,23 @@ function sendFrontendFile(relativePath) {
     relativePath
   );
 
-  console.log(
-    `Serving /${relativePath} from ${absolutePath}`
-  );
-
   return (req, res) => {
     res.set("Cache-Control", NO_STORE);
     res.sendFile(absolutePath);
   };
 }
 
-app.get(
-  "/",
-  sendFrontendFile("index.html")
-);
-
-app.get(
-  "/app.js",
-  sendFrontendFile("app.js")
-);
-
-/*
- * api.js is imported by app.js. Without this
- * route the browser receives a 404 for the
- * import and the whole module graph aborts —
- * which is why the page appeared blank.
- */
-app.get(
-  "/api.js",
-  sendFrontendFile("api.js")
-);
-
+app.get("/", sendFrontendFile("index.html"));
+app.get("/app.js", sendFrontendFile("app.js"));
+app.get("/api.js", sendFrontendFile("api.js"));
 app.get(
   "/components.js",
   sendFrontendFile("components.js")
 );
-
 app.get(
   "/helpers.js",
   sendFrontendFile("helpers.js")
 );
-
 app.get(
   "/style.css",
   sendFrontendFile("style.css")
@@ -1504,9 +2246,6 @@ app.use((error, req, res, next) => {
     return next(error);
   }
 
-  /*
-   * Malformed JSON body from express.json().
-   */
   if (error?.type === "entity.parse.failed") {
     return res.status(400).json({
       error: "Invalid JSON body"
@@ -1520,9 +2259,6 @@ app.use((error, req, res, next) => {
   });
 });
 
-/*
- * PostgreSQL pool errors
- */
 pool.on("error", error => {
   console.error(
     "Unexpected PostgreSQL pool error:",
@@ -1531,21 +2267,29 @@ pool.on("error", error => {
 });
 
 /*
- * Start
+ * Session purge interval
  */
+const SESSION_PURGE_INTERVAL_MS = 60 * 60 * 1000;
+
+setInterval(
+  purgeExpiredSessions,
+  SESSION_PURGE_INTERVAL_MS
+).unref();
+
 const server = app.listen(
   PORT,
   "0.0.0.0",
   () => {
+    console.log(`AIDC running on port ${PORT}`);
+    console.log(`Public origin: ${PUBLIC_ORIGIN}`);
+    console.log(`OIDC issuer: ${discovery.issuer}`);
+    console.log(`OIDC client: ${CLIENT_ID}`);
     console.log(
-      `AIDC running on port ${PORT}`
+      `Cookies: Secure=${IS_PRODUCTION}, SameSite=Lax`
     );
   }
 );
 
-/*
- * Graceful shutdown
- */
 async function shutdown(signal) {
   console.log(
     `${signal} received. Shutting down...`
@@ -1555,9 +2299,7 @@ async function shutdown(signal) {
     try {
       await pool.end();
 
-      console.log(
-        "Database connection closed."
-      );
+      console.log("Database connection closed.");
 
       process.exit(0);
     } catch (error) {
