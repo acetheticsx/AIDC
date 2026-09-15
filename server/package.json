@@ -1,13 +1,13 @@
 {
-  "name": "aidc",
-  "version": "1.0.0",
+  "name": "aidc-server",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
-  "main": "server/server.js",
+  "main": "server.js",
   "scripts": {
-  "start": "node --env-file=../.env server.js",
-  "dev": "node --watch --env-file=../.env server.js"
-},
+    "start": "node server.js",
+    "dev": "node --watch --env-file=../.env server.js"
+  },
   "dependencies": {
     "express": "^5.1.0",
     "pg": "^8.16.3"

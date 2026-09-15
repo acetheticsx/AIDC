@@ -1403,53 +1403,74 @@ app.get(
 );
 
 /*
+ * ═══════════════════════════════════════════
  * Frontend
  *
  * Explicitly serve only the frontend files.
  * The server/ directory itself is not exposed.
+ *
+ * Every static asset is served with
+ * Cache-Control: no-store so that a plain
+ * browser refresh always fetches the current
+ * file. During development this is what you
+ * want — otherwise a stale components.js can
+ * shadow code changes for hours.
+ * ═══════════════════════════════════════════
  */
 
-app.get("/", (req, res) => {
-  res.sendFile(
-    path.join(PROJECT_ROOT, "index.html")
-  );
-});
+const NO_STORE = "no-store, must-revalidate";
 
-app.get("/app.js", (req, res) => {
-  res.sendFile(
-    path.join(PROJECT_ROOT, "app.js")
+function sendFrontendFile(relativePath) {
+  const absolutePath = path.join(
+    PROJECT_ROOT,
+    relativePath
   );
-});
+
+  console.log(
+    `Serving /${relativePath} from ${absolutePath}`
+  );
+
+  return (req, res) => {
+    res.set("Cache-Control", NO_STORE);
+    res.sendFile(absolutePath);
+  };
+}
+
+app.get(
+  "/",
+  sendFrontendFile("index.html")
+);
+
+app.get(
+  "/app.js",
+  sendFrontendFile("app.js")
+);
 
 /*
- * api.js is imported by app.js. Without this route
- * the browser receives a 404 for the import and
- * the whole module graph aborts — which is why the
- * page appeared blank.
+ * api.js is imported by app.js. Without this
+ * route the browser receives a 404 for the
+ * import and the whole module graph aborts —
+ * which is why the page appeared blank.
  */
-app.get("/api.js", (req, res) => {
-  res.sendFile(
-    path.join(PROJECT_ROOT, "api.js")
-  );
-});
+app.get(
+  "/api.js",
+  sendFrontendFile("api.js")
+);
 
-app.get("/components.js", (req, res) => {
-  res.sendFile(
-    path.join(PROJECT_ROOT, "components.js")
-  );
-});
+app.get(
+  "/components.js",
+  sendFrontendFile("components.js")
+);
 
-app.get("/helpers.js", (req, res) => {
-  res.sendFile(
-    path.join(PROJECT_ROOT, "helpers.js")
-  );
-});
+app.get(
+  "/helpers.js",
+  sendFrontendFile("helpers.js")
+);
 
-app.get("/style.css", (req, res) => {
-  res.sendFile(
-    path.join(PROJECT_ROOT, "style.css")
-  );
-});
+app.get(
+  "/style.css",
+  sendFrontendFile("style.css")
+);
 
 app.use(
   "/assets",
@@ -1458,7 +1479,10 @@ app.use(
     {
       fallthrough: false,
       dotfiles: "deny",
-      index: false
+      index: false,
+      setHeaders(res) {
+        res.set("Cache-Control", NO_STORE);
+      }
     }
   )
 );
