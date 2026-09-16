@@ -20,6 +20,13 @@ function renderProfile(user) {
   const container = sidebar.querySelector(".aidc-sidebar-user");
   if (!container) return;
 
+  const legacyInfo = container.querySelector(
+    ".aidc-sidebar-user-info"
+  );
+  if (legacyInfo) {
+    legacyInfo.hidden = true;
+  }
+
   const existing = container.querySelector(".aidc-profile-link");
   const logout = container.querySelector(".aidc-icon-button");
 
