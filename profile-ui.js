@@ -13,6 +13,14 @@ function initials(user) {
   return source.slice(0, 2).toUpperCase();
 }
 
+function diceBearAvatar(user) {
+  const seed = String(
+    user?.id || user?.email || user?.name || "ace-id"
+  ).trim();
+
+  return `https://api.dicebear.com/10.x/identicon/svg?seed=${encodeURIComponent(seed)}`;
+}
+
 function renderProfile(user) {
   const sidebar = document.querySelector("aidc-sidebar");
   if (!sidebar || !user) return;
@@ -89,26 +97,20 @@ function updateProfile(link, user) {
   const displayEmail = String(user?.email || "").trim();
   const picture = String(
     user?.picture || user?.avatar_url || ""
-  ).trim();
+  ).trim() || diceBearAvatar(user);
 
   name.textContent = displayName;
   email.textContent = displayEmail;
   email.hidden = !displayEmail;
   letters.textContent = initials(user);
 
-  if (picture) {
-    image.src = picture;
-    image.hidden = false;
-    letters.hidden = true;
-    image.onerror = () => {
-      image.hidden = true;
-      letters.hidden = false;
-    };
-  } else {
-    image.removeAttribute("src");
+  image.src = picture;
+  image.hidden = false;
+  letters.hidden = true;
+  image.onerror = () => {
     image.hidden = true;
     letters.hidden = false;
-  }
+  };
 }
 
 function sync(event) {
