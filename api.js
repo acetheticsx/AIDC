@@ -18,9 +18,13 @@ async function request(path, options = {}) {
     options.method || "GET"
   ).toUpperCase();
 
+  const useApiBase = options.base !== false;
+  const fetchOptions = { ...options };
+  delete fetchOptions.base;
+
   const headers = {
     "Content-Type": "application/json",
-    ...(options.headers || {})
+    ...(fetchOptions.headers || {})
   };
 
   /*
@@ -38,8 +42,9 @@ async function request(path, options = {}) {
     }
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
+  const base = useApiBase ? API_BASE : "";
+  const response = await fetch(`${base}${path}`, {
+    ...fetchOptions,
     credentials: "include",
     headers
   });
@@ -95,7 +100,8 @@ export const api = {
 
     logout() {
       return request("/auth/logout", {
-        method: "POST"
+        method: "POST",
+        base: false
       });
     }
   },
