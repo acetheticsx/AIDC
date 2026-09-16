@@ -1,0 +1,25 @@
+/*
+ * AIDC monochrome finish.
+ * Keep the existing visual system intact while removing
+ * browser/theme colour leakage from controls and status UI.
+ */
+
+html {
+  filter: grayscale(1);
+}
+
+input[type="checkbox"] {
+  accent-color: #111110;
+  color-scheme: light;
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid #111110;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
