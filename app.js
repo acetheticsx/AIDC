@@ -1331,6 +1331,73 @@ registerAIDCComponents(AIDC);
 window.AIDC = AIDC;
 
 /* ─────────────────────────────────────────────
+   UI polish
+───────────────────────────────────────────── */
+
+const uiStyle = document.createElement("style");
+uiStyle.textContent = `
+  .aidc-sidebar-user-info::before {
+    content: "Signed in as";
+    display: block;
+    margin-bottom: 3px;
+    color: var(--aidc-muted);
+    font-family: var(--aidc-font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .aidc-config-item > input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    margin: 0;
+    border: 1px solid var(--aidc-border);
+    border-radius: 6px;
+    background: var(--aidc-surface);
+    box-shadow: inset 0 0 0 3px var(--aidc-surface);
+    cursor: pointer;
+    transition:
+      background var(--aidc-fast),
+      border-color var(--aidc-fast),
+      box-shadow var(--aidc-fast),
+      transform var(--aidc-fast);
+  }
+
+  .aidc-config-item > input[type="checkbox"]:checked {
+    border-color: var(--aidc-black);
+    background: var(--aidc-black);
+    box-shadow: inset 0 0 0 4px var(--aidc-black);
+  }
+
+  .aidc-config-item > input[type="checkbox"]:checked::after {
+    content: "";
+    display: block;
+    width: 5px;
+    height: 9px;
+    margin: 3px auto 0;
+    border: solid var(--aidc-white);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  .aidc-config-item > input[type="checkbox"]:hover:not(:disabled) {
+    border-color: var(--aidc-text);
+    transform: scale(1.04);
+  }
+
+  .aidc-config-item > input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+    opacity: .55;
+  }
+`;
+document.head.appendChild(uiStyle);
+
+/* ─────────────────────────────────────────────
    Initialisation
 ───────────────────────────────────────────── */
 
