@@ -3269,6 +3269,39 @@ body:has(
   line-height: 1.7;
 }
 
+.aidc-landing-notice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: min(560px, 100%);
+  margin-top: 20px;
+  padding: 11px 13px;
+  border: 1px solid var(--aidc-border);
+  border-radius: 10px;
+  background: var(--aidc-surface);
+  color: var(--aidc-text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.aidc-landing-notice-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  color: var(--aidc-muted);
+}
+
+.aidc-landing-notice-error {
+  border-color: #d7d7d3;
+  background: #f7f7f4;
+}
+
+.aidc-landing-notice-success {
+  background: #fafaf8;
+}
+
 .aidc-landing-actions {
   display: flex;
   align-items: center;
