@@ -25,6 +25,7 @@ const state = {
    * application data is loaded.
    */
   user: null,
+  authReady: false,
 
   applications: [],
   applicationsError: null,
@@ -46,7 +47,8 @@ const state = {
   ui: {
     notice: null,
     deleteApplication: null,
-    createModal: false
+    createModal: false,
+    consoleOpen: false
   }
 };
 
@@ -195,35 +197,63 @@ const auth = {
       const data = await api.auth.me();
 
       state.user = data?.user || null;
+      state.authReady = true;
 
       emitState();
 
       return state.user;
     } catch (error) {
       if (error?.status === 401) {
-        requireAuth();
-
-        /*
-         * Return a promise that never resolves so
-         * the caller's .then() does not run. The
-         * page is being torn down anyway.
-         */
-        return new Promise(() => {});
+        state.user = null;
+        state.authReady = true;
+        emitState();
+        return null;
       }
 
       /*
-       * Something other than 401 (network error,
-       * 500, etc.). Surface it and give up booting
-       * the app rather than hiding the failure.
+       * A transient session-check failure should not
+       * strand the visitor on a blank page. Keep the
+       * public landing page available and let the CTA
+       * start a fresh Ace ID login.
        */
+      state.user = null;
+      state.authReady = true;
+
       notify(
         error?.message ||
-          "Unable to verify session.",
+          "Unable to verify session. You can still sign in.",
         "error"
       );
 
-      throw error;
+      emitState();
+
+      return null;
     }
+  },
+
+  async enterConsole() {
+    if (!state.authReady) {
+      return false;
+    }
+
+    haptic(8);
+
+    if (!state.user) {
+      window.location.assign(LOGIN_PATH);
+      return false;
+    }
+
+    state.ui.consoleOpen = true;
+    emitState();
+
+    try {
+      await applications.load();
+    } finally {
+      lastRouteKey = "";
+      handleRouteChange();
+    }
+
+    return true;
   },
 
   async logout() {
@@ -234,6 +264,8 @@ const auth = {
        * Clear local state before leaving.
        */
       state.user = null;
+      state.authReady = true;
+      state.ui.consoleOpen = false;
 
       emitState();
 
@@ -1406,9 +1438,4 @@ document.head.appendChild(uiStyle);
  * Only after /api/me succeeds do we load data and
  * run the initial route.
  */
-auth.bootstrap().then(() => {
-  applications.load().finally(() => {
-    lastRouteKey = "";
-    handleRouteChange();
-  });
-});
+auth.bootstrap();
