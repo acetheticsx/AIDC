@@ -3218,6 +3218,29 @@ export function registerAIDCComponents(AIDC) {
                 from one focused console.
               </p>
 
+              ${
+                state.ui.notice
+                  ? html`
+                      <div
+                        class="aidc-landing-notice aidc-landing-notice-${text(
+                          state.ui.notice.type || "error"
+                        )}"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <span class="aidc-landing-notice-icon" aria-hidden="true">
+                          ${icon(
+                            state.ui.notice.type === "error"
+                              ? "alert-02"
+                              : "checkmark-circle-02"
+                          )}
+                        </span>
+                        <span>${text(state.ui.notice.message)}</span>
+                      </div>
+                    `
+                  : ""
+              }
+
               <div class="aidc-landing-actions">
                 <button
                   class="aidc-landing-cta"
