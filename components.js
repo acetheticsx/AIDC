@@ -17,6 +17,7 @@ import {
 export function registerAIDCComponents(AIDC) {
   const {
     state,
+    auth,
     applications,
     redirectUris,
     scopes,
@@ -3157,6 +3158,185 @@ export function registerAIDCComponents(AIDC) {
       this.sidebarOpen = false;
     }
 
+    enterConsole() {
+      auth.enterConsole();
+    }
+
+    renderLanding() {
+      const user = state.user;
+      const signedIn = Boolean(user);
+      const identity =
+        user?.name ||
+        user?.email ||
+        "Ace ID account";
+      const email = user?.email || "";
+
+      return html`
+        <div class="aidc-landing">
+          <header class="aidc-landing-nav">
+            <a class="aidc-landing-brand" href="/" aria-label="AIDC home">
+              <img
+                src="./assets/icon.png"
+                alt=""
+                width="38"
+                height="38"
+                decoding="async"
+              />
+              <span>
+                <strong>AIDC</strong>
+                <small>Developer Console</small>
+              </span>
+            </a>
+
+            <div class="aidc-landing-nav-actions">
+              <a
+                class="aidc-landing-link"
+                href="https://identity.ace-base.cc/account"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Ace ID account
+              </a>
+            </div>
+          </header>
+
+          <main class="aidc-landing-main">
+            <section class="aidc-landing-hero" aria-labelledby="aidc-landing-title">
+              <div class="aidc-landing-eyebrow">
+                <span class="aidc-landing-dot" aria-hidden="true"></span>
+                Ace ID · Developer Console
+              </div>
+
+              <h1 id="aidc-landing-title">
+                Your identity layer,
+                <em>built for developers.</em>
+              </h1>
+
+              <p class="aidc-landing-copy">
+                Manage Ace ID applications, OAuth configuration,
+                credentials, redirect URIs, scopes, and developer settings
+                from one focused console.
+              </p>
+
+              <div class="aidc-landing-actions">
+                <button
+                  class="aidc-landing-cta"
+                  type="button"
+                  ?disabled=${!state.authReady}
+                  aria-busy=${!state.authReady}
+                  @click=${() => this.enterConsole()}
+                >
+                  <span>
+                    ${state.authReady
+                      ? signedIn
+                        ? "Open developer console"
+                        : "Continue with Ace ID"
+                      : "Checking Ace ID…"}
+                  </span>
+                  ${icon("arrow-up-right-01")}
+                </button>
+
+                <span class="aidc-landing-note">
+                  ${signedIn
+                    ? "Your Ace ID session is active."
+                    : "Secure sign-in with your Ace ID account."}
+                </span>
+              </div>
+
+              ${signedIn
+                ? html`
+                    <div class="aidc-landing-account">
+                      <span class="aidc-landing-avatar" aria-hidden="true">
+                        ${text(identity.slice(0, 1).toUpperCase())}
+                      </span>
+                      <span class="aidc-landing-account-copy">
+                        <small>Signed in with Ace ID</small>
+                        <strong>${text(identity)}</strong>
+                        ${email
+                          ? html`<span>${text(email)}</span>`
+                          : ""}
+                      </span>
+                      <span class="aidc-landing-account-check" aria-hidden="true">
+                        ${icon("checkmark-circle-02")}
+                      </span>
+                    </div>
+                  `
+                : ""}
+
+              <div class="aidc-landing-rule" aria-hidden="true"></div>
+
+              <div class="aidc-landing-features" aria-label="AIDC capabilities">
+                <article>
+                  <span>${icon("app-window")}</span>
+                  <div>
+                    <strong>Applications</strong>
+                    <p>Create and manage identity applications.</p>
+                  </div>
+                </article>
+
+                <article>
+                  <span>${icon("shield-01")}</span>
+                  <div>
+                    <strong>OAuth / OIDC</strong>
+                    <p>Configure scopes, redirects, and credentials.</p>
+                  </div>
+                </article>
+
+                <article>
+                  <span>${icon("settings-01")}</span>
+                  <div>
+                    <strong>Developer controls</strong>
+                    <p>Keep integration settings in one place.</p>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <aside class="aidc-landing-aside" aria-label="AIDC preview">
+              <div class="aidc-landing-preview">
+                <div class="aidc-landing-preview-top">
+                  <span></span>
+                  <small>AIDC / CONSOLE</small>
+                  <span></span>
+                </div>
+
+                <div class="aidc-landing-preview-card">
+                  <div class="aidc-landing-preview-icon">
+                    ${icon("finger-print")}
+                  </div>
+                  <div>
+                    <small>Identity infrastructure</small>
+                    <strong>Ace ID</strong>
+                  </div>
+                  <span class="aidc-landing-preview-status">
+                    <i></i> Ready
+                  </span>
+                </div>
+
+                <div class="aidc-landing-preview-lines">
+                  <span style="--w: 82%"></span>
+                  <span style="--w: 58%"></span>
+                  <span style="--w: 71%"></span>
+                  <span style="--w: 43%"></span>
+                </div>
+
+                <div class="aidc-landing-preview-footer">
+                  <span>OIDC</span>
+                  <span>PKCE</span>
+                  <span>HTTPS</span>
+                </div>
+              </div>
+            </aside>
+          </main>
+
+          <footer class="aidc-landing-footer">
+            <span>Built for the Ace Base developer ecosystem.</span>
+            <span>© AIDC</span>
+          </footer>
+        </div>
+      `;
+    }
+
     renderPage() {
       const route =
         router.parse();
@@ -3213,6 +3393,10 @@ export function registerAIDCComponents(AIDC) {
     }
 
     render() {
+      if (!state.ui.consoleOpen) {
+        return this.renderLanding();
+      }
+
       return html`
         <div
           class="aidc-shell ${
