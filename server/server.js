@@ -926,10 +926,29 @@ app.get(
           .send("Invalid identity subject");
       }
 
+      const identity = await pool.query(
+        `
+        SELECT
+          email,
+          display_name,
+          username
+        FROM public.aceid_users
+        WHERE id = $1
+        `,
+        [payload.sub]
+      );
+
+      const identityUser = identity.rows[0] || null;
+
       const session = await createSession({
         developerId: payload.sub,
-        email: payload.email || null,
+        email:
+          identityUser?.email ||
+          payload.email ||
+          null,
         name:
+          identityUser?.display_name ||
+          identityUser?.username ||
           payload.name ||
           payload.preferred_username ||
           null
