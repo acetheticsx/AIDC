@@ -178,3 +178,41 @@ input[type="radio"]:focus-visible {
     scroll-behavior: auto;
   }
 }
+
+
+.aidc-switch-account {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--aidc-border);
+  border-radius: 9px;
+  background: var(--aidc-surface);
+  color: var(--aidc-muted);
+  font-size: 11px;
+  font-weight: 650;
+  text-decoration: none;
+  transition:
+    background var(--aidc-fast),
+    border-color var(--aidc-fast),
+    color var(--aidc-fast),
+    transform var(--aidc-fast);
+}
+
+.aidc-switch-account:hover {
+  background: var(--aidc-hover);
+  border-color: #c3c3bf;
+  color: var(--aidc-text);
+}
+
+.aidc-switch-account:active {
+  background: var(--aidc-active);
+  transform: scale(.94);
+}
+
+.aidc-switch-account:focus-visible {
+  outline: 2px solid var(--aidc-text);
+  outline-offset: 3px;
+}
