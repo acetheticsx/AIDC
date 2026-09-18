@@ -212,6 +212,7 @@ export function registerAIDCComponents(AIDC) {
             <a
               class="aidc-sidebar-user-info"
               href="https://identity.ace-base.cc/account"
+              target="_self"
               aria-label="Open Ace ID account"
             >
               <strong>
