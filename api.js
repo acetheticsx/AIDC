@@ -20,7 +20,11 @@ async function request(path, options = {}) {
 
   const useApiBase = options.base !== false;
   const fetchOptions = { ...options };
+  const redirectOnAuthFailure =
+    options.authRedirect !== false;
+
   delete fetchOptions.base;
+  delete fetchOptions.authRedirect;
 
   const headers = {
     "Content-Type": "application/json",
@@ -71,7 +75,10 @@ async function request(path, options = {}) {
      * to /auth/login. Doing this here means every
      * API caller gets the behaviour for free.
      */
-    if (response.status === 401) {
+    if (
+      response.status === 401 &&
+      redirectOnAuthFailure
+    ) {
       window.dispatchEvent(
         new CustomEvent("aidc-auth-required", {
           detail: {
@@ -95,7 +102,9 @@ function id(value) {
 export const api = {
   auth: {
     me() {
-      return request("/me");
+      return request("/me", {
+        authRedirect: false
+      });
     },
 
     logout() {
