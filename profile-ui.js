@@ -31,12 +31,25 @@ function renderProfile(user) {
   const legacyInfo = container.querySelector(
     ".aidc-sidebar-user-info"
   );
-  if (legacyInfo) {
-    legacyInfo.hidden = true;
-  }
 
   const existing = container.querySelector(".aidc-profile-link");
   const logout = container.querySelector(".aidc-icon-button");
+  const switchLink = container.querySelector(".aidc-switch-account");
+
+  if (!switchLink) {
+    const link = document.createElement("a");
+    link.className = "aidc-switch-account";
+    link.href = "https://identity.ace-base.cc/login?switch=1";
+    link.setAttribute("aria-label", "Switch Ace ID account");
+    link.title = "Switch account";
+    link.textContent = "Switch";
+
+    if (logout) {
+      container.insertBefore(link, logout);
+    } else {
+      container.append(link);
+    }
+  }
 
   if (existing) {
     updateProfile(existing, user);
@@ -48,6 +61,7 @@ function renderProfile(user) {
   link.href = ACCOUNT_URL;
   link.setAttribute("aria-label", "Open Ace ID account");
   link.title = "Open Ace ID account";
+  link.target = "_self";
 
   const avatar = document.createElement("span");
   avatar.className = "aidc-profile-avatar";
