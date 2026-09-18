@@ -209,8 +209,10 @@ export function registerAIDCComponents(AIDC) {
           <div
             class="aidc-sidebar-user"
           >
-            <div
+            <a
               class="aidc-sidebar-user-info"
+              href="https://identity.ace-base.cc/account"
+              aria-label="Open Ace ID account"
             >
               <strong>
                 ${text(
@@ -230,7 +232,7 @@ export function registerAIDCComponents(AIDC) {
                     `
                   : ""
               }
-            </div>
+            </a>
 
             <button
               class="aidc-icon-button"
