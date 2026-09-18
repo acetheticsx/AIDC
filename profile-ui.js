@@ -51,6 +51,10 @@ function renderProfile(user) {
     }
   }
 
+  if (legacyInfo) {
+    return;
+  }
+
   if (existing) {
     updateProfile(existing, user);
     return;
