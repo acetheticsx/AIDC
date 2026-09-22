@@ -4253,6 +4253,14 @@ body:has(
   border-radius:inherit;
 }
 
+.aidc-user-avatar > .aidc-icon{
+  display:block;
+  width:18px;
+  height:18px;
+  margin:7px auto;
+  color:var(--aidc-muted);
+}
+
 .aidc-sidebar-user-info{
   flex-direction:row;
   align-items:center;
