@@ -537,15 +537,19 @@ export function registerAIDCComponents(AIDC) {
             <div class="aidc-stat-card">
 
               <div class="aidc-stat-icon">
-                ${icon("server-stack-01")}
+                ${icon("layers-01")}
               </div>
 
               <div>
-                <span>API</span>
+                <span>Project slots</span>
 
                 <strong>
-                  Connected
+                  ${state.quota.remaining}
                 </strong>
+
+                <small>
+                  of ${state.quota.limit} available
+                </small>
               </div>
 
             </div>
@@ -3659,6 +3663,11 @@ export function registerAIDCComponents(AIDC) {
   customElements.define(
     "aidc-application-overview",
     AIDCApplicationOverview
+  );
+
+  customElements.define(
+    "aidc-url-configs",
+    AIDCUrlConfigs
   );
 
   customElements.define(
