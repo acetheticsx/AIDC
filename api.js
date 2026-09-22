@@ -266,6 +266,12 @@ export const api = {
     }
   },
 
+  playground: {
+    config() {
+      return request("/playground/config");
+    }
+  },
+
   activity: {
     list(applicationId, limit = 50) {
       return request(
