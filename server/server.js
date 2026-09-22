@@ -1120,14 +1120,38 @@ app.post(
 /*
  * GET /api/me
  */
-app.get("/api/me", requireAuth, (req, res) => {
-  res.json({
-    user: {
-      id: req.developer.id,
-      email: req.developer.email,
-      name: req.developer.name
-    }
-  });
+app.get("/api/me", requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        avatar_url
+      FROM public.aceid_users
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [req.developer.id]
+    );
+
+    const avatarUrl =
+      result.rows[0]?.avatar_url || null;
+
+    res.json({
+      user: {
+        id: req.developer.id,
+        email: req.developer.email,
+        name: req.developer.name,
+        picture: avatarUrl,
+        avatar_url: avatarUrl
+      }
+    });
+  } catch (error) {
+    console.error("GET /api/me:", error);
+
+    res.status(500).json({
+      error: "Failed to fetch account profile"
+    });
+  }
 });
 
 /*
