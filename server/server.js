@@ -2472,7 +2472,10 @@ app.get(
   requireAuth,
   async (req, res) => {
     const requestedDays = Number.parseInt(req.query.days, 10);
-    const days = [7, 14, 30].includes(requestedDays) ? requestedDays : 7;
+    const days = [7, 14, 30].includes(requestedDays)
+      ? requestedDays
+      : 7;
+
     try {
       const result = await pool.query(
         `
@@ -2487,39 +2490,142 @@ app.get(
             COALESCE(
               to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
               s.created_at
-            ) AS login_at
+            ) AS login_at,
+            NULLIF(s.payload->>'accountId', '') AS account_id
           FROM public.aceid_oidc_store AS s
           WHERE s.model_name = 'Session'
             AND s.payload->>'kind' = 'Session'
             AND EXISTS (
               SELECT 1
               FROM owned_clients AS c
-              WHERE COALESCE(s.payload->'authorizations', '{}'::jsonb) ? c.client_id
+              WHERE COALESCE(
+                s.payload->'authorizations',
+                '{}'::jsonb
+              ) ? c.client_id
             )
         ),
-        daily AS (
-          SELECT DATE_TRUNC('day', login_at)::date AS day, COUNT(*)::int AS count
+        daily_logins AS (
+          SELECT
+            DATE_TRUNC('day', login_at)::date AS day,
+            COUNT(*)::int AS count
           FROM oidc_logins
           WHERE login_at >= CURRENT_DATE - ($2::int - 1)
             AND login_at < CURRENT_DATE + INTERVAL '1 day'
           GROUP BY 1
+        ),
+        daily_users AS (
+          SELECT
+            DATE_TRUNC('day', login_at)::date AS day,
+            COUNT(DISTINCT account_id)::int AS count
+          FROM oidc_logins
+          WHERE login_at >= CURRENT_DATE - ($2::int - 1)
+            AND login_at < CURRENT_DATE + INTERVAL '1 day'
+          GROUP BY 1
+        ),
+        daily_failures AS (
+          SELECT
+            DATE_TRUNC('day', created_at)::date AS day,
+            COUNT(*)::int AS count
+          FROM public.aceid_auth_events
+          WHERE client_id IN (
+            SELECT client_id
+            FROM owned_clients
+          )
+            AND event_type = 'login_failed'
+            AND created_at >= CURRENT_DATE - ($2::int - 1)
+            AND created_at < CURRENT_DATE + INTERVAL '1 day'
+          GROUP BY 1
         )
-        SELECT calendar.day::date AS day, COALESCE(daily.count, 0)::int AS count
+        SELECT
+          calendar.day::date AS day,
+          COALESCE(daily_logins.count, 0)::int AS logins,
+          COALESCE(daily_users.count, 0)::int AS unique_users,
+          COALESCE(daily_failures.count, 0)::int AS failed_attempts
         FROM generate_series(
           CURRENT_DATE - ($2::int - 1),
           CURRENT_DATE,
           INTERVAL '1 day'
         ) AS calendar(day)
-        LEFT JOIN daily ON daily.day = calendar.day::date
+        LEFT JOIN daily_logins
+          ON daily_logins.day = calendar.day::date
+        LEFT JOIN daily_users
+          ON daily_users.day = calendar.day::date
+        LEFT JOIN daily_failures
+          ON daily_failures.day = calendar.day::date
         ORDER BY calendar.day ASC
         `,
         [req.developer.id, days]
       );
-      const items = result.rows.map(row => ({ date: row.day, count: Number(row.count) || 0 }));
-      res.json({ days, total: items.reduce((sum, item) => sum + item.count, 0), items });
+
+      const items = result.rows.map(row => ({
+        date: row.day,
+        count: Number(row.logins) || 0,
+        uniqueUsers: Number(row.unique_users) || 0,
+        failedAttempts: Number(row.failed_attempts) || 0
+      }));
+
+      const total = items.reduce(
+        (sum, item) => sum + item.count,
+        0
+      );
+
+      const failedAttempts = items.reduce(
+        (sum, item) => sum + item.failedAttempts,
+        0
+      );
+
+      const uniqueUsersResult = await pool.query(
+        `
+        WITH owned_clients AS (
+          SELECT client_id
+          FROM public.applications
+          WHERE owner_id = $1
+        )
+        SELECT COUNT(
+          DISTINCT NULLIF(s.payload->>'accountId', '')
+        )::int AS count
+        FROM public.aceid_oidc_store AS s
+        WHERE s.model_name = 'Session'
+          AND s.payload->>'kind' = 'Session'
+          AND COALESCE(
+            to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
+            s.created_at
+          ) >= CURRENT_DATE - ($2::int - 1)
+          AND COALESCE(
+            to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
+            s.created_at
+          ) < CURRENT_DATE + INTERVAL '1 day'
+          AND EXISTS (
+            SELECT 1
+            FROM owned_clients AS c
+            WHERE COALESCE(
+              s.payload->'authorizations',
+              '{}'::jsonb
+            ) ? c.client_id
+          )
+        `,
+        [req.developer.id, days]
+      );
+
+      const uniqueUsers =
+        Number(uniqueUsersResult.rows[0]?.count) || 0;
+
+      res.json({
+        days,
+        total,
+        uniqueUsers,
+        failedAttempts,
+        items
+      });
     } catch (error) {
-      console.error("GET analytics logins:", error);
-      res.status(500).json({ error: "Failed to fetch analytics" });
+      console.error(
+        "GET analytics logins:",
+        error
+      );
+
+      res.status(500).json({
+        error: "Failed to fetch analytics"
+      });
     }
   }
 );
