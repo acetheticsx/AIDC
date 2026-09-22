@@ -446,6 +446,74 @@ function validateRedirectUri(value) {
   };
 }
 
+
+function validateOriginUrl(value, { required = false } = {}) {
+  if (value === undefined || value === null || !String(value).trim()) {
+    return required ? { valid: false, error: "Origin URL is required" } : { valid: true, origin: null };
+  }
+  if (typeof value !== "string") return { valid: false, error: "Origin URL must be a string" };
+
+  const input = value.trim();
+  if (input.length > 2048) return { valid: false, error: "Origin URL is too long" };
+
+  let parsed;
+  try { parsed = new URL(input); }
+  catch { return { valid: false, error: "Origin URL must be a valid URL" }; }
+
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    return { valid: false, error: "Origin URL must use HTTP or HTTPS" };
+  }
+  if (parsed.username || parsed.password) {
+    return { valid: false, error: "Origin URL cannot contain credentials" };
+  }
+  if (parsed.pathname !== "/" || parsed.search || parsed.hash) {
+    return { valid: false, error: "Origin URL must contain only the scheme and domain" };
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  const isLocalhost =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname === "[::1]";
+
+  if (parsed.protocol === "http:" && !isLocalhost) {
+    return { valid: false, error: "HTTP origins are only allowed for localhost" };
+  }
+
+  return { valid: true, origin: parsed.origin };
+}
+
+function normalizeCrossAppScopes(value) {
+  if (value === undefined || value === null || value === "") {
+    return { valid: true, scopes: [] };
+  }
+
+  const values = Array.isArray(value) ? value : String(value).split(",");
+  const scopes = [
+    ...new Set(
+      values
+        .filter(item => typeof item === "string")
+        .map(item => item.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  ];
+
+  if (scopes.length > 20) {
+    return { valid: false, error: "A maximum of 20 cross-app scopes is allowed" };
+  }
+
+  const invalid = scopes.find(
+    scope => scope.length > 100 || !/^[a-z0-9][a-z0-9._:-]*$/.test(scope)
+  );
+
+  if (invalid) {
+    return { valid: false, error: "Invalid cross-app scope: " + invalid };
+  }
+
+  return { valid: true, scopes };
+}
+
 function validateBranding(payload) {
   const {
     display_name,
@@ -1075,37 +1143,52 @@ app.get("/api/health", async (req, res) => {
  * ═══════════════════════════════════════════
  */
 
+
 app.get(
   "/api/applications",
   requireAuth,
   async (req, res) => {
     try {
-      const result = await pool.query(
-        `
-        SELECT
-          id,
-          name,
-          description,
-          client_id,
-          status,
-          created_at,
-          updated_at
-        FROM public.applications
-        WHERE owner_id = $1
-        ORDER BY created_at DESC
-        `,
-        [req.developer.id]
-      );
+      const [userResult, applicationsResult] = await Promise.all([
+        pool.query(
+          'SELECT email_verified FROM public.aceid_users WHERE id = $1',
+          [req.developer.id]
+        ),
+        pool.query(
+          `
+          SELECT
+            id,
+            name,
+            description,
+            client_id,
+            origin_url,
+            cross_app_scopes,
+            status,
+            created_at,
+            updated_at
+          FROM public.applications
+          WHERE owner_id = $1
+          ORDER BY created_at DESC
+          `,
+          [req.developer.id]
+        )
+      ]);
+
+      const verified = userResult.rows[0]?.email_verified === true;
+      const limit = verified ? 10 : 3;
 
       res.json({
-        applications: result.rows
+        applications: applicationsResult.rows,
+        quota: {
+          verified,
+          count: applicationsResult.rows.length,
+          limit,
+          remaining: Math.max(limit - applicationsResult.rows.length, 0)
+        }
       });
     } catch (error) {
       console.error("GET /api/applications:", error);
-
-      res.status(500).json({
-        error: "Failed to fetch applications"
-      });
+      res.status(500).json({ error: "Failed to fetch applications" });
     }
   }
 );
@@ -1114,58 +1197,105 @@ app.post(
   "/api/applications",
   requireAuth,
   async (req, res) => {
-    const {
-      name,
-      description = ""
-    } = req.body ?? {};
+    const { name, description = "", origin_url, cross_app_scopes } = req.body ?? {};
 
-    if (
-      typeof name !== "string" ||
-      !name.trim()
-    ) {
-      return res.status(400).json({
-        error: "Application name is required"
-      });
+    if (typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Application name is required" });
     }
 
     if (typeof description !== "string") {
-      return res.status(400).json({
-        error: "Description must be a string"
-      });
+      return res.status(400).json({ error: "Description must be a string" });
     }
 
-    const applicationName = name.trim();
-    const applicationDescription = description.trim();
-    const clientId = generateClientId();
+    const originValidation = validateOriginUrl(origin_url, { required: true });
+    if (!originValidation.valid) {
+      return res.status(400).json({ error: originValidation.error });
+    }
+
+    const scopeValidation = normalizeCrossAppScopes(cross_app_scopes);
+    if (!scopeValidation.valid) {
+      return res.status(400).json({ error: scopeValidation.error });
+    }
+
+    const client = await pool.connect();
 
     try {
-      const result = await pool.query(
+      await client.query("BEGIN");
+
+      const userResult = await client.query(
+        'SELECT email_verified FROM public.aceid_users WHERE id = $1 FOR UPDATE',
+        [req.developer.id]
+      );
+
+      if (!userResult.rows.length) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({ error: "Ace ID account not found" });
+      }
+
+      const verified = userResult.rows[0].email_verified === true;
+      const limit = verified ? 10 : 3;
+
+      const countResult = await client.query(
+        'SELECT COUNT(*)::integer AS count FROM public.applications WHERE owner_id = $1',
+        [req.developer.id]
+      );
+
+      const count = countResult.rows[0].count;
+
+      if (count >= limit) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({
+          error:
+            "Project limit reached. " +
+            (verified ? "Verified" : "Unverified") +
+            " accounts can create up to " +
+            limit +
+            " projects.",
+          code: "PROJECT_LIMIT_REACHED",
+          quota: { verified, count, limit, remaining: 0 }
+        });
+      }
+
+      const result = await client.query(
         `
         INSERT INTO public.applications
-          (name, description, client_id, owner_id)
+          (name, description, client_id, origin_url, cross_app_scopes, owner_id)
         VALUES
-          ($1, $2, $3, $4)
+          ($1, $2, $3, $4, $5, $6)
         RETURNING
           id,
           name,
           description,
           client_id,
+          origin_url,
+          cross_app_scopes,
           status,
           created_at,
           updated_at
         `,
         [
-          applicationName,
-          applicationDescription,
-          clientId,
+          name.trim(),
+          description.trim(),
+          generateClientId(),
+          originValidation.origin,
+          scopeValidation.scopes,
           req.developer.id
         ]
       );
 
+      await client.query("COMMIT");
+
       res.status(201).json({
-        application: result.rows[0]
+        application: result.rows[0],
+        quota: {
+          verified,
+          count: count + 1,
+          limit,
+          remaining: Math.max(limit - (count + 1), 0)
+        }
       });
     } catch (error) {
+      await client.query("ROLLBACK");
       console.error("POST /api/applications:", error);
 
       if (error?.code === "23505") {
@@ -1174,9 +1304,9 @@ app.post(
         });
       }
 
-      res.status(500).json({
-        error: "Failed to create application"
-      });
+      res.status(500).json({ error: "Failed to create application" });
+    } finally {
+      client.release();
     }
   }
 );
@@ -1188,9 +1318,7 @@ app.get(
     const { id } = req.params;
 
     if (!isValidUuid(id)) {
-      return res.status(400).json({
-        error: "Invalid application ID"
-      });
+      return res.status(400).json({ error: "Invalid application ID" });
     }
 
     try {
@@ -1201,6 +1329,8 @@ app.get(
           name,
           description,
           client_id,
+          origin_url,
+          cross_app_scopes,
           status,
           created_at,
           updated_at
@@ -1211,24 +1341,14 @@ app.get(
         [id, req.developer.id]
       );
 
-      if (result.rows.length === 0) {
-        return res.status(404).json({
-          error: "Application not found"
-        });
+      if (!result.rows.length) {
+        return res.status(404).json({ error: "Application not found" });
       }
 
-      res.json({
-        application: result.rows[0]
-      });
+      res.json({ application: result.rows[0] });
     } catch (error) {
-      console.error(
-        "GET /api/applications/:id:",
-        error
-      );
-
-      res.status(500).json({
-        error: "Failed to fetch application"
-      });
+      console.error("GET /api/applications/:id:", error);
+      res.status(500).json({ error: "Failed to fetch application" });
     }
   }
 );
@@ -1240,55 +1360,49 @@ app.patch(
     const { id } = req.params;
 
     if (!isValidUuid(id)) {
-      return res.status(400).json({
-        error: "Invalid application ID"
-      });
+      return res.status(400).json({ error: "Invalid application ID" });
     }
 
-    const {
-      name,
-      description,
-      status
-    } = req.body ?? {};
+    const { name, description, origin_url, cross_app_scopes, status } = req.body ?? {};
 
-    if (
-      name !== undefined &&
-      (
-        typeof name !== "string" ||
-        !name.trim()
-      )
-    ) {
-      return res.status(400).json({
-        error: "Application name cannot be empty"
-      });
+    if (name !== undefined && (typeof name !== "string" || !name.trim())) {
+      return res.status(400).json({ error: "Application name cannot be empty" });
     }
 
-    if (
-      description !== undefined &&
-      typeof description !== "string"
-    ) {
-      return res.status(400).json({
-        error: "Description must be a string"
-      });
+    if (description !== undefined && typeof description !== "string") {
+      return res.status(400).json({ error: "Description must be a string" });
     }
 
-    if (
-      status !== undefined &&
-      !["active", "disabled"].includes(status)
-    ) {
-      return res.status(400).json({
-        error: "Invalid application status"
-      });
+    let origin = null;
+    if (origin_url !== undefined) {
+      const originValidation = validateOriginUrl(origin_url, { required: true });
+      if (!originValidation.valid) {
+        return res.status(400).json({ error: originValidation.error });
+      }
+      origin = originValidation.origin;
+    }
+
+    let scopes = null;
+    if (cross_app_scopes !== undefined) {
+      const scopeValidation = normalizeCrossAppScopes(cross_app_scopes);
+      if (!scopeValidation.valid) {
+        return res.status(400).json({ error: scopeValidation.error });
+      }
+      scopes = scopeValidation.scopes;
+    }
+
+    if (status !== undefined && !["active", "disabled"].includes(status)) {
+      return res.status(400).json({ error: "Invalid application status" });
     }
 
     if (
       name === undefined &&
       description === undefined &&
+      origin_url === undefined &&
+      cross_app_scopes === undefined &&
       status === undefined
     ) {
-      return res.status(400).json({
-        error: "No fields to update"
-      });
+      return res.status(400).json({ error: "No fields to update" });
     }
 
     try {
@@ -1298,44 +1412,41 @@ app.patch(
         SET
           name = COALESCE($1, name),
           description = COALESCE($2, description),
-          status = COALESCE($3, status),
+          origin_url = COALESCE($3, origin_url),
+          cross_app_scopes = COALESCE($4, cross_app_scopes),
+          status = COALESCE($5, status),
           updated_at = now()
-        WHERE id = $4
-          AND owner_id = $5
+        WHERE id = $6
+          AND owner_id = $7
         RETURNING
           id,
           name,
           description,
           client_id,
+          origin_url,
+          cross_app_scopes,
           status,
           created_at,
           updated_at
         `,
         [
           name !== undefined ? name.trim() : null,
-          description !== undefined
-            ? description.trim()
-            : null,
+          description !== undefined ? description.trim() : null,
+          origin,
+          scopes,
           status ?? null,
           id,
           req.developer.id
         ]
       );
 
-      if (result.rows.length === 0) {
-        return res.status(404).json({
-          error: "Application not found"
-        });
+      if (!result.rows.length) {
+        return res.status(404).json({ error: "Application not found" });
       }
 
-      res.json({
-        application: result.rows[0]
-      });
+      res.json({ application: result.rows[0] });
     } catch (error) {
-      console.error(
-        "PATCH /api/applications/:id:",
-        error
-      );
+      console.error("PATCH /api/applications/:id:", error);
 
       if (error?.code === "23505") {
         return res.status(409).json({
@@ -1343,9 +1454,7 @@ app.patch(
         });
       }
 
-      res.status(500).json({
-        error: "Failed to update application"
-      });
+      res.status(500).json({ error: "Failed to update application" });
     }
   }
 );
@@ -1373,6 +1482,8 @@ app.delete(
           name,
           description,
           client_id,
+          origin_url,
+          cross_app_scopes,
           status,
           created_at,
           updated_at
