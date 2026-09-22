@@ -3765,3 +3765,20 @@ body:has(
 .aidc-dialog-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:18px}
 @media (max-width:900px){.aidc-scope-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:600px){.aidc-scope-grid{grid-template-columns:1fr}.aidc-tabs{gap:18px}.aidc-detail-header{align-items:flex-start}.aidc-page-header{align-items:flex-start}}
+
+.aidc-scope-control{position:relative;display:inline-flex;align-self:flex-end;margin-top:auto;width:22px;height:22px;flex:0 0 22px}
+.aidc-scope-input{position:absolute;inset:0;width:22px;height:22px;margin:0;opacity:0;cursor:pointer;z-index:2}
+.aidc-scope-checkbox{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--aidc-border);border-radius:6px;background:var(--aidc-surface);box-shadow:inset 0 0 0 2px var(--aidc-surface);transition:background var(--aidc-fast),border-color var(--aidc-fast),transform var(--aidc-fast),box-shadow var(--aidc-fast)}
+.aidc-scope-checkmark{display:flex;align-items:center;justify-content:center;opacity:0;color:var(--aidc-white);font-size:12px;line-height:1;transform:scale(.7);transition:opacity var(--aidc-fast),transform var(--aidc-fast)}
+.aidc-scope-input:checked + .aidc-scope-checkbox{border-color:var(--aidc-black);background:var(--aidc-black);box-shadow:none}
+.aidc-scope-input:checked + .aidc-scope-checkbox .aidc-scope-checkmark{opacity:1;transform:scale(1)}
+.aidc-scope-input:hover + .aidc-scope-checkbox{border-color:var(--aidc-text);transform:scale(1.05)}
+.aidc-scope-input:focus-visible + .aidc-scope-checkbox{outline:2px solid var(--aidc-text);outline-offset:2px}
+.aidc-scope-input:disabled{cursor:not-allowed}
+.aidc-scope-input:disabled + .aidc-scope-checkbox{opacity:.5}
+.aidc-scope-grid .aidc-config-item{min-height:148px}
+.aidc-scope-grid{align-items:stretch}
+.aidc-scope-grid .aidc-config-value{min-width:0}
+.aidc-dialog-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:18px}
+@media (max-width:900px){.aidc-scope-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:600px){.aidc-scope-grid{grid-template-columns:1fr}.aidc-tabs{gap:18px}.aidc-detail-header{align-items:flex-start}.aidc-page-header{align-items:flex-start}}
