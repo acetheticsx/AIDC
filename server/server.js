@@ -1223,7 +1223,7 @@ app.post(
   "/api/applications",
   requireAuth,
   async (req, res) => {
-    const { name, description = "", origin_url, cross_app_scopes } = req.body ?? {};
+    const { name, description = "", origin_url } = req.body ?? {};
 
     if (typeof name !== "string" || !name.trim()) {
       return res.status(400).json({ error: "Application name is required" });
