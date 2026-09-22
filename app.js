@@ -1079,6 +1079,18 @@ const analytics = {
   }
 };
 
+const playground = {
+  async config() {
+    try {
+      const data = await api.playground.config();
+      return data || null;
+    } catch (error) {
+      handleError(error, "Failed to load integration playground");
+      throw error;
+    }
+  }
+};
+
 const activity = {
   async list(applicationId, limit = 50) {
     if (!applicationId) {
@@ -1406,6 +1418,8 @@ const AIDC = {
   activity,
 
   analytics,
+
+  playground,
 
   router: {
     navigate,
