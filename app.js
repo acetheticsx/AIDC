@@ -367,6 +367,7 @@ const applications = {
     name,
     description = "",
     origin_url,
+    application_type = "web",
     cross_app_scopes = []
   }) {
     haptic(8);
@@ -377,6 +378,7 @@ const applications = {
           name,
           description,
           origin_url,
+          application_type,
           cross_app_scopes
         });
 
