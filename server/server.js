@@ -1197,6 +1197,26 @@ app.get("/api/health", async (req, res) => {
   });
 });
 
+app.get(
+  "/api/playground/config",
+  requireAuth,
+  async (req, res) => {
+    if (discoveryState.status !== "ready" || !discoveryState.doc) {
+      return res.status(503).json({
+        error: "Ace ID discovery is not ready"
+      });
+    }
+
+    res.json({
+      issuer: discoveryState.doc.issuer || ISSUER,
+      authorization_endpoint:
+        discoveryState.doc.authorization_endpoint || null,
+      token_endpoint:
+        discoveryState.doc.token_endpoint || null
+    });
+  }
+);
+
 /*
  * ═══════════════════════════════════════════
  * Applications
