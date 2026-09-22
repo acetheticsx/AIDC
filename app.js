@@ -490,6 +490,17 @@ const applications = {
           application => application.id !== id
         );
 
+      if (state.quota.count > 0) {
+        state.quota = {
+          ...state.quota,
+          count: state.quota.count - 1,
+          remaining: Math.min(
+            state.quota.limit,
+            state.quota.remaining + 1
+          )
+        };
+      }
+
       redirectUriRequestId++;
 
       state.redirectUris = {
