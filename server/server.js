@@ -1419,16 +1419,16 @@ app.get(
       const result = await pool.query(
         `
         SELECT
-          id,
-          name,
-          description,
-          client_id,
+          public.applications.id,
+          public.applications.name,
+          public.applications.description,
+          public.applications.client_id,
           COALESCE(aceid.application_type, public.applications.application_type, 'web') AS application_type,
-          origin_url,
-          cross_app_scopes,
-          status,
-          created_at,
-          updated_at,
+          public.applications.origin_url,
+          public.applications.cross_app_scopes,
+          public.applications.status,
+          public.applications.created_at,
+          public.applications.updated_at,
           branding.logo_url
         FROM public.applications
         LEFT JOIN public.application_branding AS branding
