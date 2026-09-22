@@ -1720,6 +1720,18 @@ app.post(
         });
       }
 
+      const applicationType =
+        application.rows[0]?.application_type || "web";
+
+      const validation =
+        validateRedirectUri(uri, { applicationType });
+
+      if (!validation.valid) {
+        return res.status(400).json({
+          error: validation.error
+        });
+      }
+
       const result = await pool.query(
         `
         INSERT INTO public.redirect_uris
