@@ -42,10 +42,18 @@ export function shortId(value) {
   return `${string.slice(0, 8)}…${string.slice(-6)}`;
 }
 
+const ICON_ALIASES = {
+  "user-01": "user",
+  "x-close": "cancel-01",
+  "help-circle": "information-circle"
+};
+
 export function icon(name, className = "") {
+  const resolvedName = ICON_ALIASES[name] || name;
+
   return html`
     <i
-      class="aidc-icon hgi-stroke hgi-${name} ${className}"
+      class="aidc-icon hgi-stroke hgi-${resolvedName} ${className}"
       aria-hidden="true"
     ></i>
   `;
