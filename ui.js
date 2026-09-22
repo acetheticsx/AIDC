@@ -2188,7 +2188,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                                 type="button"
                                 aria-label=${`Remove ${scope}`}
                                 @click=${() => {
-                                  this.crossAppInput = this.crossAppScopes
+                                  this.crossAppInput = this.crossAppTokens()
                                     .filter(item => item !== scope)
                                     .join(", ");
                                   this.scopeDirty = true;
