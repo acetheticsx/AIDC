@@ -1357,10 +1357,13 @@ app.get(
           cross_app_scopes,
           status,
           created_at,
-          updated_at
+          updated_at,
+          branding.logo_url
         FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
+        LEFT JOIN public.application_branding AS branding
+          ON branding.application_id = public.applications.id
+        WHERE public.applications.id = $1
+          AND public.applications.owner_id = $2
         `,
         [id, req.developer.id]
       );
@@ -1451,7 +1454,8 @@ app.patch(
           cross_app_scopes,
           status,
           created_at,
-          updated_at
+          updated_at,
+          (SELECT logo_url FROM public.application_branding WHERE application_id = public.applications.id) AS logo_url
         `,
         [
           name !== undefined ? name.trim() : null,
