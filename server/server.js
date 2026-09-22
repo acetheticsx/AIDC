@@ -2475,8 +2475,8 @@ app.get("/", sendFrontendFile("index.html"));
 app.get("/app.js", sendFrontendFile("app.js"));
 app.get("/api.js", sendFrontendFile("api.js"));
 app.get(
-  "/components.js",
-  sendFrontendFile("components.js")
+  "/ui.js",
+  sendFrontendFile("ui.js")
 );
 app.get(
   "/helpers.js",
