@@ -30,7 +30,7 @@ const state = {
   applications: [],
   applicationsError: null,
 
-  analytics: { days: 7, items: [], total: 0, loading: false, error: null },
+  analytics: { days: 7, items: [], total: 0, uniqueUsers: 0, failedAttempts: 0, loading: false, error: null },
   quota: {
     verified: false,
     count: 0,
@@ -1069,7 +1069,15 @@ const analytics = {
     emitState();
     try {
       const data = await api.analytics.logins(normalized);
-      state.analytics = { days: normalized, items: Array.isArray(data?.items) ? data.items : [], total: Number(data?.total) || 0, loading: false, error: null };
+      state.analytics = {
+        days: normalized,
+        items: Array.isArray(data?.items) ? data.items : [],
+        total: Number(data?.total) || 0,
+        uniqueUsers: Number(data?.uniqueUsers) || 0,
+        failedAttempts: Number(data?.failedAttempts) || 0,
+        loading: false,
+        error: null
+      };
       emitState();
       return state.analytics.items;
     } catch (error) {
