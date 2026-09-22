@@ -3782,3 +3782,23 @@ body:has(
 .aidc-dialog-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:18px}
 @media (max-width:900px){.aidc-scope-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:600px){.aidc-scope-grid{grid-template-columns:1fr}.aidc-tabs{gap:18px}.aidc-detail-header{align-items:flex-start}.aidc-page-header{align-items:flex-start}}
+
+.aidc-overview-activity{margin-top:16px}
+.aidc-overview-activity .aidc-card-section-header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.aidc-inline-button{min-height:34px;padding:0 10px;text-decoration:none;white-space:nowrap}
+.aidc-inline-button>.aidc-icon:last-child{margin-left:4px}
+.aidc-overview-activity-body>.aidc-card{border:0;padding:0;background:transparent;box-shadow:none}
+.aidc-overview-activity-body>.aidc-card>.aidc-card-section-header{display:none}
+.aidc-overview-activity-body .aidc-detail-fields{border-top:1px solid var(--aidc-border-soft)}
+.aidc-activity-list{display:grid;border-top:1px solid var(--aidc-border-soft)}
+.aidc-activity-row{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:58px;padding:10px 0;border-bottom:1px solid var(--aidc-border-soft)}
+.aidc-activity-row:last-child{border-bottom:0}
+.aidc-activity-main{display:flex;align-items:center;gap:10px;min-width:0}
+.aidc-activity-main>div{display:grid;gap:2px;min-width:0}
+.aidc-activity-icon{display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border:1px solid var(--aidc-border);border-radius:8px;background:var(--aidc-surface)}
+.aidc-activity-main strong{font-size:12px;font-weight:650}
+.aidc-activity-status{font-size:10px;color:var(--aidc-muted)}
+.aidc-activity-status.is-success{color:var(--aidc-text-secondary)}
+.aidc-activity-status.is-failed{color:var(--aidc-danger)}
+.aidc-activity-row time{flex:0 0 auto;color:var(--aidc-muted);font-size:10px}
+@media (max-width:600px){.aidc-overview-activity .aidc-card-section-header{align-items:flex-start}.aidc-overview-activity .aidc-card-section-header>.aidc-inline-button{flex:0 0 auto}.aidc-activity-row{align-items:flex-start}.aidc-activity-row time{padding-top:2px}}
