@@ -4117,3 +4117,34 @@ body:has(
     font-size:21px;
   }
 }
+
+
+.aidc-help-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  min-height:34px;
+  padding:7px 11px;
+  border:1px solid var(--aidc-border);
+  border-radius:8px;
+  background:var(--aidc-surface);
+  color:var(--aidc-text);
+  font-size:11px;
+  font-weight:650;
+  line-height:1;
+  text-decoration:none;
+  white-space:nowrap;
+  transition:background var(--aidc-fast),border-color var(--aidc-fast),transform var(--aidc-fast);
+}
+
+.aidc-help-link:hover{
+  border-color:var(--aidc-text);
+  background:var(--aidc-surface-soft);
+  transform:translateY(-1px);
+}
+
+.aidc-help-link > .aidc-icon:last-child{
+  width:13px;
+  height:13px;
+}
