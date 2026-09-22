@@ -1532,7 +1532,6 @@ export function registerAIDCComponents(AIDC) {
                 </span>
 
                 <span class="aidc-button-loading">
-                  <span class="aidc-spinner"></span>
                   Adding…
                 </span>
 
@@ -1715,7 +1714,7 @@ export function registerAIDCComponents(AIDC) {
       }
 
       const checked =
-        Boolean(event.currentTarget?.checked);
+        Boolean(event.target?.checked ?? event.currentTarget?.checked);
 
       const next =
         new Set(this.localScopes);
@@ -1967,10 +1966,6 @@ export function registerAIDCComponents(AIDC) {
                       <span
                         class="aidc-button-loading"
                       >
-                        <span
-                          class="aidc-spinner"
-                        ></span>
-
                         Saving…
                       </span>
 
@@ -2291,9 +2286,6 @@ export function registerAIDCComponents(AIDC) {
                       </span>
 
                       <span class="aidc-button-loading">
-                        <span
-                          class="aidc-spinner"
-                        ></span>
                         Rotating…
                       </span>
                     </button>
@@ -2516,7 +2508,6 @@ export function registerAIDCComponents(AIDC) {
                 </span>
 
                 <span class="aidc-button-loading">
-                  <span class="aidc-spinner"></span>
                   Saving…
                 </span>
               </button>
@@ -3077,10 +3068,6 @@ export function registerAIDCComponents(AIDC) {
                   <span
                     class="aidc-button-loading"
                   >
-                    <span
-                      class="aidc-spinner"
-                    ></span>
-
                     Creating…
                   </span>
 
