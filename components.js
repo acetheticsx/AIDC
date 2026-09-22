@@ -1120,6 +1120,31 @@ export function registerAIDCComponents(AIDC) {
               <div class="aidc-detail-field">
 
                 <span>
+                  Origin URL
+                </span>
+
+                <code class="aidc-mono">
+                  ${app.origin_url || "Not configured"}
+                </code>
+
+              </div>
+
+              <div class="aidc-detail-field">
+
+                <span>
+                  Cross-App Scope
+                </span>
+
+                <code class="aidc-mono">
+                  ${Array.isArray(app.cross_app_scopes) && app.cross_app_scopes.length
+                    ? app.cross_app_scopes.join(", ")
+                    : "None"}
+                </code>
+
+              </div>
+              <div class="aidc-detail-field">
+
+                <span>
                   Status
                 </span>
 
@@ -2679,6 +2704,14 @@ export function registerAIDCComponents(AIDC) {
         state: true
       },
 
+      originUrl: {
+        state: true
+      },
+
+      crossAppScope: {
+        state: true
+      },
+
       submitting: {
         state: true
       },
@@ -2693,6 +2726,8 @@ export function registerAIDCComponents(AIDC) {
 
       this.name = "";
       this.description = "";
+      this.originUrl = "";
+      this.crossAppScope = "";
       this.submitting = false;
       this.error = "";
 
@@ -2731,6 +2766,15 @@ export function registerAIDCComponents(AIDC) {
       const description =
         this.description.trim();
 
+      const originUrl =
+        this.originUrl.trim();
+
+      const crossAppScopes =
+        this.crossAppScope
+          .split(",")
+          .map(scope => scope.trim())
+          .filter(Boolean);
+
       if (!name) {
         this.error =
           "Application name is required.";
@@ -2745,6 +2789,13 @@ export function registerAIDCComponents(AIDC) {
         return;
       }
 
+      if (!originUrl) {
+        this.error =
+          "Origin URL is required.";
+
+        return;
+      }
+
       this.error = "";
       this.submitting = true;
 
@@ -2752,11 +2803,15 @@ export function registerAIDCComponents(AIDC) {
         const application =
           await applications.create({
             name,
-            description
+            description,
+            origin_url: originUrl,
+            cross_app_scopes: crossAppScopes
           });
 
         this.name = "";
         this.description = "";
+        this.originUrl = "";
+        this.crossAppScope = "";
 
         modals.closeCreate();
 
@@ -2888,6 +2943,71 @@ export function registerAIDCComponents(AIDC) {
                 ></textarea>
 
               </label>
+
+              <label class="aidc-field">
+
+                <span>
+                  Origin URL
+                  <b>*</b>
+                </span>
+
+                <input
+                  type="url"
+                  inputmode="url"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="https://example.com"
+                  .value=${this.originUrl}
+                  @input=${event => {
+                    this.originUrl =
+                      event.target.value;
+
+                    this.error = "";
+                  }}
+                  ?disabled=${this.submitting}
+                />
+
+                <small>
+                  The domain where Ace ID authentication may originate.
+                </small>
+
+              </label>
+
+              <label class="aidc-field">
+
+                <span>
+                  Cross-App Scope
+                </span>
+
+                <input
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="source.read, source.profile"
+                  .value=${this.crossAppScope}
+                  @input=${event => {
+                    this.crossAppScope =
+                      event.target.value;
+
+                    this.error = "";
+                  }}
+                  ?disabled=${this.submitting}
+                />
+
+                <small>
+                  Comma-separated scopes exposed across Ace apps.
+                </small>
+
+              </label>
+
+              <div class="aidc-dialog-note">
+                ${icon("information-circle")}
+
+                <span>
+                  ${state.quota.verified ? "Verified" : "Unverified"} account ·
+                  ${state.quota.remaining} of ${state.quota.limit} project slots remaining.
+                </span>
+              </div>
 
               ${
                 this.error
