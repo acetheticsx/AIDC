@@ -456,13 +456,21 @@ const applications = {
           application => application.id === id
         );
 
+      const merged =
+        index !== -1
+          ? {
+              ...state.applications[index],
+              ...updated
+            }
+          : updated;
+
       if (index !== -1) {
-        state.applications[index] = updated;
+        state.applications[index] = merged;
       }
 
       emitState();
 
-      return updated;
+      return merged;
     } catch (error) {
       handleError(
         error,
@@ -1147,9 +1155,15 @@ function updateDocumentTitle() {
 
     const section = route.section || "overview";
 
+    const sectionLabels = {
+      "url-configs": "URL Configs",
+      "redirect-uris": "URL Configs"
+    };
+
     const label =
-      section.charAt(0).toUpperCase() +
-      section.slice(1);
+      sectionLabels[section] ||
+      (section.charAt(0).toUpperCase() +
+        section.slice(1));
 
     document.title = app
       ? `${app.name} · ${label} · ${APP_NAME}`
