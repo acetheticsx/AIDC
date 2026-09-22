@@ -1630,7 +1630,8 @@ export function registerAIDCComponents(AIDC) {
         state: true
       },
       crossAppScopes: { state: true },
-      crossAppInput: { state: true }
+      crossAppInput: { state: true },
+      scopeDirty: { state: true }
     };
 
     constructor() {
@@ -1640,6 +1641,7 @@ export function registerAIDCComponents(AIDC) {
       this.localScopes = [];
       this.crossAppScopes = [];
       this.crossAppInput = "";
+      this.scopeDirty = false;
     }
 
     updated(changed) {
@@ -1652,6 +1654,7 @@ export function registerAIDCComponents(AIDC) {
        */
       if (changed.has("applicationId")) {
         this.localScopes = [];
+        this.scopeDirty = false;
       }
 
       if (
@@ -1679,7 +1682,8 @@ export function registerAIDCComponents(AIDC) {
 
         if (
           this.localScopes.join("|") !== incoming.join("|") &&
-          !state.scopes.saving
+          !state.scopes.saving &&
+          !this.scopeDirty
         ) {
           this.localScopes = [...incoming];
         }
@@ -1724,6 +1728,7 @@ export function registerAIDCComponents(AIDC) {
 
       next.add("openid");
       this.localScopes = [...next];
+      this.scopeDirty = true;
     }
 
     async save() {
@@ -1756,6 +1761,7 @@ export function registerAIDCComponents(AIDC) {
 
         this.crossAppScopes = crossAppScopes;
         this.crossAppInput = crossAppScopes.join(", ");
+        this.scopeDirty = false;
 
         notify("Scopes updated");
 
