@@ -3746,3 +3746,374 @@ body:has(
 @media (max-width:600px){.aidc-overview-activity .aidc-card-section-header{align-items:flex-start}.aidc-overview-activity .aidc-card-section-header>.aidc-inline-button{flex:0 0 auto}.aidc-activity-row{align-items:flex-start}.aidc-activity-row time{padding-top:2px}}
 
 .aidc-url-config-stack{display:grid;gap:18px}.aidc-inline-meta{color:var(--aidc-muted);font-size:11px;font-weight:600}
+
+
+/* ═══════════════════════════════════════════
+   RESPONSIVE / APPLICATION DETAIL REFINEMENT
+   ═══════════════════════════════════════════ */
+
+.aidc-stat-card small{
+  display:block;
+  margin-top:4px;
+  color:var(--aidc-muted);
+  font-size:10px;
+}
+
+.aidc-detail-content{
+  min-width:0;
+  margin-top:22px;
+}
+
+.aidc-detail-content > *{
+  min-width:0;
+}
+
+.aidc-detail-grid{
+  align-items:start;
+}
+
+.aidc-detail-grid > .aidc-card{
+  min-width:0;
+}
+
+.aidc-detail-fields .aidc-mono,
+.aidc-copy-field .aidc-mono,
+.aidc-detail-field code{
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+
+.aidc-config-button{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  width:100%;
+  min-height:64px;
+  margin-top:10px;
+  padding:11px 13px;
+  text-align:left;
+}
+
+.aidc-config-button > .aidc-icon:first-child{
+  width:34px;
+  height:34px;
+  border:1px solid var(--aidc-border);
+  border-radius:9px;
+  background:var(--aidc-surface-soft);
+}
+
+.aidc-config-button > div{
+  display:flex;
+  min-width:0;
+  flex-direction:column;
+  gap:2px;
+}
+
+.aidc-config-button strong{
+  font-size:12px;
+  font-weight:650;
+}
+
+.aidc-config-button span{
+  overflow:hidden;
+  color:var(--aidc-muted);
+  font-size:11px;
+  text-overflow:ellipsis;
+}
+
+.aidc-url-config-stack{
+  min-width:0;
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:16px;
+}
+
+.aidc-url-config-stack .aidc-card{
+  min-width:0;
+}
+
+.aidc-url-config-stack .aidc-dialog-form{
+  max-width:none;
+}
+
+.aidc-url-config-stack .aidc-field input{
+  min-width:0;
+}
+
+.aidc-tabs{
+  overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  scroll-snap-type:x proximity;
+}
+
+.aidc-tabs::-webkit-scrollbar{
+  display:none;
+}
+
+.aidc-tab{
+  scroll-snap-align:start;
+  min-height:44px;
+  padding:0 2px 12px;
+}
+
+@media (min-width:1100px){
+  .aidc-content{
+    padding:48px 42px 72px;
+  }
+
+  .aidc-detail-header{
+    gap:32px;
+  }
+
+  .aidc-detail-grid{
+    grid-template-columns:minmax(0,1.15fr) minmax(360px,.85fr);
+    gap:18px;
+  }
+
+  .aidc-overview-activity{
+    grid-column:1 / -1;
+  }
+
+  .aidc-tabs{
+    gap:30px;
+  }
+}
+
+@media (max-width:900px){
+  .aidc-content{
+    padding:32px 24px 56px;
+  }
+
+  .aidc-page-header{
+    align-items:flex-start;
+    margin-bottom:28px;
+  }
+
+  .aidc-stat-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+
+  .aidc-stat-card:last-child{
+    grid-column:1 / -1;
+  }
+
+  .aidc-detail-header{
+    align-items:flex-start;
+  }
+
+  .aidc-detail-grid{
+    grid-template-columns:minmax(0,1fr);
+  }
+
+  .aidc-overview-activity{
+    grid-column:auto;
+  }
+
+  .aidc-application-row{
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:10px 14px;
+  }
+
+  .aidc-row-client{
+    grid-column:1;
+  }
+
+  .aidc-application-row > .aidc-status{
+    grid-column:2;
+    grid-row:2;
+    justify-self:end;
+  }
+
+  .aidc-row-open{
+    grid-column:2;
+    grid-row:1;
+  }
+}
+
+@media (max-width:760px){
+  .aidc-content{
+    padding:24px 18px 44px;
+  }
+
+  .aidc-page h1{
+    font-size:clamp(2rem,10vw,2.8rem);
+  }
+
+  .aidc-page-header{
+    flex-direction:column;
+    align-items:stretch;
+    gap:18px;
+  }
+
+  .aidc-page-header .aidc-button{
+    width:100%;
+  }
+
+  .aidc-stat-grid{
+    grid-template-columns:1fr;
+    gap:10px;
+    margin-bottom:30px;
+  }
+
+  .aidc-stat-card:last-child{
+    grid-column:auto;
+  }
+
+  .aidc-section-header{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:10px;
+  }
+
+  .aidc-toolbar{
+    flex-direction:column;
+    align-items:stretch;
+    gap:10px;
+  }
+
+  .aidc-search{
+    width:100%;
+  }
+
+  .aidc-toolbar-count{
+    align-self:flex-start;
+  }
+
+  .aidc-detail-topbar{
+    margin-bottom:14px;
+  }
+
+  .aidc-detail-header{
+    flex-direction:column;
+    align-items:stretch;
+    gap:16px;
+  }
+
+  .aidc-detail-heading{
+    align-items:flex-start;
+  }
+
+  .aidc-detail-title-row{
+    align-items:flex-start;
+  }
+
+  .aidc-detail-title-row h1{
+    white-space:normal;
+    overflow:visible;
+    overflow-wrap:anywhere;
+  }
+
+  .aidc-detail-header .aidc-danger-button{
+    width:100%;
+  }
+
+  .aidc-tabs{
+    margin-top:20px;
+    margin-inline:-18px;
+    padding-inline:18px;
+    gap:22px;
+  }
+
+  .aidc-detail-content{
+    margin-top:16px;
+  }
+
+  .aidc-card{
+    border-radius:12px;
+  }
+
+  .aidc-card-section-header{
+    padding-bottom:15px;
+  }
+
+  .aidc-detail-field{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:5px;
+    padding:13px 0;
+  }
+
+  .aidc-detail-field > span:first-child{
+    width:auto;
+  }
+
+  .aidc-detail-field > .aidc-mono,
+  .aidc-detail-field > time{
+    width:100%;
+  }
+
+  .aidc-copy-field{
+    width:100%;
+  }
+
+  .aidc-config-button{
+    min-height:60px;
+  }
+
+  .aidc-url-config-stack{
+    gap:12px;
+  }
+
+  .aidc-dialog-actions{
+    flex-wrap:wrap;
+  }
+
+  .aidc-dialog-actions .aidc-button{
+    min-width:0;
+  }
+}
+
+@media (max-width:480px){
+  .aidc-content{
+    padding:20px 14px 36px;
+  }
+
+  .aidc-page h1{
+    font-size:2.15rem;
+  }
+
+  .aidc-page-header p{
+    font-size:13px;
+  }
+
+  .aidc-application-row{
+    padding:12px;
+  }
+
+  .aidc-row-main{
+    gap:9px;
+  }
+
+  .aidc-row-client .aidc-mono{
+    font-size:10px;
+  }
+
+  .aidc-tabs{
+    margin-inline:-14px;
+    padding-inline:14px;
+    gap:19px;
+  }
+
+  .aidc-tab{
+    font-size:11px;
+  }
+
+  .aidc-detail-heading{
+    gap:11px;
+  }
+
+  .aidc-app-symbol.large{
+    width:44px;
+    height:44px;
+    flex:0 0 44px;
+  }
+
+  .aidc-detail-title-row h1{
+    font-size:1.9rem;
+  }
+
+  .aidc-card-section-header h2{
+    font-size:21px;
+  }
+}
