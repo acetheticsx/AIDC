@@ -1183,20 +1183,20 @@ app.get(
         pool.query(
           `
           SELECT
-            id,
-            name,
-            description,
-            client_id,
-            origin_url,
-            cross_app_scopes,
-            status,
-            created_at,
-            updated_at,
+            public.applications.id,
+            public.applications.name,
+            public.applications.description,
+            public.applications.client_id,
+            public.applications.origin_url,
+            public.applications.cross_app_scopes,
+            public.applications.status,
+            public.applications.created_at,
+            public.applications.updated_at,
             branding.logo_url
           FROM public.applications
           LEFT JOIN public.application_branding AS branding
             ON branding.application_id = public.applications.id
-          WHERE owner_id = $1
+          WHERE public.applications.owner_id = $1
           ORDER BY created_at DESC
           `,
           [req.developer.id]
