@@ -645,26 +645,85 @@ export function registerAIDCComponents(AIDC) {
     async changeRange(event) {
       const days = Number(event.target.value);
       if (![7, 14, 30].includes(days) || days === state.analytics.days) return;
-      haptic?.(6);
       this.days = days;
       await AIDC.analytics.load(days);
     }
 
-    formatDay(value) {
-      const date = new Date(`${value}T00:00:00`);
-      return new Intl.DateTimeFormat(undefined, {
-        weekday: "short",
-        day: "numeric",
-        month:"short"
-      }).format(date);
-    }
-
     renderChart(items) {
       const max = Math.max(1, ...items.map(item => Number(item.count) || 0));
-      const width = 720, height = 230, padX = 26, padTop = 18, padBottom = 34;
-      const innerW = width - padX * 2, innerH = height - padBottom;
       const points = items.map((item, index) => {
-        const x = items.length === 1 ? width / 2 : padX > ...ctyt + (index / (items.length - 1)) * innerW;
+        const x = items.length === 1 ? 50 : (index / (items.length - 1)) * 100;
+        const y = 92 - ((Number(item.count) || 0) / max) * 78;
+        return { ...item, x, y };
+      });
+      const line = points.map(p => `${p.x},${p.y}`).join(" ");
+      return html`
+        <div class="aidc-analytics-chart">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <path class="aidc-analytics-gridline" d="M0 14H100M0 53H100M0 92H100"></path>
+            <polyline class="aidc-analytics-line" points="${line}"></polyline>
+            ${points.map(p => html`
+              <circle class="aidc-analytics-point" cx="${p.x}" cy="${p.y}" r="1.4">
+                <title>${p.date}: ${p.count} login${p.count === 1 ? "" : "s"}</title>
+              </circle>
+            `)}
+          </svg>
+        </div>
+      `;
+    }
+
+    render() {
+      const s = state.analytics;
+      const items = s.items || [];
+      return html`
+        <div class="aidc-page aidc-analytics-page">
+          <header class="aidc-page-header">
+            <div>
+              <span class="aidc-eyebrow">AIDC</span>
+              <h1>Analytics</h1>
+              <p>Authentication activity across your applications.</p>
+            </div>
+            <label class="aidc-analytics-range">
+              <span>Range</span>
+              <select .value="${String(this.days)}" @change="${this.changeRange}">
+                <option value="7">Last 7 days</option>
+                <option value="14">Last 14 days</option>
+                <option value="30">Last 30 days</option>
+              </select>
+            </label>
+          </header>
+
+          <section class="aidc-analytics-summary">
+            <div class="aidc-analytics-total">
+              <span>Logins</span>
+              <strong>${s.total}</strong>
+              <small>within the selected range</small>
+            </div>
+            <div class="aidc-analytics-meta">
+              <span>${items.length} days</span>
+              <span>Live data</span>
+            </div>
+          </section>
+
+          <section class="aidc-card aidc-analytics-card">
+            <header class="aidc-card-section-header">
+              <h2>Logins</h2>
+              <p>Successful Ace ID sessions associated with your applications.</p>
+            </header>
+            ${s.loading
+              ? html`<div class="aidc-loading-card aidc-skeleton-card" aria-busy="true"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-chart"></div></div>`
+              : s.error
+                ? emptyState({ iconName: "chart-02", title: "Analytics unavailable", description: s.error })
+                : items.length
+                  ? this.renderChart(items)
+                  : emptyState({ iconName: "chart-02", title: "No login activity yet", description: "Login activity will appear here when users authenticate through your applications." })
+            }
+          </section>
+        </div>
+      `;
+    }
+  }
+
   class AIDCApplications extends AIDCElement {
     static properties = {
       search: {
