@@ -3713,7 +3713,7 @@ export function registerAIDCComponents(AIDC) {
             <header class="aidc-mobile-header">
               <a class="aidc-mobile-brand" href="#/" aria-label="AIDC overview"><span>AIDC</span></a>
 
-              <a class="aidc-profile-button" href="https://identity.ace-base.cc/account" aria-label="Open identity account" title="Identity account">
+              <a class="aidc-profile-button" href="https://identity.ace-base.cc/account" aria-label="Open Ace ID" title="Ace ID">
                 ${state.user ? userAvatar(state.user, "aidc-profile-avatar") : icon("user-01")}
               </a>
             </header>
@@ -3722,7 +3722,7 @@ export function registerAIDCComponents(AIDC) {
               ${this.renderPage()}
             </div>
 
-            <a class="aidc-profile-desktop" href="https://identity.ace-base.cc/account" aria-label="Open identity account" title="Identity account">
+            <a class="aidc-profile-desktop" href="https://identity.ace-base.cc/account" aria-label="Open Ace ID" title="Ace ID">
               ${state.user ? userAvatar(state.user, "aidc-profile-avatar") : icon("user-01")}
             </a>
 
