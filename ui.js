@@ -45,31 +45,19 @@ export function registerAIDCComponents(AIDC) {
   }
 
   function userAvatar(user, className = "") {
-    const picture = String(
-      user?.picture || user?.avatar_url || ""
+    const seed = String(
+      user?.id || user?.email || user?.name || "ace-id"
     ).trim();
-    const initials = userInitials(user);
+    const src = `https://api.dicebear.com/10.x/identicon/svg?seed=${encodeURIComponent(seed)}`;
 
     return html`
       <span class="aidc-user-avatar ${className}" aria-hidden="true">
-        ${picture
-          ? html`
-              <img
-                src=${picture}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                @error=${event => {
-                  event.currentTarget.hidden = true;
-                  const fallback = event.currentTarget.nextElementSibling;
-                  if (fallback) fallback.hidden = false;
-                }}
-              />
-            `
-          : ""}
-        <span class="aidc-user-avatar-fallback" ?hidden=${Boolean(picture)}>
-          ${initials}
-        </span>
+        <img
+          src=${src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+        />
       </span>
     `;
   }
