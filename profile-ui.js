@@ -40,7 +40,7 @@ function renderProfile(user) {
     const link = document.createElement("a");
     link.className = "aidc-switch-account";
     link.href = "https://identity.ace-base.cc/login?switch=1";
-    link.setAttribute("aria-label", "Switch Ace ID account");
+    link.setAttribute("aria-label", "Switch Ace ID");
     link.title = "Switch account";
     link.textContent = "Switch";
 
@@ -63,8 +63,8 @@ function renderProfile(user) {
   const link = document.createElement("a");
   link.className = "aidc-profile-link";
   link.href = ACCOUNT_URL;
-  link.setAttribute("aria-label", "Open Ace ID account");
-  link.title = "Open Ace ID account";
+  link.setAttribute("aria-label", "Open Ace ID");
+  link.title = "Open Ace ID";
   link.target = "_self";
 
   const avatar = document.createElement("span");
