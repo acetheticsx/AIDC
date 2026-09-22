@@ -1646,6 +1646,17 @@ export function registerAIDCComponents(AIDC) {
     }
 
     render() {
+      const application =
+        getApplication(AIDC, this.applicationId);
+
+      const liveValidation =
+        this.uriValue.trim()
+          ? validateRedirectUri(
+              this.uriValue,
+              application?.application_type || "web"
+            )
+          : null;
+
       const isCurrent =
         state.redirectUris.applicationId ===
         this.applicationId;
@@ -1704,6 +1715,31 @@ export function registerAIDCComponents(AIDC) {
               />
 
             </label>
+
+            ${
+              liveValidation
+                ? html`
+                    <div class="aidc-url-validation ${
+                      liveValidation.valid
+                        ? "is-valid"
+                        : "is-invalid"
+                    }">
+                      ${icon(
+                        liveValidation.valid
+                          ? "checkmark-circle-02"
+                          : "alert-02"
+                      )}
+                      <span>
+                        ${
+                          liveValidation.valid
+                            ? liveValidation.message || "Valid redirect URI"
+                            : liveValidation.error
+                        }
+                      </span>
+                    </div>
+                  `
+                : ""
+            }
 
             ${
               this.error
