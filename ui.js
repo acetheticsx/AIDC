@@ -118,6 +118,9 @@ export function registerAIDCComponents(AIDC) {
       const overviewActive =
         route.path === "/";
 
+      const analyticsActive =
+        route.path === "/analytics";
+
       const applicationsActive =
         route.path === "/applications" ||
         route.path === "/applications/:id";
@@ -144,7 +147,7 @@ export function registerAIDCComponents(AIDC) {
 
               <span class="aidc-brand-copy">
                 <strong>AIDC</strong>
-                <small>Developer Console</small>
+
               </span>
             </a>
 
@@ -184,17 +187,13 @@ export function registerAIDCComponents(AIDC) {
                   ? "active"
                   : ""
               }"
-              href="#/applications"
+              href="#/analytics"
               @click=${() =>
                 this.closeMobile()}
             >
-              ${icon("app-window")}
+              ${icon("chart-02")}
 
-              <span>Applications</span>
-
-              <span class="aidc-nav-count">
-                ${state.applications.length}
-              </span>
+              <span>Analytics</span>
             </a>
 
           </nav>
@@ -435,8 +434,6 @@ export function registerAIDCComponents(AIDC) {
 
           </div>
 
-          ${statusBadge(app.status)}
-
           <button
             class="aidc-icon-button aidc-row-open"
             aria-label="Open application"
@@ -627,6 +624,47 @@ export function registerAIDCComponents(AIDC) {
      APPLICATIONS
      ═══════════════════════════════════════ */
 
+  class AIDCAnalytics extends AIDCElement {
+    static properties = { days: { state: true } };
+
+    constructor() {
+      super();
+      this.days = 7;
+    }
+
+    connectedCallback() {
+      super.connectedCallback();
+      this.load();
+    }
+
+    async load() {
+      this.days = state.analytics.days || 7;
+      await AIDC.analytics.load(this.days);
+    }
+
+    async changeRange(event) {
+      const days = Number(event.target.value);
+      if (![7, 14, 30].includes(days) || days === state.analytics.days) return;
+      haptic?.(6);
+      this.days = days;
+      await AIDC.analytics.load(days);
+    }
+
+    formatDay(value) {
+      const date = new Date(`${value}T00:00:00`);
+      return new Intl.DateTimeFormat(undefined, {
+        weekday: "short",
+        day: "numeric",
+        month:"short"
+      }).format(date);
+    }
+
+    renderChart(items) {
+      const max = Math.max(1, ...items.map(item => Number(item.count) || 0));
+      const width = 720, height = 230, padX = 26, padTop = 18, padBottom = 34;
+      const innerW = width - padX * 2, innerH = height - padBottom;
+      const points = items.map((item, index) => {
+        const x = items.length === 1 ? width / 2 : padX > ...ctyt + (index / (items.length - 1)) * innerW;
   class AIDCApplications extends AIDCElement {
     static properties = {
       search: {
@@ -3342,7 +3380,7 @@ export function registerAIDCComponents(AIDC) {
             <section class="aidc-landing-hero" aria-labelledby="aidc-landing-title">
               <div class="aidc-landing-eyebrow">
                 <span class="aidc-landing-dot" aria-hidden="true"></span>
-                Ace ID · Developer Console
+                Ace ID
               </div>
 
               <h1 id="aidc-landing-title">
@@ -3508,6 +3546,10 @@ export function registerAIDCComponents(AIDC) {
         `;
       }
 
+      if (route.path === "/analytics") {
+        return html`<aidc-analytics></aidc-analytics>`;
+      }
+
       if (
         route.path ===
         "/applications"
@@ -3589,33 +3631,8 @@ export function registerAIDCComponents(AIDC) {
 
           <main class="aidc-main">
 
-            <header
-              class="aidc-mobile-header"
-            >
-
-              <button
-                class="aidc-icon-button"
-                aria-label="Open navigation"
-                @click=${() =>
-                  (this.sidebarOpen =
-                    true)}
-              >
-                ${icon("menu-01")}
-              </button>
-
-              <a
-                class="aidc-mobile-brand"
-                href="#/"
-              >
-                <span>
-                  AIDC
-                </span>
-              </a>
-
-              <span
-                class="aidc-mobile-spacer"
-              ></span>
-
+            <header class="aidc-mobile-header">
+              <a class="aidc-mobile-brand" href="#/" aria-label="AIDC overview"><span>AIDC</span></a>
             </header>
 
             <div class="aidc-content">
@@ -3623,6 +3640,17 @@ export function registerAIDCComponents(AIDC) {
             </div>
 
           </main>
+
+          <nav class="aidc-mobile-nav" aria-label="Mobile navigation">
+            <a class="aidc-mobile-nav-item ${router.parse().path === "/" ? "active" : ""}" href="#/" aria-label="Overview">
+              ${icon("home-01")}
+              <span>Overview</span>
+            </a>
+            <a class="aidc-mobile-nav-item ${router.parse().path === "/analytics" ? "active" : ""}" href="#/analytics" aria-label="Analytics">
+              ${icon("chart-02")}
+              <span>Analytics</span>
+            </a>
+          </nav>
 
           <aidc-create-dialog></aidc-create-dialog>
           <aidc-delete-modal></aidc-delete-modal>
@@ -3660,6 +3688,11 @@ export function registerAIDCComponents(AIDC) {
   customElements.define(
     "aidc-applications",
     AIDCApplications
+  );
+
+  customElements.define(
+    "aidc-analytics",
+    AIDCAnalytics
   );
 
   customElements.define(
