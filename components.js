@@ -1673,15 +1673,11 @@ export function registerAIDCComponents(AIDC) {
 
     toggleScope(scope, event) {
       if (scope === "openid") {
-        event.preventDefault();
         return;
       }
 
-      const checked =
-        event.currentTarget.checked;
-
-      const next =
-        new Set(this.localScopes);
+      const checked = Boolean(event.target?.checked);
+      const next = new Set(this.localScopes);
 
       if (checked) {
         next.add(scope);
@@ -1690,10 +1686,7 @@ export function registerAIDCComponents(AIDC) {
       }
 
       next.add("openid");
-
-      this.localScopes = [
-        ...next
-      ];
+      this.localScopes = [...next];
     }
 
     async save() {
@@ -1787,21 +1780,22 @@ export function registerAIDCComponents(AIDC) {
 
           </div>
 
-          <input
-            type="checkbox"
-            .checked=${enabled}
-            ?disabled=${required ||
-            state.scopes.saving ||
-            state.scopes.loading}
-            @change=${event =>
-              this.toggleScope(
-                scope,
-                event
-              )}
-            aria-label=${`Enable ${
-              names[scope] || scope
-            } scope`}
-          />
+          <span class="aidc-scope-control">
+            <input
+              type="checkbox"
+              .checked=${enabled}
+              ?disabled=${required ||
+              state.scopes.saving ||
+              state.scopes.loading}
+              @change=${event =>
+                this.toggleScope(
+                  scope,
+                  event
+                )}
+              aria-label=${`Enable ${names[scope] || scope} scope`}
+            />
+            <span class="aidc-scope-checkbox" aria-hidden="true"></span>
+          </span>
 
         </label>
       `;
