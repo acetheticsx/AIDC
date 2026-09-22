@@ -1956,80 +1956,67 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       }
     }
 
+    scopeMeta(scope) {
+      const meta = {
+        openid: {
+          name: "OpenID",
+          description: "Required to establish the user's authenticated identity.",
+          icon: "finger-print",
+          required: true
+        },
+        profile: {
+          name: "Profile",
+          description: "Basic profile information such as the display name.",
+          icon: "user",
+          required: false
+        },
+        email: {
+          name: "Email",
+          description: "The user's verified email address when available.",
+          icon: "mail-01",
+          required: false
+        }
+      };
+
+      return meta[scope] || {
+        name: scope,
+        description: "Application-defined permission.",
+        icon: "shield-01",
+        required: false
+      };
+    }
+
     renderScope(scope) {
-      const descriptions = {
-        openid:
-          "Required for OpenID Connect identity.",
-        profile:
-          "Basic profile information.",
-        email:
-          "The user's email address."
-      };
-
-      const names = {
-        openid: "OpenID",
-        profile: "Profile",
-        email: "Email"
-      };
-
-      const required =
-        scope === "openid";
-
-      const enabled =
-        this.isEnabled(scope);
+      const meta = this.scopeMeta(scope);
+      const enabled = this.isEnabled(scope);
 
       return html`
-        <label
-          class="aidc-config-item"
-        >
-
-          <div
-            class="aidc-config-value"
-          >
-
-            <div>
-
-              <strong>
-                ${names[scope] || scope}
-              </strong>
-
-              <div class="aidc-mono">
-                ${scope}
-              </div>
-
-              <p>
-                ${
-                  descriptions[scope] ||
-                  ""
-                }
-              </p>
-
-            </div>
-
+        <label class="aidc-scope-card ${enabled ? "is-enabled" : ""}">
+          <div class="aidc-scope-card-main">
+            <span class="aidc-scope-icon">${icon(meta.icon)}</span>
+            <span class="aidc-scope-copy">
+              <span class="aidc-scope-title-row">
+                <strong>${meta.name}</strong>
+                <code>${scope}</code>
+              </span>
+              <span>${meta.description}</span>
+            </span>
           </div>
 
-          <span class="aidc-scope-control">
+          <span class="aidc-scope-card-side">
+            <small>${meta.required ? "Required" : enabled ? "Enabled" : "Optional"}</small>
             <input
               class="aidc-scope-input"
               type="checkbox"
               .checked=${enabled}
-              ?disabled=${required ||
-              state.scopes.saving ||
-              state.scopes.loading}
-              @change=${event =>
-                this.toggleScope(
-                  scope,
-                  event
-                )}
-              aria-label=${`Enable ${names[scope] || scope} scope`}
+              ?disabled=${meta.required || state.scopes.saving || state.scopes.loading}
+              @change=${event => this.toggleScope(scope, event)}
+              aria-label=${`Enable ${meta.name} scope`}
             />
-
           </span>
-
         </label>
       `;
     }
-
     render() {
       const isCurrent =
         state.scopes.applicationId ===
@@ -2073,16 +2060,16 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
         <section class="aidc-card">
 
           <header
-            class="aidc-card-section-header"
+            class="aidc-card-section-header aidc-scope-header"
           >
-            <h2>
-              Scopes
-            </h2>
-
-            <p>
-              Configure the permissions
-              available to this application.
-            </p>
+            <div>
+              <span class="aidc-eyebrow">Permissions</span>
+              <h2>Scopes</h2>
+              <p>Keep requested access explicit and minimal.</p>
+            </div>
+            <span class="aidc-scope-count">
+              ${this.localScopes.length} enabled
+            </span>
           </header>
 
           ${
@@ -2091,10 +2078,17 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                   <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading scopes"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-row"></div><div class="aidc-skeleton aidc-skeleton-row short"></div><div class="aidc-skeleton aidc-skeleton-row"></div></div>
                 `
               : html`
-                  <div class="aidc-scope-grid">
-                    ${this.renderScope("openid")}
-                    ${this.renderScope("profile")}
-                    ${this.renderScope("email")}
+                  <div class="aidc-scope-list">
+                    ${["openid", "profile", "email"].map(scope =>
+                      this.renderScope(scope)
+                    )}
+                  </div>
+
+                  <div class="aidc-scope-note">
+                    ${icon("information-circle")}
+                    <span>
+                      OpenID is always required. Changes affect the permissions your client can request.
+                    </span>
                   </div>
 
                   <div class="aidc-cross-app-card">
