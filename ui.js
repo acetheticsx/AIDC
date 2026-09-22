@@ -1528,10 +1528,13 @@ export function registerAIDCComponents(AIDC) {
     async addUri(event) {
       event.preventDefault();
 
-      const result =
-        validateRedirectUri(
-          this.uriValue
-        );
+      const application =
+        getApplication(AIDC, this.applicationId);
+
+      const result = validateRedirectUri(
+        this.uriValue,
+        application?.application_type || "web"
+      );
 
       if (!result.valid) {
         this.error =
@@ -1539,6 +1542,18 @@ export function registerAIDCComponents(AIDC) {
           result.error ||
           "Invalid redirect URI.";
 
+        return;
+      }
+
+      const items = state.redirectUris.items || [];
+
+      if (
+        items.some(
+          item => String(item?.uri) === result.value
+        )
+      ) {
+        this.error =
+          "That redirect URI is already registered.";
         return;
       }
 
@@ -1677,9 +1692,9 @@ export function registerAIDCComponents(AIDC) {
                       )}
 
                       <span>
-                        HTTPS is required for
-                        production. HTTP is allowed
-                        only for localhost development.
+${getApplication(AIDC, this.applicationId)?.application_type === "native"
+                          ? "Native clients support HTTPS, loopback HTTP, and reverse-domain custom schemes."
+                          : "HTTPS is required for production. HTTP is allowed only for localhost development."}
                       </span>
                     </div>
                   `
