@@ -116,7 +116,7 @@ export function getApplication(source, applicationId) {
   );
 }
 
-export function validateRedirectUri(value) {
+export function validateRedirectUri(value, applicationType = "web") {
   if (typeof value !== "string") {
     return {
       valid: false,
@@ -136,8 +136,7 @@ export function validateRedirectUri(value) {
   if (uri.length > 2048) {
     return {
       valid: false,
-      error:
-        "Redirect URI must be 2048 characters or fewer."
+      error: "Redirect URI must be 2048 characters or fewer."
     };
   }
 
@@ -148,7 +147,67 @@ export function validateRedirectUri(value) {
   } catch {
     return {
       valid: false,
-      error: "Enter a valid URL."
+      error: "Enter a valid redirect URI."
+    };
+  }
+
+  if (parsed.hash) {
+    return {
+      valid: false,
+      error: "Redirect URIs cannot contain fragments."
+    };
+  }
+
+  if (parsed.username || parsed.password) {
+    return {
+      valid: false,
+      error: "Redirect URIs cannot contain credentials."
+    };
+  }
+
+  if (applicationType === "native") {
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      const hostname = parsed.hostname.toLowerCase();
+      const loopback =
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "::1" ||
+        hostname === "[::1]";
+
+      if (parsed.protocol === "http:" && !loopback) {
+        return {
+          valid: false,
+          error: "HTTP native redirects are only allowed on loopback hosts."
+        };
+      }
+
+      return {
+        valid: true,
+        value: uri,
+        message:
+          parsed.protocol === "http:"
+            ? "Loopback redirect"
+            : "HTTPS redirect"
+      };
+    }
+
+    const scheme = parsed.protocol.slice(0, -1);
+
+    if (
+      !/^[a-z][a-z0-9+.-]*$/.test(scheme) ||
+      !scheme.includes(".")
+    ) {
+      return {
+        valid: false,
+        error:
+          "Native custom schemes must use reverse-domain notation, such as com.example.app:/oauth2redirect."
+      };
+    }
+
+    return {
+      valid: true,
+      value: uri,
+      message: "Native custom-scheme redirect"
     };
   }
 
@@ -158,29 +217,11 @@ export function validateRedirectUri(value) {
   ) {
     return {
       valid: false,
-      error:
-        "Only HTTP and HTTPS URLs are allowed."
+      error: "Web redirect URIs must use HTTP or HTTPS."
     };
   }
 
-  if (parsed.hash) {
-    return {
-      valid: false,
-      error:
-        "Redirect URIs cannot contain fragments."
-    };
-  }
-
-  if (parsed.username || parsed.password) {
-    return {
-      valid: false,
-      error:
-        "Redirect URIs cannot contain credentials."
-    };
-  }
-
-  const hostname =
-    parsed.hostname.toLowerCase();
+  const hostname = parsed.hostname.toLowerCase();
 
   const isLocalhost =
     hostname === "localhost" ||
@@ -194,13 +235,16 @@ export function validateRedirectUri(value) {
   ) {
     return {
       valid: false,
-      error:
-        "HTTP is only allowed for localhost."
+      error: "HTTP is only allowed for localhost development."
     };
   }
 
   return {
     valid: true,
-    value: uri
+    value: uri,
+    message:
+      parsed.protocol === "http:"
+        ? "Local development redirect"
+        : "HTTPS redirect"
   };
 }
