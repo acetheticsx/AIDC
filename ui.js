@@ -31,6 +31,48 @@ export function registerAIDCComponents(AIDC) {
     notify
   } = AIDC;
 
+  function userInitials(user) {
+    const source = String(
+      user?.name || user?.email || "Ace ID"
+    ).trim();
+    const parts = source.split(/\s+/).filter(Boolean);
+
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    }
+
+    return source.slice(0, 2).toUpperCase();
+  }
+
+  function userAvatar(user, className = "") {
+    const picture = String(
+      user?.picture || user?.avatar_url || ""
+    ).trim();
+    const initials = userInitials(user);
+
+    return html`
+      <span class="aidc-user-avatar ${className}" aria-hidden="true">
+        ${picture
+          ? html`
+              <img
+                src=${picture}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                @error=${event => {
+                  event.currentTarget.hidden = true;
+                  const fallback = event.currentTarget.nextElementSibling;
+                  if (fallback) fallback.hidden = false;
+                }}
+              />
+            `
+          : ""}
+        <span class="aidc-user-avatar-fallback" ?hidden=${Boolean(picture)}>
+          ${initials}
+        </span>
+      </span>
+    `;
+  }
   /* ═══════════════════════════════════════
      BASE
      ═══════════════════════════════════════ */
@@ -214,33 +256,26 @@ export function registerAIDCComponents(AIDC) {
   ${
     state.user
       ? html`
-          <div
-            class="aidc-sidebar-user"
-          >
+          <div class="aidc-sidebar-user">
             <a
               class="aidc-sidebar-user-info"
               href="https://identity.ace-base.cc/account"
               target="_self"
               aria-label="Open Ace ID account"
             >
-              <strong>
-                ${text(
-                  state.user.name ||
-                    state.user.email ||
-                    "Signed in"
-                )}
-              </strong>
-
-              ${
-                state.user.email &&
-                state.user.name
-                  ? html`
-                      <span>
-                        ${state.user.email}
-                      </span>
-                    `
-                  : ""
-              }
+              ${userAvatar(state.user, "aidc-sidebar-avatar")}
+              <span class="aidc-sidebar-user-copy">
+                <strong>
+                  ${text(
+                    state.user.name ||
+                      state.user.email ||
+                      "Signed in"
+                  )}
+                </strong>
+                ${state.user.email && state.user.name
+                  ? html`<span>${state.user.email}</span>`
+                  : ""}
+              </span>
             </a>
 
             <button
@@ -265,7 +300,7 @@ export function registerAIDCComponents(AIDC) {
         `
   }
 
-</div>
+</div>>
 
         </aside>
       `;
@@ -497,63 +532,34 @@ export function registerAIDCComponents(AIDC) {
 
           </header>
 
-          <div class="aidc-stat-grid">
+          <section class="aidc-metric-segments" aria-label="Overview metrics">
 
-            <div class="aidc-stat-card">
-
-              <div class="aidc-stat-icon">
-                ${icon("app-window")}
-              </div>
-
+            <div class="aidc-metric-segment">
               <div>
                 <span>Applications</span>
-
-                <strong>
-                  ${apps.length}
-                </strong>
+                <strong>${apps.length}</strong>
               </div>
-
+              ${icon("app-window")}
             </div>
 
-            <div class="aidc-stat-card">
-
-              <div class="aidc-stat-icon">
-                ${icon("checkmark-circle-02")}
-              </div>
-
+            <div class="aidc-metric-segment">
               <div>
                 <span>Active</span>
-
-                <strong>
-                  ${activeCount}
-                </strong>
+                <strong>${activeCount}</strong>
               </div>
-
+              ${icon("checkmark-circle-02")}
             </div>
 
-            <div class="aidc-stat-card">
-
-              <div class="aidc-stat-icon">
-                ${icon("layers-01")}
-              </div>
-
+            <div class="aidc-metric-segment">
               <div>
                 <span>Project slots</span>
-
-                <strong>
-                  ${state.quota.remaining}
-                </strong>
-
-                <small>
-                  of ${state.quota.limit} available
-                </small>
+                <strong>${state.quota.remaining}</strong>
+                <small>of ${state.quota.limit} available</small>
               </div>
-
+              ${icon("layers-01")}
             </div>
 
-          </div>
-
-          <section class="aidc-section">
+          </section>          <section class="aidc-section">
 
             <div class="aidc-section-header">
 
@@ -3445,14 +3451,29 @@ export function registerAIDCComponents(AIDC) {
             </a>
 
             <div class="aidc-landing-nav-actions">
-              <a
-                class="aidc-landing-link"
-                href="https://identity.ace-base.cc/account"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Ace ID account
-              </a>
+              ${signedIn
+                ? html`
+                    <a
+                      class="aidc-landing-account-link"
+                      href="https://identity.ace-base.cc/account"
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="Open Ace ID account"
+                    >
+                      ${userAvatar(user, "aidc-landing-nav-avatar")}
+                      <span>${text(identity)}</span>
+                    </a>
+                  `
+                : html`
+                    <a
+                      class="aidc-landing-link"
+                      href="https://identity.ace-base.cc/account"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Ace ID account
+                    </a>
+                  `}
             </div>
           </header>
 
@@ -3525,9 +3546,7 @@ export function registerAIDCComponents(AIDC) {
               ${signedIn
                 ? html`
                     <div class="aidc-landing-account">
-                      <span class="aidc-landing-avatar" aria-hidden="true">
-                        ${text(identity.slice(0, 1).toUpperCase())}
-                      </span>
+                      ${userAvatar(user, "aidc-landing-avatar")}
                       <span class="aidc-landing-account-copy">
                         <small>Signed in with Ace ID</small>
                         <strong>${text(identity)}</strong>
@@ -3715,7 +3734,7 @@ export function registerAIDCComponents(AIDC) {
               <a class="aidc-mobile-brand" href="#/" aria-label="AIDC overview"><span>AIDC</span></a>
 
               <a class="aidc-profile-button" href="https://identity.ace-base.cc/account" aria-label="Open identity account" title="Identity account">
-                ${icon("user-01")}
+                ${state.user ? userAvatar(state.user, "aidc-profile-avatar") : icon("user-01")}
               </a>
             </header>
 
@@ -3724,7 +3743,7 @@ export function registerAIDCComponents(AIDC) {
             </div>
 
             <a class="aidc-profile-desktop" href="https://identity.ace-base.cc/account" aria-label="Open identity account" title="Identity account">
-              ${icon("user-01")}
+              ${state.user ? userAvatar(state.user, "aidc-profile-avatar") : icon("user-01")}
             </a>
 
           </main>
