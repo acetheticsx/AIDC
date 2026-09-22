@@ -1514,8 +1514,8 @@ app.patch(
           cross_app_scopes = COALESCE($5, cross_app_scopes),
           status = COALESCE($6, status),
           updated_at = now()
-        WHERE id = $6
-          AND owner_id = $7
+        WHERE id = $7
+          AND owner_id = $8
         RETURNING
           id,
           name,
@@ -1651,6 +1651,15 @@ app.get(
         });
       }
 
+      const applicationType = application.rows[0]?.application_type || "web";
+      const validation = validateRedirectUri(uri, { applicationType });
+
+      if (!validation.valid) {
+        return res.status(400).json({
+          error: validation.error
+        });
+      }
+
       const result = await pool.query(
         `
         SELECT
@@ -1691,15 +1700,6 @@ app.post(
     if (!isValidUuid(id)) {
       return res.status(400).json({
         error: "Invalid application ID"
-      });
-    }
-
-    const applicationType = application.rows[0]?.application_type || "web";
-    const validation = validateRedirectUri(uri, { applicationType });
-
-    if (!validation.valid) {
-      return res.status(400).json({
-        error: validation.error
       });
     }
 
