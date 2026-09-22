@@ -1522,6 +1522,34 @@ app.patch(
       return res.status(400).json({ error: "No fields to update" });
     }
 
+    if (application_type !== undefined) {
+      const redirectResult = await pool.query(
+        `
+        SELECT uri
+        FROM public.redirect_uris
+        WHERE application_id = $1
+        ORDER BY created_at ASC
+        `,
+        [id]
+      );
+
+      const invalidRedirect = redirectResult.rows.find(
+        row =>
+          !validateRedirectUri(
+            row.uri,
+            { applicationType: application_type }
+          ).valid
+      );
+
+      if (invalidRedirect) {
+        return res.status(409).json({
+          error:
+            "Update or remove incompatible redirect URIs before changing the client type.",
+          redirect_uri: invalidRedirect.uri
+        });
+      }
+    }
+
     try {
       const result = await pool.query(
         `
