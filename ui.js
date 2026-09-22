@@ -300,7 +300,7 @@ export function registerAIDCComponents(AIDC) {
         `
   }
 
-</div>>
+</div>
 
         </aside>
       `;
