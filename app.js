@@ -29,6 +29,12 @@ const state = {
 
   applications: [],
   applicationsError: null,
+  quota: {
+    verified: false,
+    count: 0,
+    limit: 3,
+    remaining: 3
+  },
   loading: false,
 
   redirectUris: {
@@ -321,6 +327,15 @@ const applications = {
             ? data.applications
             : [];
 
+        if (data?.quota) {
+          state.quota = {
+            verified: data.quota.verified === true,
+            count: Number(data.quota.count) || 0,
+            limit: Number(data.quota.limit) || 3,
+            remaining: Number(data.quota.remaining) || 0
+          };
+        }
+
         return state.applications;
       } catch (error) {
         handleError(
@@ -343,14 +358,21 @@ const applications = {
     return applicationsLoadPromise;
   },
 
-  async create({ name, description = "" }) {
+  async create({
+    name,
+    description = "",
+    origin_url,
+    cross_app_scopes = []
+  }) {
     haptic(8);
 
     try {
       const data =
         await api.applications.create({
           name,
-          description
+          description,
+          origin_url,
+          cross_app_scopes
         });
 
       const application = data?.application;
@@ -365,6 +387,15 @@ const applications = {
         application,
         ...state.applications
       ];
+
+      if (data?.quota) {
+        state.quota = {
+          verified: data.quota.verified === true,
+          count: Number(data.quota.count) || 0,
+          limit: Number(data.quota.limit) || 3,
+          remaining: Number(data.quota.remaining) || 0
+        };
+      }
 
       emitState();
 
