@@ -1113,8 +1113,60 @@ export function registerAIDCComponents(AIDC) {
     static properties = {
       application: {
         attribute: false
+      },
+      clientType: {
+        state: true
+      },
+      savingClientType: {
+        state: true
       }
     };
+
+    constructor() {
+      super();
+      this.clientType = "web";
+      this.savingClientType = false;
+    }
+
+    updated(changed) {
+      if (changed.has("application")) {
+        this.clientType = this.application?.application_type || "web";
+      }
+    }
+
+    async saveClientType(event) {
+      const nextType = event.target.value;
+
+      if (
+        !["web", "native"].includes(nextType) ||
+        !this.application?.id
+      ) {
+        return;
+      }
+
+      this.clientType = nextType;
+      this.savingClientType = true;
+
+      try {
+        await applications.update(
+          this.application.id,
+          { application_type: nextType }
+        );
+
+        notify(
+          nextType === "native"
+            ? "Client type changed to Native"
+            : "Client type changed to Web"
+        );
+
+        haptic?.(8);
+      } catch {
+        this.clientType =
+          this.application?.application_type || "web";
+      } finally {
+        this.savingClientType = false;
+      }
+    }
 
     async copyClientId() {
       const app =
@@ -1199,6 +1251,31 @@ export function registerAIDCComponents(AIDC) {
                 </code>
 
               </div>
+
+              <div class="aidc-detail-field aidc-client-type-field">
+
+                <span>Client type</span>
+
+                <div class="aidc-client-type-control">
+                  <select
+                    .value=${this.clientType}
+                    @change=${this.saveClientType}
+                    ?disabled=${this.savingClientType}
+                    aria-label="Client type"
+                  >
+                    <option value="web">Web</option>
+                    <option value="native">Native</option>
+                  </select>
+
+                  <small>
+                    ${this.clientType === "native"
+                      ? "Public native client"
+                      : "Browser-based client"}
+                  </small>
+                </div>
+
+              </div>
+
 
               <div class="aidc-detail-field">
 
