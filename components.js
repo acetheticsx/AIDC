@@ -1234,7 +1234,9 @@ export function registerAIDCComponents(AIDC) {
                 ${icon("arrow-right-01")}
               </a>
             </header>
-            <aidc-activity .applicationId=${app.id}></aidc-activity>
+            <div class="aidc-overview-activity-body">
+              <aidc-activity .applicationId=${app.id}></aidc-activity>
+            </div>
           </section>
 
         </div>
