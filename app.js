@@ -29,6 +29,8 @@ const state = {
 
   applications: [],
   applicationsError: null,
+
+  analytics: { days: 7, items: [], total: 0, loading: false, error: null },
   quota: {
     verified: false,
     count: 0,
@@ -1052,6 +1054,25 @@ const branding = {
    Activity
 ───────────────────────────────────────────── */
 
+const analytics = {
+  async load(days = state.analytics.days) {
+    const normalized = [7, 14, 30].includes(Number(days)) ? Number(days) : 7;
+    state.analytics = { ...state.analytics, days: normalized, loading: true, error: null };
+    emitState();
+    try {
+      const data = await api.analytics.logins(normalized);
+      state.analytics = { days: normalized, items: Array.isArray(data?.items) ? data.items : [], total: Number(data?.total) || 0, loading: false, error: null };
+      emitState();
+      return state.analytics.items;
+    } catch (error) {
+      handleError(error, "Failed to load analytics");
+      state.analytics = { ...state.analytics, loading: false, error: error?.message || "Failed to load analytics" };
+      emitState();
+      return [];
+    }
+  }
+};
+
 const activity = {
   async list(applicationId, limit = 50) {
     if (!applicationId) {
@@ -1142,6 +1163,11 @@ function updateDocumentTitle() {
 
   if (route.path === "/") {
     document.title = `Overview · ${APP_NAME}`;
+    return;
+  }
+
+  if (route.path === "/analytics") {
+    document.title = `Analytics · ${APP_NAME}`;
     return;
   }
 
@@ -1372,6 +1398,8 @@ const AIDC = {
   branding,
 
   activity,
+
+  analytics,
 
   router: {
     navigate,
