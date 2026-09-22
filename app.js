@@ -1190,15 +1190,15 @@ function handleRouteChange() {
     route.path === "/applications/:id" &&
     Boolean(route.id);
 
-  const isRedirectRoute =
+  const isUrlConfigRoute =
     isApplicationRoute &&
-    route.section === "redirect-uris";
+    ["url-configs", "redirect-uris"].includes(route.section);
 
   const isScopesRoute =
     isApplicationRoute &&
     route.section === "scopes";
 
-  if (isRedirectRoute) {
+  if (isUrlConfigRoute) {
     redirectUris.load(route.id);
   } else {
     redirectUriRequestId++;
