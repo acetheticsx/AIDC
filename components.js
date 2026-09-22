@@ -1676,8 +1676,11 @@ export function registerAIDCComponents(AIDC) {
         return;
       }
 
-      const checked = Boolean(event.target?.checked);
-      const next = new Set(this.localScopes);
+      const checked =
+        Boolean(event.currentTarget?.checked);
+
+      const next =
+        new Set(this.localScopes);
 
       if (checked) {
         next.add(scope);
@@ -1780,8 +1783,15 @@ export function registerAIDCComponents(AIDC) {
 
           </div>
 
-          <span class="aidc-scope-control">
+          <span
+            class="aidc-scope-control"
+            aria-hidden="true"
+          >
+            <span class="aidc-scope-checkbox">
+              <span class="aidc-scope-checkmark">${icon("checkmark-02")}</span>
+            </span>
             <input
+              class="aidc-scope-input"
               type="checkbox"
               .checked=${enabled}
               ?disabled=${required ||
@@ -1794,7 +1804,6 @@ export function registerAIDCComponents(AIDC) {
                 )}
               aria-label=${`Enable ${names[scope] || scope} scope`}
             />
-            <span class="aidc-scope-checkbox" aria-hidden="true"></span>
           </span>
 
         </label>
