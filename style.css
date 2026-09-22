@@ -1158,6 +1158,8 @@ aidc-app {
     var(--aidc-text);
 }
 
+.aidc-app-logo{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}.aidc-row-icon .aidc-app-logo{width:36px;height:36px;border-radius:9px}.aidc-app-symbol .aidc-app-logo{width:100%;height:100%;border-radius:inherit}
+
 .aidc-row-info {
   display: flex;
   flex-direction: column;
@@ -1844,58 +1846,8 @@ aidc-app {
    LOADING
    ═══════════════════════════════════════ */
 
-.aidc-loading-card {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  min-height: 150px;
-
-  gap: 10px;
-
-  border:
-    1px solid var(--aidc-border);
-
-  border-radius: 14px;
-
-  background:
-    var(--aidc-surface);
-
-  color:
-    var(--aidc-muted);
-
-  font-size: 12px;
-}
-
-.aidc-spinner {
-  display: inline-block;
-
-  width: 15px;
-  height: 15px;
-
-  flex-shrink: 0;
-
-  border:
-    2px solid var(--aidc-border);
-
-  border-top-color:
-    var(--aidc-text);
-
-  border-radius: 50%;
-
-  animation:
-    aidc-spin
-    650ms
-    linear
-    infinite;
-}
-
-@keyframes aidc-spin {
-  to {
-    transform:
-      rotate(360deg);
-  }
-}
+.aidc-loading-card{min-height:150px;padding:20px;border:1px solid var(--aidc-border);border-radius:14px;background:var(--aidc-surface)}
+.aidc-skeleton-card{display:flex;flex-direction:column;justify-content:center;gap:10px}.aidc-skeleton{position:relative;overflow:hidden;border-radius:7px;background:var(--aidc-surface-soft)}.aidc-skeleton::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,var(--aidc-surface),transparent);animation:aidc-skeleton-shimmer 1.25s ease-in-out infinite}.aidc-skeleton-title{width:42%;height:13px}.aidc-skeleton-row{width:100%;height:11px}.aidc-skeleton-row.short{width:68%}@keyframes aidc-skeleton-shimmer{to{transform:translateX(100%)}}@media (prefers-reduced-motion:reduce){.aidc-skeleton::after{animation:none}}
 
 
 /* ═══════════════════════════════════════
@@ -3802,3 +3754,5 @@ body:has(
 .aidc-activity-status.is-failed{color:var(--aidc-danger)}
 .aidc-activity-row time{flex:0 0 auto;color:var(--aidc-muted);font-size:10px}
 @media (max-width:600px){.aidc-overview-activity .aidc-card-section-header{align-items:flex-start}.aidc-overview-activity .aidc-card-section-header>.aidc-inline-button{flex:0 0 auto}.aidc-activity-row{align-items:flex-start}.aidc-activity-row time{padding-top:2px}}
+
+.aidc-url-config-stack{display:grid;gap:18px}.aidc-inline-meta{color:var(--aidc-muted);font-size:11px;font-weight:600}
