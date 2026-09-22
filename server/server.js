@@ -2390,21 +2390,39 @@ app.get(
       const result = await pool.query(
         `
         WITH owned_clients AS (
-          SELECT client_id FROM public.applications WHERE owner_id = $1
+          SELECT client_id
+          FROM public.applications
+          WHERE owner_id = $1
         ),
-        daily AS (
-          SELECT DATE_TRUNC('day', s.created_at)::date AS day, COUNT(*)::int AS count
+        oidc_logins AS (
+          SELECT DISTINCT
+            s.id,
+            COALESCE(
+              to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
+              s.created_at
+            ) AS login_at
           FROM public.aceid_oidc_store AS s
           WHERE s.model_name = 'Session'
-            AND s.created_at >= CURRENT_DATE - ($2::int - 1)
+            AND s.payload->>'kind' = 'Session'
             AND EXISTS (
-              SELECT 1 FROM owned_clients AS c
+              SELECT 1
+              FROM owned_clients AS c
               WHERE COALESCE(s.payload->'authorizations', '{}'::jsonb) ? c.client_id
             )
+        ),
+        daily AS (
+          SELECT DATE_TRUNC('day', login_at)::date AS day, COUNT(*)::int AS count
+          FROM oidc_logins
+          WHERE login_at >= CURRENT_DATE - ($2::int - 1)
+            AND login_at < CURRENT_DATE + INTERVAL '1 day'
           GROUP BY 1
         )
         SELECT calendar.day::date AS day, COALESCE(daily.count, 0)::int AS count
-        FROM generate_series(CURRENT_DATE - ($2::int - 1), CURRENT_DATE, INTERVAL '1 day') AS calendar(day)
+        FROM generate_series(
+          CURRENT_DATE - ($2::int - 1),
+          CURRENT_DATE,
+          INTERVAL '1 day'
+        ) AS calendar(day)
         LEFT JOIN daily ON daily.day = calendar.day::date
         ORDER BY calendar.day ASC
         `,
