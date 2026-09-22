@@ -939,12 +939,6 @@ export function registerAIDCComponents(AIDC) {
               "paint-board"
             )}
 
-            ${this.tab(
-              "activity",
-              "Activity",
-              "activity-01"
-            )}
-
           </nav>
 
           <div class="aidc-detail-content">
@@ -1011,13 +1005,6 @@ export function registerAIDCComponents(AIDC) {
             <aidc-branding
               .applicationId=${app.id}
             ></aidc-branding>
-          `;
-
-        case "activity":
-          return html`
-            <aidc-activity
-              .applicationId=${app.id}
-            ></aidc-activity>
           `;
 
         case "overview":
@@ -1233,6 +1220,21 @@ export function registerAIDCComponents(AIDC) {
 
             </div>
 
+          </section>
+
+          <section class="aidc-card aidc-overview-activity">
+            <header class="aidc-card-section-header">
+              <div>
+                <h2>Recent activity</h2>
+                <p>Latest authentication and application events.</p>
+              </div>
+              <a class="aidc-button aidc-button-secondary aidc-inline-button"
+                href="#/applications/${app.id}/activity">
+                View all
+                ${icon("arrow-right-01")}
+              </a>
+            </header>
+            <aidc-activity .applicationId=${app.id}></aidc-activity>
           </section>
 
         </div>
