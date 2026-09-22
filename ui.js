@@ -31,24 +31,17 @@ export function registerAIDCComponents(AIDC) {
     notify
   } = AIDC;
 
-  function userInitials(user) {
-    const source = String(
-      user?.name || user?.email || "Ace ID"
-    ).trim();
-    const parts = source.split(/\s+/).filter(Boolean);
-
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-    }
-
-    return source.slice(0, 2).toUpperCase();
-  }
-
   function userAvatar(user, className = "") {
+    const linkedAvatar = String(
+      user?.avatar_url || user?.picture || ""
+    ).trim();
+
     const seed = String(
       user?.id || user?.email || user?.name || "ace-id"
     ).trim();
-    const src = `https://api.dicebear.com/10.x/identicon/svg?seed=${encodeURIComponent(seed)}`;
+
+    const src = linkedAvatar
+      || `https://api.dicebear.com/10.x/identicon/svg?seed=${encodeURIComponent(seed)}`;
 
     return html`
       <span class="aidc-user-avatar ${className}" aria-hidden="true">
@@ -57,6 +50,7 @@ export function registerAIDCComponents(AIDC) {
           alt=""
           loading="lazy"
           decoding="async"
+          referrerpolicy="no-referrer"
         />
       </span>
     `;
