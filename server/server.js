@@ -1191,8 +1191,11 @@ app.get(
             cross_app_scopes,
             status,
             created_at,
-            updated_at
+            updated_at,
+            branding.logo_url
           FROM public.applications
+          LEFT JOIN public.application_branding AS branding
+            ON branding.application_id = public.applications.id
           WHERE owner_id = $1
           ORDER BY created_at DESC
           `,
