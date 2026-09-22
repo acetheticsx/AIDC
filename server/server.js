@@ -1254,7 +1254,7 @@ app.get(
           LEFT JOIN public.aceid_clients AS aceid
             ON aceid.client_id = public.applications.client_id
           WHERE public.applications.owner_id = $1
-          ORDER BY created_at DESC
+          ORDER BY public.applications.created_at DESC
           `,
           [req.developer.id]
         )
