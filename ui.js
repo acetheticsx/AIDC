@@ -241,7 +241,7 @@ export function registerAIDCComponents(AIDC) {
               class="aidc-sidebar-user-info"
               href="https://identity.ace-base.cc/account"
               target="_self"
-              aria-label="Open Ace ID account"
+              aria-label="Open Ace ID"
             >
               ${userAvatar(state.user, "aidc-sidebar-avatar")}
               <span class="aidc-sidebar-user-copy">
@@ -3410,7 +3410,7 @@ export function registerAIDCComponents(AIDC) {
       const identity =
         user?.name ||
         user?.email ||
-        "Ace ID account";
+        "Ace ID";
       const email = user?.email || "";
 
       return html`
@@ -3438,7 +3438,7 @@ export function registerAIDCComponents(AIDC) {
                       href="https://identity.ace-base.cc/account"
                       target="_blank"
                       rel="noreferrer"
-                      aria-label="Open Ace ID account"
+                      aria-label="Open Ace ID"
                     >
                       ${userAvatar(user, "aidc-landing-nav-avatar")}
                       <span>${text(identity)}</span>
@@ -3451,7 +3451,7 @@ export function registerAIDCComponents(AIDC) {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      Ace ID account
+                      Ace ID
                     </a>
                   `}
             </div>
@@ -3519,7 +3519,7 @@ export function registerAIDCComponents(AIDC) {
                 <span class="aidc-landing-note">
                   ${signedIn
                     ? "Your Ace ID session is active."
-                    : "Secure sign-in with your Ace ID account."}
+                    : "Secure sign-in with your Ace ID."}
                 </span>
               </div>
 
