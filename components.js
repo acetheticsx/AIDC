@@ -1547,10 +1547,7 @@ export function registerAIDCComponents(AIDC) {
             ${
               loading
                 ? html`
-                    <div class="aidc-loading-card">
-                      <span class="aidc-spinner"></span>
-                      Loading redirect URIs…
-                    </div>
+                    <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading redirect URIs"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-row"></div><div class="aidc-skeleton aidc-skeleton-row short"></div><div class="aidc-skeleton aidc-skeleton-row"></div></div>
                   `
                 : items.length
                   ? items.map(
@@ -2182,10 +2179,7 @@ export function registerAIDCComponents(AIDC) {
           ${
             this.loading
               ? html`
-                  <div class="aidc-loading-card">
-                    <span class="aidc-spinner"></span>
-                    Loading credentials…
-                  </div>
+                  <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading credentials"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-row"></div><div class="aidc-skeleton aidc-skeleton-row short"></div><div class="aidc-skeleton aidc-skeleton-row"></div></div>
                 `
               : html`
                   <div class="aidc-detail-fields">
