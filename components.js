@@ -1837,9 +1837,7 @@ export function registerAIDCComponents(AIDC) {
                 )}
               aria-label=${`Enable ${names[scope] || scope} scope`}
             />
-            <span class="aidc-scope-checkbox" aria-hidden="true">
-              <span class="aidc-scope-checkmark">${icon("checkmark-02")}</span>
-            </span>
+
           </span>
 
         </label>
