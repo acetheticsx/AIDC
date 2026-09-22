@@ -2764,6 +2764,182 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
   }
 
   /* ═══════════════════════════════════════
+     INTEGRATION PLAYGROUND
+     ═══════════════════════════════════════ */
+
+  class AIDCIntegrationPlayground extends AIDCElement {
+    static properties = {
+      applicationId: { type: String },
+      redirectUri: { state: true },
+      selectedScopes: { state: true },
+      authorizationEndpoint: { state: true },
+      authorizationUrl: { state: true },
+      loading: { state: true },
+      error: { state: true }
+    };
+
+    constructor() {
+      super();
+      this.applicationId = null;
+      this.redirectUri = "";
+      this.selectedScopes = [];
+      this.authorizationEndpoint = "";
+      this.authorizationUrl = "";
+      this.loading = true;
+      this.error = "";
+    }
+
+    connectedCallback() {
+      super.connectedCallback();
+      this.load();
+    }
+
+    updated(changed) {
+      if (changed.has("applicationId") && this.applicationId) this.load();
+    }
+
+    async load() {
+      if (!this.applicationId) return;
+      this.loading = true;
+      this.error = "";
+      try {
+        const config = await AIDC.playground.config();
+        this.authorizationEndpoint = config?.authorization_endpoint || "";
+        await redirectUris.load(this.applicationId);
+        await scopes.load(this.applicationId);
+        const redirects = state.redirectUris.items || [];
+        this.redirectUri = redirects.some(item => item.uri === this.redirectUri)
+          ? this.redirectUri
+          : redirects[0]?.uri || "";
+        this.selectedScopes = state.scopes.items?.length
+          ? [...state.scopes.items]
+          : ["openid"];
+      } catch (error) {
+        this.error = error?.message || "Unable to load playground.";
+      } finally {
+        this.loading = false;
+      }
+    }
+
+    async buildAuthorizationUrl() {
+      const app = getApplication(AIDC, this.applicationId);
+      if (!app?.client_id || !this.redirectUri || !this.authorizationEndpoint) {
+        this.error = "Select a registered redirect URI before starting the flow.";
+        return;
+      }
+      this.error = "";
+      try {
+        const random = bytes => {
+          const values = new Uint8Array(bytes);
+          crypto.getRandomValues(values);
+          return btoa(String.fromCharCode(...values)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        };
+        const stateValue = random(32);
+        const verifier = random(64);
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+        const challenge = btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        const params = new URLSearchParams({
+          response_type: "code",
+          client_id: app.client_id,
+          redirect_uri: this.redirectUri,
+          scope: this.selectedScopes.join(" "),
+          state: stateValue,
+          code_challenge: challenge,
+          code_challenge_method: "S256"
+        });
+        const url = new URL(this.authorizationEndpoint);
+        url.search = params.toString();
+        this.authorizationUrl = url.toString();
+        sessionStorage.setItem(
+          `aidc-playground:${stateValue}`,
+          JSON.stringify({ clientId: app.client_id, redirectUri: this.redirectUri, verifier })
+        );
+        haptic?.(10);
+      } catch (error) {
+        this.error = error?.message || "Unable to build authorization request.";
+      }
+    }
+
+    async openAuthorization() {
+      await this.buildAuthorizationUrl();
+      if (this.authorizationUrl) window.open(this.authorizationUrl, "_blank", "noopener,noreferrer");
+    }
+
+    async copyUrl() {
+      if (this.authorizationUrl && await copyToClipboard(this.authorizationUrl)) notify("Authorization URL copied");
+    }
+
+    toggleScope(scope, event) {
+      const next = new Set(this.selectedScopes);
+      if (event.target.checked) next.add(scope);
+      else next.delete(scope);
+      next.add("openid");
+      this.selectedScopes = [...next];
+      this.authorizationUrl = "";
+    }
+
+    render() {
+      const app = getApplication(AIDC, this.applicationId);
+      const redirects = state.redirectUris.items || [];
+      const availableScopes = state.scopes.items?.length ? state.scopes.items : ["openid"];
+
+      if (this.loading) return html`
+        <section class="aidc-card"><div class="aidc-loading-card aidc-skeleton-card" aria-busy="true">
+          <div class="aidc-skeleton aidc-skeleton-title"></div>
+          <div class="aidc-skeleton aidc-skeleton-row"></div>
+          <div class="aidc-skeleton aidc-skeleton-row"></div>
+          <div class="aidc-skeleton aidc-skeleton-chart"></div>
+        </div></section>`;
+
+      return html`
+        <div class="aidc-playground">
+          <section class="aidc-card">
+            <header class="aidc-card-section-header">
+              <span class="aidc-eyebrow">OIDC</span>
+              <h2>Integration playground</h2>
+              <p>Build a real Authorization Code + PKCE request from this application.</p>
+            </header>
+            ${this.error ? html`<div class="aidc-dialog-note">${icon("alert-02")}<span>${this.error}</span></div>` : ""}
+            <div class="aidc-playground-grid">
+              <div class="aidc-playground-form">
+                <label class="aidc-field"><span>Application</span><input type="text" readonly .value=${app?.name || "Application"} /></label>
+                <label class="aidc-field"><span>Redirect URI</span>
+                  <select .value=${this.redirectUri} @change=${event => { this.redirectUri = event.target.value; this.authorizationUrl = ""; }} ?disabled=${!redirects.length}>
+                    ${redirects.length ? redirects.map(item => html`<option value=${item.uri}>${item.uri}</option>`) : html`<option value="">No registered redirect URIs</option>`}
+                  </select>
+                </label>
+                <div class="aidc-playground-scopes"><span class="aidc-field-label">Scopes</span>
+                  <div class="aidc-playground-scope-list">
+                    ${availableScopes.map(scope => html`<label class="aidc-playground-scope"><input type="checkbox" .checked=${this.selectedScopes.includes(scope)} ?disabled=${scope === "openid"} @change=${event => this.toggleScope(scope, event)} /><code>${scope}</code></label>`)}
+                  </div>
+                </div>
+                <div class="aidc-dialog-actions">
+                  <button class="aidc-button aidc-button-primary" type="button" ?disabled=${!redirects.length} @click=${this.openAuthorization}>${icon("arrow-up-right-01")}Open authorization</button>
+                  <button class="aidc-button aidc-button-secondary" type="button" ?disabled=${!redirects.length} @click=${this.buildAuthorizationUrl}>${icon("computer-programming-02")}Build request</button>
+                </div>
+              </div>
+              <div class="aidc-playground-request">
+                <div class="aidc-playground-request-head"><div><span class="aidc-eyebrow">Request</span><strong>Authorization URL</strong></div><button class="aidc-icon-button" type="button" title="Copy authorization URL" aria-label="Copy authorization URL" ?disabled=${!this.authorizationUrl} @click=${this.copyUrl}>${icon("copy-01")}</button></div>
+                <pre class="aidc-playground-code"><code>${this.authorizationUrl || "Build a request to preview the generated URL."}</code></pre>
+                <div class="aidc-playground-checks"><span>${icon("checkmark-circle-02")}PKCE S256</span><span>${icon("checkmark-circle-02")}State parameter</span><span>${icon("checkmark-circle-02")}Registered redirect</span></div>
+              </div>
+            </div>
+          </section>
+          <section class="aidc-card">
+            <header class="aidc-card-section-header"><h2>Starter integration</h2><p>Use the generated configuration with ace-id-sdk.</p></header>
+            <pre class="aidc-playground-code"><code>const auth = new AceID({
+  issuer: "https://identity.ace-base.cc",
+  clientId: "${app?.client_id || "YOUR_CLIENT_ID"}",
+  redirectUri: "${this.redirectUri || "YOUR_REDIRECT_URI"}"
+});
+
+await auth.signIn();</code></pre>
+          </section>
+        </div>
+      `;
+    }
+  }
+  /* ═══════════════════════════════════════
      ACTIVITY
      ═══════════════════════════════════════ */
 
