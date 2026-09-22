@@ -1525,4 +1525,19 @@ document.head.appendChild(uiStyle);
  * Only after /api/me succeeds do we load data and
  * run the initial route.
  */
-auth.bootstrap();
+auth.bootstrap().then(user => {
+  if (!user) {
+    return;
+  }
+
+  /*
+   * A valid AIDC session already exists, so skip
+   * the public landing page and enter the console.
+   */
+  state.ui.consoleOpen = true;
+
+  applications.load().finally(() => {
+    lastRouteKey = "";
+    handleRouteChange();
+  });
+});
