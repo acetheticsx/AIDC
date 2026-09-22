@@ -1916,6 +1916,17 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       this.scopeDirty = true;
     }
 
+    crossAppTokens() {
+      return [
+        ...new Set(
+          this.crossAppInput
+            .split(",")
+            .map(scope => scope.trim().toLowerCase())
+            .filter(Boolean)
+        )
+      ];
+    }
+
     async save() {
       if (
         !this.applicationId ||
@@ -2102,8 +2113,8 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                     </div>
 
                     <div class="aidc-scope-token-list">
-                      ${this.crossAppScopes.length
-                        ? this.crossAppScopes.map(scope => html`
+                      ${this.crossAppTokens().length
+                        ? this.crossAppTokens().map(scope => html`
                             <span class="aidc-scope-token">
                               <code>${scope}</code>
                               <button
@@ -2113,8 +2124,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                                   this.crossAppInput = this.crossAppScopes
                                     .filter(item => item !== scope)
                                     .join(", ");
-                                  this.crossAppScopes = this.crossAppScopes
-                                    .filter(item => item !== scope);
                                   this.scopeDirty = true;
                                 }}
                               >
