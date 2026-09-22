@@ -3358,6 +3358,9 @@ export function registerAIDCComponents(AIDC) {
     static properties = {
       sidebarOpen: {
         state: true
+      },
+      helpOpen: {
+        state: true
       }
     };
 
@@ -3365,9 +3368,11 @@ export function registerAIDCComponents(AIDC) {
       super();
 
       this.sidebarOpen = false;
+      this.helpOpen = false;
 
       this._closeSidebar = () => {
         this.sidebarOpen = false;
+        this.helpOpen = false;
       };
     }
 
@@ -3390,7 +3395,23 @@ export function registerAIDCComponents(AIDC) {
     }
 
     handleEscape() {
+      if (this.helpOpen) {
+        this.helpOpen = false;
+        haptic?.(4);
+        return;
+      }
+
       this.sidebarOpen = false;
+    }
+
+    openHelp() {
+      this.helpOpen = true;
+      haptic?.(10);
+    }
+
+    closeHelp() {
+      this.helpOpen = false;
+      haptic?.(4);
     }
 
     enterConsole() {
@@ -3700,16 +3721,50 @@ export function registerAIDCComponents(AIDC) {
 
           </main>
 
-          <nav class="aidc-mobile-nav" aria-label="Mobile navigation">
-            <a class="aidc-mobile-nav-item ${router.parse().path === "/" ? "active" : ""}" href="#/" aria-label="Overview">
-              ${icon("home-01")}
-              <span>Overview</span>
-            </a>
-            <a class="aidc-mobile-nav-item ${router.parse().path === "/analytics" ? "active" : ""}" href="#/analytics" aria-label="Analytics">
-              ${icon("chart-02")}
-              <span>Analytics</span>
-            </a>
-          </nav>
+          <div class="aidc-mobile-actions">
+            <nav class="aidc-mobile-nav" aria-label="Mobile navigation">
+              <a class="aidc-mobile-nav-item ${router.parse().path === "/" ? "active" : ""}" href="#/" aria-label="Overview">
+                ${icon("home-01")}
+                <span>Overview</span>
+              </a>
+              <a class="aidc-mobile-nav-item ${router.parse().path === "/analytics" ? "active" : ""}" href="#/analytics" aria-label="Analytics">
+                ${icon("chart-02")}
+                <span>Analytics</span>
+              </a>
+            </nav>
+
+            <button class="aidc-help-fab" type="button" aria-label="Help" aria-expanded=${this.helpOpen} @click=${this.helpOpen ? this.closeHelp : this.openHelp}>
+              ${icon("help-circle")}
+            </button>
+          </div>
+
+          ${
+            this.helpOpen
+              ? html`
+                  <div class="aidc-help-sheet-layer">
+                    <button class="aidc-help-sheet-backdrop" type="button" aria-label="Close help" @click=${this.closeHelp}></button>
+                    <section class="aidc-help-sheet" role="dialog" aria-modal="true" aria-label="Help and resources">
+                      <div class="aidc-help-sheet-handle"></div>
+                      <header class="aidc-help-sheet-header">
+                        <div><span class="aidc-eyebrow">Help</span><h2>Resources</h2></div>
+                        <button class="aidc-icon-button" type="button" aria-label="Close help" @click=${this.closeHelp}>${icon("x-close")}</button>
+                      </header>
+                      <div class="aidc-help-sheet-links">
+                        <a class="aidc-help-sheet-link" href="https://ace-base.cc" target="_blank" rel="noopener noreferrer">
+                          <span class="aidc-help-sheet-icon">${icon("globe-02")}</span><span><strong>Website</strong><small>ace-base.cc</small></span>${icon("arrow-up-right-01")}
+                        </a>
+                        <a class="aidc-help-sheet-link" href="mailto:hello@ace-base.cc">
+                          <span class="aidc-help-sheet-icon">${icon("mail-01")}</span><span><strong>Email</strong><small>hello@ace-base.cc</small></span>${icon("arrow-right-01")}
+                        </a>
+                        <a class="aidc-help-sheet-link" href="https://docs.ace-base.cc" target="_blank" rel="noopener noreferrer">
+                          <span class="aidc-help-sheet-icon">${icon("book-open-01")}</span><span><strong>Documentation</strong><small>docs.ace-base.cc</small></span>${icon("arrow-up-right-01")}
+                        </a>
+                      </div>
+                    </section>
+                  </div>
+                `
+              : ""
+          }
 
           <aidc-create-dialog></aidc-create-dialog>
           <aidc-delete-modal></aidc-delete-modal>
