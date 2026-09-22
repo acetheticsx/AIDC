@@ -2846,6 +2846,10 @@ export function registerAIDCComponents(AIDC) {
         state: true
       },
 
+      applicationType: {
+        state: true
+      },
+
       submitting: {
         state: true
       },
@@ -2861,6 +2865,7 @@ export function registerAIDCComponents(AIDC) {
       this.name = "";
       this.description = "";
       this.originUrl = "";
+      this.applicationType = "web";
       this.submitting = false;
       this.error = "";
 
@@ -2924,12 +2929,14 @@ export function registerAIDCComponents(AIDC) {
           await applications.create({
             name,
             description,
-            origin_url: originUrl || undefined
+            origin_url: originUrl || undefined,
+            application_type: this.applicationType
           });
 
         this.name = "";
         this.description = "";
         this.originUrl = "";
+        this.applicationType = "web";
 
         modals.closeCreate();
 
@@ -3060,6 +3067,27 @@ export function registerAIDCComponents(AIDC) {
                   ?disabled=${this.submitting}
                 ></textarea>
 
+              </label>
+
+              <label class="aidc-field">
+                <span>Client type</span>
+
+                <select
+                  class="aidc-client-type-select"
+                  .value=${this.applicationType}
+                  @change=${event => {
+                    this.applicationType = event.target.value;
+                    this.error = "";
+                  }}
+                  ?disabled=${this.submitting}
+                >
+                  <option value="web">Web application</option>
+                  <option value="native">Native application</option>
+                </select>
+
+                <small>
+                  Native clients are public and use PKCE with app or loopback redirects.
+                </small>
               </label>
 
               <label class="aidc-field">
