@@ -874,9 +874,16 @@ export function registerAIDCComponents(AIDC) {
                     ${text(app.name)}
                   </h1>
 
-                  ${statusBadge(
-                    app.status
-                  )}
+                  <a
+                    class="aidc-help-link"
+                    href="https://docs.ace-base.cc/projects/ace-id#sdk-integration"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    ${icon("help-circle")}
+                    <span>Get help adding authentication</span>
+                    ${icon("arrow-up-right-01")}
+                  </a>
 
                 </div>
 
