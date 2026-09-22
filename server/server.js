@@ -403,57 +403,71 @@ function isValidUuid(value) {
   );
 }
 
-function validateRedirectUri(value) {
+function validateRedirectUri(value, { applicationType = "web" } = {}) {
   if (typeof value !== "string" || !value.trim()) {
-    return {
-      valid: false,
-      error: "Redirect URI is required"
-    };
+    return { valid: false, error: "Redirect URI is required" };
   }
 
   const uri = value.trim();
 
   if (uri.length > 2048) {
-    return {
-      valid: false,
-      error: "Redirect URI is too long"
-    };
+    return { valid: false, error: "Redirect URI is too long" };
   }
 
   let parsed;
-
   try {
     parsed = new URL(uri);
   } catch {
-    return {
-      valid: false,
-      error: "Redirect URI must be a valid URL"
-    };
+    return { valid: false, error: "Redirect URI must be a valid URL" };
+  }
+
+  if (parsed.hash) {
+    return { valid: false, error: "Redirect URI cannot contain a fragment" };
+  }
+
+  if (parsed.username || parsed.password) {
+    return { valid: false, error: "Redirect URI cannot contain credentials" };
+  }
+
+  if (applicationType === "native") {
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      const hostname = parsed.hostname.toLowerCase();
+      const isLoopback =
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "::1" ||
+        hostname === "[::1]";
+
+      if (parsed.protocol === "http:" && !isLoopback) {
+        return {
+          valid: false,
+          error: "HTTP native redirects are only allowed on loopback hosts"
+        };
+      }
+
+      return { valid: true, uri };
+    }
+
+    const scheme = parsed.protocol.slice(0, -1);
+
+    if (!/^[a-z][a-z0-9+.-]*$/.test(scheme) || !scheme.includes(".")) {
+      return {
+        valid: false,
+        error: "Native custom schemes must use reverse-domain notation"
+      };
+    }
+
+    return { valid: true, uri };
   }
 
   if (!["http:", "https:"].includes(parsed.protocol)) {
     return {
       valid: false,
-      error: "Redirect URI must use HTTP or HTTPS"
-    };
-  }
-
-  if (parsed.hash) {
-    return {
-      valid: false,
-      error: "Redirect URI cannot contain a fragment"
-    };
-  }
-
-  if (parsed.username || parsed.password) {
-    return {
-      valid: false,
-      error: "Redirect URI cannot contain credentials"
+      error: "Web redirect URI must use HTTP or HTTPS"
     };
   }
 
   const hostname = parsed.hostname.toLowerCase();
-
   const isLocalhost =
     hostname === "localhost" ||
     hostname === "127.0.0.1" ||
@@ -467,12 +481,8 @@ function validateRedirectUri(value) {
     };
   }
 
-  return {
-    valid: true,
-    uri
-  };
+  return { valid: true, uri };
 }
-
 
 function validateOriginUrl(value, { required = false } = {}) {
   if (value === undefined || value === null || !String(value).trim()) {
@@ -1211,6 +1221,7 @@ app.get(
             public.applications.name,
             public.applications.description,
             public.applications.client_id,
+            COALESCE(aceid.application_type, public.applications.application_type, 'web') AS application_type,
             public.applications.origin_url,
             public.applications.cross_app_scopes,
             public.applications.status,
@@ -1220,6 +1231,8 @@ app.get(
           FROM public.applications
           LEFT JOIN public.application_branding AS branding
             ON branding.application_id = public.applications.id
+          LEFT JOIN public.aceid_clients AS aceid
+            ON aceid.client_id = public.applications.client_id
           WHERE public.applications.owner_id = $1
           ORDER BY created_at DESC
           `,
@@ -1250,7 +1263,12 @@ app.post(
   "/api/applications",
   requireAuth,
   async (req, res) => {
-    const { name, description = "", origin_url } = req.body ?? {};
+    const {
+      name,
+      description = "",
+      origin_url,
+      application_type = "web"
+    } = req.body ?? {};
 
     if (typeof name !== "string" || !name.trim()) {
       return res.status(400).json({ error: "Application name is required" });
@@ -1258,6 +1276,12 @@ app.post(
 
     if (typeof description !== "string") {
       return res.status(400).json({ error: "Description must be a string" });
+    }
+
+    if (!["web", "native"].includes(application_type)) {
+      return res.status(400).json({
+        error: "Application type must be web or native"
+      });
     }
 
     const originValidation = validateOriginUrl(origin_url, { required: false });
@@ -1307,14 +1331,15 @@ app.post(
       const result = await client.query(
         `
         INSERT INTO public.applications
-          (name, description, client_id, origin_url, cross_app_scopes, owner_id)
+          (name, description, client_id, application_type, origin_url, cross_app_scopes, owner_id)
         VALUES
-          ($1, $2, $3, $4, $5, $6)
+          ($1, $2, $3, $4, $5, $6, $7)
         RETURNING
           id,
           name,
           description,
           client_id,
+          application_type,
           origin_url,
           cross_app_scopes,
           status,
@@ -1325,6 +1350,7 @@ app.post(
           name.trim(),
           description.trim(),
           generateClientId(),
+          application_type,
           originValidation.origin,
           [],
           req.developer.id
@@ -1377,6 +1403,7 @@ app.get(
           name,
           description,
           client_id,
+          COALESCE(aceid.application_type, public.applications.application_type, 'web') AS application_type,
           origin_url,
           cross_app_scopes,
           status,
@@ -1386,6 +1413,8 @@ app.get(
         FROM public.applications
         LEFT JOIN public.application_branding AS branding
           ON branding.application_id = public.applications.id
+        LEFT JOIN public.aceid_clients AS aceid
+          ON aceid.client_id = public.applications.client_id
         WHERE public.applications.id = $1
           AND public.applications.owner_id = $2
         `,
@@ -1414,7 +1443,14 @@ app.patch(
       return res.status(400).json({ error: "Invalid application ID" });
     }
 
-    const { name, description, origin_url, cross_app_scopes, status } = req.body ?? {};
+    const {
+      name,
+      description,
+      application_type,
+      origin_url,
+      cross_app_scopes,
+      status
+    } = req.body ?? {};
 
     if (name !== undefined && (typeof name !== "string" || !name.trim())) {
       return res.status(400).json({ error: "Application name cannot be empty" });
@@ -1422,6 +1458,15 @@ app.patch(
 
     if (description !== undefined && typeof description !== "string") {
       return res.status(400).json({ error: "Description must be a string" });
+    }
+
+    if (
+      application_type !== undefined &&
+      !["web", "native"].includes(application_type)
+    ) {
+      return res.status(400).json({
+        error: "Application type must be web or native"
+      });
     }
 
     let origin = null;
@@ -1449,6 +1494,7 @@ app.patch(
     if (
       name === undefined &&
       description === undefined &&
+      application_type === undefined &&
       origin_url === undefined &&
       cross_app_scopes === undefined &&
       status === undefined
@@ -1463,9 +1509,10 @@ app.patch(
         SET
           name = COALESCE($1, name),
           description = COALESCE($2, description),
-          origin_url = COALESCE($3, origin_url),
-          cross_app_scopes = COALESCE($4, cross_app_scopes),
-          status = COALESCE($5, status),
+          application_type = COALESCE($3, application_type),
+          origin_url = COALESCE($4, origin_url),
+          cross_app_scopes = COALESCE($5, cross_app_scopes),
+          status = COALESCE($6, status),
           updated_at = now()
         WHERE id = $6
           AND owner_id = $7
@@ -1474,6 +1521,7 @@ app.patch(
           name,
           description,
           client_id,
+          application_type,
           origin_url,
           cross_app_scopes,
           status,
@@ -1484,6 +1532,7 @@ app.patch(
         [
           name !== undefined ? name.trim() : null,
           description !== undefined ? description.trim() : null,
+          application_type ?? null,
           origin,
           scopes,
           status ?? null,
@@ -1534,6 +1583,7 @@ app.delete(
           name,
           description,
           client_id,
+          application_type,
           origin_url,
           cross_app_scopes,
           status,
@@ -1644,7 +1694,8 @@ app.post(
       });
     }
 
-    const validation = validateRedirectUri(uri);
+    const applicationType = application.rows[0]?.application_type || "web";
+    const validation = validateRedirectUri(uri, { applicationType });
 
     if (!validation.valid) {
       return res.status(400).json({
@@ -1655,7 +1706,7 @@ app.post(
     try {
       const application = await pool.query(
         `
-        SELECT id
+        SELECT id, application_type
         FROM public.applications
         WHERE id = $1
           AND owner_id = $2
