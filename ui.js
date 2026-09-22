@@ -1030,6 +1030,12 @@ export function registerAIDCComponents(AIDC) {
             )}
 
             ${this.tab(
+              "playground",
+              "Playground",
+              "computer-programming-02"
+            )}
+
+            ${this.tab(
               "branding",
               "Branding",
               "paint-board"
@@ -1100,6 +1106,13 @@ export function registerAIDCComponents(AIDC) {
             <aidc-branding
               .applicationId=${app.id}
             ></aidc-branding>
+          `;
+
+        case "playground":
+          return html`
+            <aidc-integration-playground
+              .applicationId=${app.id}
+            ></aidc-integration-playground>
           `;
 
         case "overview":
@@ -4204,6 +4217,11 @@ await auth.signIn();</code></pre>
   customElements.define(
     "aidc-branding",
     AIDCBranding
+  );
+
+  customElements.define(
+    "aidc-integration-playground",
+    AIDCIntegrationPlayground
   );
 
   customElements.define(
