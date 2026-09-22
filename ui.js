@@ -183,7 +183,7 @@ export function registerAIDCComponents(AIDC) {
 
             <a
               class="aidc-nav-item ${
-                applicationsActive
+                analyticsActive
                   ? "active"
                   : ""
               }"
