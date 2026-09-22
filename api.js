@@ -260,6 +260,12 @@ export const api = {
     }
   },
 
+  analytics: {
+    logins(days = 7) {
+      return request(`/analytics/logins?days=${encodeURIComponent(days)}`);
+    }
+  },
+
   activity: {
     list(applicationId, limit = 50) {
       return request(
