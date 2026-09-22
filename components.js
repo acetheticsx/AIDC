@@ -1892,7 +1892,7 @@ export function registerAIDCComponents(AIDC) {
                         <strong>Cross-App scopes</strong>
                         <p>Optional scopes exposed between trusted Ace apps.</p>
                       </div>
-                      ${icon("arrow-right-left-01")}
+                      ${icon("arrow-right-01")}
                     </div>
 
                     <label class="aidc-field">
@@ -2964,7 +2964,6 @@ export function registerAIDCComponents(AIDC) {
 
                 <span>
                   Origin URL
-                  <b>*</b>
                 </span>
 
                 <input
