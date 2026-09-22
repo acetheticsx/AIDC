@@ -201,6 +201,15 @@ export function registerAIDCComponents(AIDC) {
 
           <div class="aidc-sidebar-spacer"></div>
 
+          <div class="aidc-sidebar-links">
+            <a class="aidc-sidebar-link" href="https://docs.ace-base.cc" target="_blank" rel="noreferrer">
+              ${icon("book-01")}<span>Docs</span>${icon("arrow-up-right-01")}
+            </a>
+            <a class="aidc-sidebar-link" href="mailto:hello@ace-base.cc">
+              ${icon("mail-01")}<span>Help</span>${icon("arrow-up-right-01")}
+            </a>
+          </div>
+
 <div class="aidc-sidebar-bottom">
 
   ${
@@ -1132,19 +1141,6 @@ export function registerAIDCComponents(AIDC) {
               <div class="aidc-detail-field">
 
                 <span>
-                  Cross-App Scope
-                </span>
-
-                <code class="aidc-mono">
-                  ${Array.isArray(app.cross_app_scopes) && app.cross_app_scopes.length
-                    ? app.cross_app_scopes.join(", ")
-                    : "None"}
-                </code>
-
-              </div>
-              <div class="aidc-detail-field">
-
-                <span>
                   Status
                 </span>
 
@@ -1200,6 +1196,15 @@ export function registerAIDCComponents(AIDC) {
               </p>
             </header>
 
+            ${!app.origin_url
+              ? html`
+                  <div class="aidc-dialog-note aidc-origin-warning">
+                    ${icon("alert-02")}
+                    <span>Authentication won't work until an Origin URL is set. Configure it in your application settings.</span>
+                  </div>
+                `
+              : ""}
+
             <div class="aidc-config-list">
 
               ${this.configItem(
@@ -1243,7 +1248,7 @@ export function registerAIDCComponents(AIDC) {
     ) {
       return html`
         <a
-          class="aidc-config-item"
+          class="aidc-button aidc-button-secondary aidc-config-button"
           href="#/applications/${id}/${section}"
         >
           ${icon(iconName)}
@@ -1589,7 +1594,9 @@ export function registerAIDCComponents(AIDC) {
 
       localScopes: {
         state: true
-      }
+      },
+      crossAppScopes: { state: true },
+      crossAppInput: { state: true }
     };
 
     constructor() {
@@ -1597,6 +1604,8 @@ export function registerAIDCComponents(AIDC) {
 
       this.applicationId = null;
       this.localScopes = [];
+      this.crossAppScopes = [];
+      this.crossAppInput = "";
     }
 
     updated(changed) {
@@ -1630,26 +1639,29 @@ export function registerAIDCComponents(AIDC) {
         this.applicationId
       ) {
         const incoming =
-          Array.isArray(
-            state.scopes.items
-          )
+          Array.isArray(state.scopes.items)
             ? state.scopes.items
             : [];
 
-        const current =
-          this.localScopes.join("|");
-
-        const next =
-          incoming.join("|");
-
         if (
-          current !== next &&
+          this.localScopes.join("|") !== incoming.join("|") &&
           !state.scopes.saving
         ) {
-          this.localScopes = [
-            ...incoming
-          ];
+          this.localScopes = [...incoming];
         }
+      }
+
+      const application = getApplication(AIDC, this.applicationId);
+      const incomingCrossApp = Array.isArray(application?.cross_app_scopes)
+        ? application.cross_app_scopes.filter(scope => typeof scope === "string").map(scope => scope.trim().toLowerCase()).filter(Boolean)
+        : [];
+
+      if (
+        this.crossAppScopes.join("|") !== incomingCrossApp.join("|") &&
+        !state.scopes.saving
+      ) {
+        this.crossAppScopes = [...incomingCrossApp];
+        this.crossAppInput = incomingCrossApp.join(", ");
       }
     }
 
@@ -1698,9 +1710,24 @@ export function registerAIDCComponents(AIDC) {
           this.localScopes
         );
 
-        notify(
-          "Scopes updated"
+        const crossAppScopes = [
+          ...new Set(
+            this.crossAppInput
+              .split(",")
+              .map(scope => scope.trim().toLowerCase())
+              .filter(Boolean)
+          )
+        ];
+
+        await applications.update(
+          this.applicationId,
+          { cross_app_scopes: crossAppScopes }
         );
+
+        this.crossAppScopes = crossAppScopes;
+        this.crossAppInput = crossAppScopes.join(", ");
+
+        notify("Scopes updated");
 
         haptic?.(8);
       } catch {
@@ -1853,22 +1880,31 @@ export function registerAIDCComponents(AIDC) {
                   </div>
                 `
               : html`
-                  <div
-                    class="aidc-config-list"
-                  >
+                  <div class="aidc-scope-grid">
+                    ${this.renderScope("openid")}
+                    ${this.renderScope("profile")}
+                    ${this.renderScope("email")}
+                  </div>
 
-                    ${this.renderScope(
-                      "openid"
-                    )}
+                  <div class="aidc-cross-app-card">
+                    <div class="aidc-cross-app-heading">
+                      <div>
+                        <strong>Cross-App scopes</strong>
+                        <p>Optional scopes exposed between trusted Ace apps.</p>
+                      </div>
+                      ${icon("arrow-right-left-01")}
+                    </div>
 
-                    ${this.renderScope(
-                      "profile"
-                    )}
-
-                    ${this.renderScope(
-                      "email"
-                    )}
-
+                    <label class="aidc-field">
+                      <span>Scopes</span>
+                      <input type="text" autocomplete="off" spellcheck="false"
+                        placeholder="source.read, source.profile"
+                        .value=${this.crossAppInput}
+                        @input=${event => { this.crossAppInput = event.target.value; }}
+                        ?disabled=${saving || loading}
+                      />
+                      <small>Comma-separated. Leave empty if this application does not expose cross-app scopes.</small>
+                    </label>
                   </div>
 
                   <div
@@ -2708,10 +2744,6 @@ export function registerAIDCComponents(AIDC) {
         state: true
       },
 
-      crossAppScope: {
-        state: true
-      },
-
       submitting: {
         state: true
       },
@@ -2727,7 +2759,6 @@ export function registerAIDCComponents(AIDC) {
       this.name = "";
       this.description = "";
       this.originUrl = "";
-      this.crossAppScope = "";
       this.submitting = false;
       this.error = "";
 
@@ -2769,12 +2800,6 @@ export function registerAIDCComponents(AIDC) {
       const originUrl =
         this.originUrl.trim();
 
-      const crossAppScopes =
-        this.crossAppScope
-          .split(",")
-          .map(scope => scope.trim())
-          .filter(Boolean);
-
       if (!name) {
         this.error =
           "Application name is required.";
@@ -2789,13 +2814,6 @@ export function registerAIDCComponents(AIDC) {
         return;
       }
 
-      if (!originUrl) {
-        this.error =
-          "Origin URL is required.";
-
-        return;
-      }
-
       this.error = "";
       this.submitting = true;
 
@@ -2804,14 +2822,12 @@ export function registerAIDCComponents(AIDC) {
           await applications.create({
             name,
             description,
-            origin_url: originUrl,
-            cross_app_scopes: crossAppScopes
+            origin_url: originUrl || undefined
           });
 
         this.name = "";
         this.description = "";
         this.originUrl = "";
-        this.crossAppScope = "";
 
         modals.closeCreate();
 
@@ -2971,32 +2987,17 @@ export function registerAIDCComponents(AIDC) {
                   The domain where Ace ID authentication may originate.
                 </small>
 
-              </label>
-
-              <label class="aidc-field">
-
-                <span>
-                  Cross-App Scope
-                </span>
-
-                <input
-                  type="text"
-                  autocomplete="off"
-                  spellcheck="false"
-                  placeholder="source.read, source.profile"
-                  .value=${this.crossAppScope}
-                  @input=${event => {
-                    this.crossAppScope =
-                      event.target.value;
-
-                    this.error = "";
-                  }}
-                  ?disabled=${this.submitting}
-                />
-
-                <small>
-                  Comma-separated scopes exposed across Ace apps.
-                </small>
+                ${!this.originUrl.trim()
+                  ? html`
+                      <div class="aidc-dialog-note aidc-origin-warning">
+                        ${icon("alert-02")}
+                        <span>
+                          Authentication won't work until an Origin URL is set.
+                          You can configure it after creating the application.
+                        </span>
+                      </div>
+                    `
+                  : ""}
 
               </label>
 
