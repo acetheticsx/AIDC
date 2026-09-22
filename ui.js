@@ -2638,103 +2638,119 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       if (this.loading) {
         return html`
           <section class="aidc-card">
-            <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading branding"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-row"></div><div class="aidc-skeleton aidc-skeleton-row short"></div><div class="aidc-skeleton aidc-skeleton-row"></div></div>
+            <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading branding">
+              <div class="aidc-skeleton aidc-skeleton-title"></div>
+              <div class="aidc-skeleton aidc-skeleton-row"></div>
+              <div class="aidc-skeleton aidc-skeleton-row short"></div>
+              <div class="aidc-skeleton aidc-skeleton-row"></div>
+            </div>
           </section>
         `;
       }
 
+      const app = getApplication(AIDC, this.applicationId);
+      const previewName = this.displayName.trim() || app?.name || "Your application";
+      const previewColor = /^#[0-9a-f]{6}$/i.test(this.accentColor.trim())
+        ? this.accentColor.trim()
+        : "#111111";
+
       return html`
-        <section class="aidc-card">
+        <div class="aidc-branding-layout">
+          <section class="aidc-card">
+            <header class="aidc-card-section-header">
+              <span class="aidc-eyebrow">Presentation</span>
+              <h2>Branding</h2>
+              <p>Shape the identity users see during Ace ID authorization.</p>
+            </header>
 
-          <header
-            class="aidc-card-section-header"
-          >
-            <h2>Branding</h2>
+            <div class="aidc-branding-editor">
+              <label class="aidc-field">
+                <span>Display name</span>
+                <input
+                  type="text"
+                  maxlength="120"
+                  autocomplete="off"
+                  .value=${this.displayName}
+                  @input=${event => (this.displayName = event.target.value)}
+                  placeholder="Your application"
+                />
+                <small>This is shown to users on the authorization screen.</small>
+              </label>
 
-            <p>
-              Configure the identity and
-              presentation shown during
-              authentication.
-            </p>
-          </header>
+              <label class="aidc-field">
+                <span>Logo URL</span>
+                <input
+                  type="url"
+                  inputmode="url"
+                  autocomplete="url"
+                  .value=${this.logoUrl}
+                  @input=${event => (this.logoUrl = event.target.value)}
+                  placeholder="https://example.com/logo.png"
+                />
+              </label>
 
-          <div class="aidc-dialog-form">
+              <div class="aidc-branding-color-row">
+                <label class="aidc-field">
+                  <span>Accent color</span>
+                  <div class="aidc-color-input">
+                    <input
+                      type="color"
+                      .value=${previewColor}
+                      aria-label="Choose accent color"
+                      @input=${event => (this.accentColor = event.target.value)}
+                    />
+                    <input
+                      type="text"
+                      maxlength="7"
+                      autocomplete="off"
+                      spellcheck="false"
+                      .value=${this.accentColor}
+                      @input=${event => (this.accentColor = event.target.value)}
+                      placeholder="#111111"
+                    />
+                  </div>
+                  <small>Use a six-digit hex color.</small>
+                </label>
+              </div>
 
-            <label class="aidc-field">
-              <span>Display name</span>
-
-              <input
-                type="text"
-                maxlength="120"
-                autocomplete="off"
-                .value=${this.displayName}
-                @input=${event =>
-                  (this.displayName =
-                    event.target.value)}
-                placeholder="Your application"
-              />
-            </label>
-
-            <label class="aidc-field">
-              <span>Logo URL</span>
-
-              <input
-                type="url"
-                inputmode="url"
-                autocomplete="url"
-                .value=${this.logoUrl}
-                @input=${event =>
-                  (this.logoUrl =
-                    event.target.value)}
-                placeholder="https://example.com/logo.png"
-              />
-            </label>
-
-            <label class="aidc-field">
-              <span>Accent color</span>
-
-              <input
-                type="text"
-                maxlength="32"
-                autocomplete="off"
-                spellcheck="false"
-                .value=${this.accentColor}
-                @input=${event =>
-                  (this.accentColor =
-                    event.target.value)}
-                placeholder="#111111"
-              />
-            </label>
-
-            <div class="aidc-dialog-actions">
-              <button
-                class="aidc-button aidc-button-primary ${
-                  this.saving
-                    ? "is-loading"
-                    : ""
-                }"
-                type="button"
-                ?disabled=${this.saving}
-                @click=${this.save}
-              >
-                <span class="aidc-button-content">
-                  ${icon("checkmark-circle-02")}
-                  ${
-                    this.saving
-                      ? "Saving…"
-                      : "Save changes"
-                  }
-                </span>
-
-                <span class="aidc-button-loading">
-                  Saving…
-                </span>
-              </button>
+              <div class="aidc-dialog-actions">
+                <button
+                  class="aidc-button aidc-button-primary ${this.saving ? "is-loading" : ""}"
+                  type="button"
+                  ?disabled=${this.saving}
+                  @click=${this.save}
+                >
+                  <span class="aidc-button-content">
+                    ${icon("checkmark-circle-02")}
+                    ${this.saving ? "Saving…" : "Save changes"}
+                  </span>
+                  <span class="aidc-button-loading">Saving…</span>
+                </button>
+              </div>
             </div>
+          </section>
 
-          </div>
+          <aside class="aidc-card aidc-branding-preview-card">
+            <header class="aidc-card-section-header">
+              <span class="aidc-eyebrow">Live preview</span>
+              <h2>Authorization screen</h2>
+              <p>A simplified preview of the identity users will see.</p>
+            </header>
 
-        </section>
+            <div class="aidc-branding-preview" style=${`--aidc-preview-accent: ${previewColor}`}>
+              <div class="aidc-branding-preview-logo">
+                ${this.logoUrl
+                  ? html`<img src=${this.logoUrl} alt="" loading="lazy" decoding="async" />`
+                  : icon("finger-print")}
+              </div>
+              <span class="aidc-branding-preview-label">Continue with</span>
+              <strong>${previewName}</strong>
+              <p>Sign in with Ace ID to continue.</p>
+              <div class="aidc-branding-preview-button">Continue</div>
+              <small>Preview only</small>
+            </div>
+          </aside>
+        </div>
       `;
     }
   }
