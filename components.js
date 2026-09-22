@@ -385,7 +385,7 @@ export function registerAIDCComponents(AIDC) {
           <div class="aidc-row-main">
 
             <div class="aidc-row-icon">
-              ${icon("app-window")}
+              ${app.logo_url ? html`<img class="aidc-app-logo" src=${app.logo_url} alt="" loading="lazy" decoding="async" />` : icon("app-window")}
             </div>
 
             <div class="aidc-row-info">
@@ -742,13 +742,7 @@ export function registerAIDCComponents(AIDC) {
             ${
               state.loading
                 ? html`
-                    <div class="aidc-loading-card">
-                      <span
-                        class="aidc-spinner"
-                      ></span>
-
-                      Loading applications…
-                    </div>
+                    <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading applications"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-row"></div><div class="aidc-skeleton aidc-skeleton-row short"></div><div class="aidc-skeleton aidc-skeleton-row"></div></div>
                   `
                 : apps.length
                   ? html`
@@ -865,7 +859,7 @@ export function registerAIDCComponents(AIDC) {
             <div class="aidc-detail-heading">
 
               <div class="aidc-app-symbol large">
-                ${icon("app-window")}
+                ${app.logo_url ? html`<img class="aidc-app-logo" src=${app.logo_url} alt="" loading="lazy" decoding="async" />` : icon("app-window")}
               </div>
 
               <div>
@@ -922,8 +916,8 @@ export function registerAIDCComponents(AIDC) {
             )}
 
             ${this.tab(
-              "redirect-uris",
-              "Redirect URIs",
+              "url-configs",
+              "URL Configs",
               "link-01"
             )}
 
@@ -986,11 +980,10 @@ export function registerAIDCComponents(AIDC) {
             ></aidc-credentials>
           `;
 
+        case "url-configs":
         case "redirect-uris":
           return html`
-            <aidc-redirect-uris
-              .applicationId=${app.id}
-            ></aidc-redirect-uris>
+            <aidc-url-configs .application=${app}></aidc-url-configs>
           `;
 
         case "scopes":
@@ -1196,10 +1189,10 @@ export function registerAIDCComponents(AIDC) {
 
               ${this.configItem(
                 app.id,
-                "redirect-uris",
+                "url-configs",
                 "link-01",
-                "Redirect URIs",
-                "Configure allowed callback URLs."
+                "URL Configs",
+                "Configure origin and callback URLs."
               )}
 
               ${this.configItem(
@@ -1228,11 +1221,7 @@ export function registerAIDCComponents(AIDC) {
                 <h2>Recent activity</h2>
                 <p>Latest authentication and application events.</p>
               </div>
-              <a class="aidc-button aidc-button-secondary aidc-inline-button"
-                href="#/applications/${app.id}/activity">
-                View all
-                ${icon("arrow-right-01")}
-              </a>
+              <span class="aidc-inline-meta">Latest events</span>
             </header>
             <div class="aidc-overview-activity-body">
               <aidc-activity .applicationId=${app.id}></aidc-activity>
@@ -1273,6 +1262,50 @@ export function registerAIDCComponents(AIDC) {
     }
   }
 
+  /* ═══════════════════════════════════════
+     URL CONFIGS
+     ═══════════════════════════════════════ */
+
+  class AIDCUrlConfigs extends AIDCElement {
+    static properties = { application: { attribute: false }, originUrl: { state: true }, savingOrigin: { state: true }, originError: { state: true } };
+    constructor() { super(); this.application=null; this.originUrl=""; this.savingOrigin=false; this.originError=""; }
+    updated(changed) { if (changed.has("application")) { this.originUrl=this.application?.origin_url||""; this.originError=""; } }
+    validateOrigin(value) {
+      if (!value) return { valid:true, value:null };
+      try { const parsed=new URL(value);
+        if (!["https:","http:"].includes(parsed.protocol)) return {valid:false,error:"Origin URL must use HTTP or HTTPS."};
+        const localhost=["localhost","127.0.0.1","::1"].includes(parsed.hostname);
+        if (parsed.protocol==="http:" && !localhost) return {valid:false,error:"HTTP Origin URLs are only allowed for localhost."};
+        return {valid:true,value:parsed.origin};
+      } catch { return {valid:false,error:"Enter a valid Origin URL."}; }
+    }
+    async saveOrigin() {
+      if (!this.application?.id || this.savingOrigin) return;
+      const result=this.validateOrigin(this.originUrl.trim());
+      if (!result.valid) { this.originError=result.error; return; }
+      this.originError=""; this.savingOrigin=true;
+      try { const updated=await applications.update(this.application.id,{origin_url:result.value}); this.application=updated; this.originUrl=updated?.origin_url||""; notify("Origin URL saved"); haptic?.(8); }
+      catch(error) { this.originError=error?.message||"Unable to save Origin URL."; }
+      finally { this.savingOrigin=false; }
+    }
+    render() {
+      const app=this.application; if(!app) return "";
+      return html`<div class="aidc-url-config-stack">
+        <section class="aidc-card">
+          <header class="aidc-card-section-header"><h2>Origin URL</h2><p>The application origin used for Ace ID authentication.</p></header>
+          <div class="aidc-dialog-form">
+            <label class="aidc-field"><span>Origin URL</span>
+              <input type="url" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://example.com" .value=${this.originUrl} @input=${event=>{this.originUrl=event.target.value;this.originError="";}} ?disabled=${this.savingOrigin} />
+              <small>Use the origin only, for example https://example.com. Paths are removed automatically.</small>
+            </label>
+            ${this.originError ? html`<div class="aidc-dialog-note">${icon("alert-02")}<span>${this.originError}</span></div>` : ""}
+            <div class="aidc-dialog-actions"><button class="aidc-button aidc-button-primary ${this.savingOrigin?"is-loading":""}" type="button" ?disabled=${this.savingOrigin} @click=${this.saveOrigin}><span class="aidc-button-content">${icon("checkmark-circle-02")}Save Origin URL</span><span class="aidc-button-loading">Saving…</span></button></div>
+          </div>
+        </section>
+        <aidc-redirect-uris .applicationId=${app.id}></aidc-redirect-uris>
+      </div>`;
+    }
+  }
   /* ═══════════════════════════════════════
      REDIRECT URIS
      ═══════════════════════════════════════ */
@@ -1787,13 +1820,7 @@ export function registerAIDCComponents(AIDC) {
 
           </div>
 
-          <span
-            class="aidc-scope-control"
-            aria-hidden="true"
-          >
-            <span class="aidc-scope-checkbox">
-              <span class="aidc-scope-checkmark">${icon("checkmark-02")}</span>
-            </span>
+          <span class="aidc-scope-control">
             <input
               class="aidc-scope-input"
               type="checkbox"
@@ -1808,6 +1835,9 @@ export function registerAIDCComponents(AIDC) {
                 )}
               aria-label=${`Enable ${names[scope] || scope} scope`}
             />
+            <span class="aidc-scope-checkbox" aria-hidden="true">
+              <span class="aidc-scope-checkmark">${icon("checkmark-02")}</span>
+            </span>
           </span>
 
         </label>
@@ -1847,13 +1877,7 @@ export function registerAIDCComponents(AIDC) {
               </p>
             </header>
 
-            <div class="aidc-loading-card">
-              <span
-                class="aidc-spinner"
-              ></span>
-
-              Loading scopes…
-            </div>
+            <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading scopes"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-row"></div><div class="aidc-skeleton aidc-skeleton-row short"></div><div class="aidc-skeleton aidc-skeleton-row"></div></div>
 
           </section>
         `;
@@ -1878,13 +1902,7 @@ export function registerAIDCComponents(AIDC) {
           ${
             loading
               ? html`
-                  <div class="aidc-loading-card">
-                    <span
-                      class="aidc-spinner"
-                    ></span>
-
-                    Loading scopes…
-                  </div>
+                  <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading scopes"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-row"></div><div class="aidc-skeleton aidc-skeleton-row short"></div><div class="aidc-skeleton aidc-skeleton-row"></div></div>
                 `
               : html`
                   <div class="aidc-scope-grid">
@@ -2409,10 +2427,7 @@ export function registerAIDCComponents(AIDC) {
       if (this.loading) {
         return html`
           <section class="aidc-card">
-            <div class="aidc-loading-card">
-              <span class="aidc-spinner"></span>
-              Loading branding…
-            </div>
+            <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading branding"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-row"></div><div class="aidc-skeleton aidc-skeleton-row short"></div><div class="aidc-skeleton aidc-skeleton-row"></div></div>
           </section>
         `;
       }
@@ -2615,10 +2630,7 @@ export function registerAIDCComponents(AIDC) {
           ${
             this.loading
               ? html`
-                  <div class="aidc-loading-card">
-                    <span class="aidc-spinner"></span>
-                    Loading activity…
-                  </div>
+                  <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading activity"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-row"></div><div class="aidc-skeleton aidc-skeleton-row short"></div><div class="aidc-skeleton aidc-skeleton-row"></div></div>
                 `
               : this.events.length
                 ? html`
