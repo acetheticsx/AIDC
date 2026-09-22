@@ -105,15 +105,21 @@ function haptic(duration = 6) {
 document.addEventListener(
   "pointerdown",
   event => {
-    const button = event.target.closest(
-      "button, [role='button']"
+    const target = event.target.closest(
+      "button, [role='button'], a.aidc-mobile-nav-item, a.aidc-help-sheet-link"
     );
 
-    if (!button || button.disabled) {
+    if (!target || target.getAttribute("aria-disabled") === "true") {
       return;
     }
 
-    haptic(6);
+    haptic(
+      target.classList.contains("aidc-help-fab")
+        ? 10
+        : target.classList.contains("aidc-help-sheet-link")
+          ? 5
+          : 6
+    );
   },
   { passive: true }
 );
