@@ -1277,7 +1277,7 @@ app.post(
 
       if (!userResult.rows.length) {
         await client.query("ROLLBACK");
-        return res.status(403).json({ error: "Ace ID account not found" });
+        return res.status(403).json({ error: "Ace ID not found" });
       }
 
       const verified = userResult.rows[0].email_verified === true;
