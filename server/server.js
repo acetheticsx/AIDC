@@ -1233,14 +1233,9 @@ app.post(
       return res.status(400).json({ error: "Description must be a string" });
     }
 
-    const originValidation = validateOriginUrl(origin_url, { required: true });
+    const originValidation = validateOriginUrl(origin_url, { required: false });
     if (!originValidation.valid) {
       return res.status(400).json({ error: originValidation.error });
-    }
-
-    const scopeValidation = normalizeCrossAppScopes(cross_app_scopes);
-    if (!scopeValidation.valid) {
-      return res.status(400).json({ error: scopeValidation.error });
     }
 
     const client = await pool.connect();
@@ -1304,7 +1299,7 @@ app.post(
           description.trim(),
           generateClientId(),
           originValidation.origin,
-          scopeValidation.scopes,
+          [],
           req.developer.id
         ]
       );
