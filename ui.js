@@ -32,26 +32,24 @@ export function registerAIDCComponents(AIDC) {
   } = AIDC;
 
   function userAvatar(user, className = "") {
-    const linkedAvatar = String(
+    const src = String(
       user?.avatar_url || user?.picture || ""
     ).trim();
 
-    const seed = String(
-      user?.id || user?.email || user?.name || "ace-id"
-    ).trim();
-
-    const src = linkedAvatar
-      || `https://api.dicebear.com/10.x/identicon/svg?seed=${encodeURIComponent(seed)}`;
-
     return html`
       <span class="aidc-user-avatar ${className}" aria-hidden="true">
-        <img
-          src=${src}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          referrerpolicy="no-referrer"
-        />
+        ${src
+          ? html`
+              <img
+                src=${src}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                referrerpolicy="no-referrer"
+              />
+            `
+          : icon("user")
+        }
       </span>
     `;
   }
