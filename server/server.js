@@ -777,8 +777,7 @@ function requireDiscovery(req, res, next) {
   }
 
   res.status(503).json({
-    error: "Ace ID is not currently reachable",
-    detail: discoveryState.lastError || null
+    error: "Ace ID is not currently reachable"
   });
 }
 
