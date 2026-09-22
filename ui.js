@@ -2682,6 +2682,16 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
         return;
       }
 
+      const accent = this.accentColor.trim();
+
+      if (
+        accent &&
+        !/^#[0-9a-f]{6}$/i.test(accent)
+      ) {
+        notify("Accent color must be a six-digit hex value");
+        return;
+      }
+
       this.saving = true;
 
       try {
@@ -2693,9 +2703,13 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
             logo_url:
               this.logoUrl.trim() || null,
             accent_color:
-              this.accentColor.trim() || null
+              accent || null
           }
         );
+
+        await applications.load();
+        notify("Branding updated");
+        haptic?.(8);
       } finally {
         this.saving = false;
       }
