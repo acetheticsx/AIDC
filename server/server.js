@@ -2381,6 +2381,45 @@ app.put(
  */
 
 app.get(
+  "/api/analytics/logins",
+  requireAuth,
+  async (req, res) => {
+    const requestedDays = Number.parseInt(req.query.days, 10);
+    const days = [7, 14, 30].includes(requestedDays) ? requestedDays : 7;
+    try {
+      const result = await pool.query(
+        `
+        WITH owned_clients AS (
+          SELECT client_id FROM public.applications WHERE owner_id = $1
+        ),
+        daily AS (
+          SELECT DATE_TRUNC('day', s.created_at)::date AS day, COUNT(*)::int AS count
+          FROM public.aceid_oidc_store AS s
+          WHERE s.model_name = 'Session'
+            AND s.created_at >= CURRENT_DATE - ($2::int - 1)
+            AND EXISTS (
+              SELECT 1 FROM owned_clients AS c
+              WHERE COALESCE(s.payload->'authorizations', '{}'::jsonb) ? c.client_id
+            )
+          GROUP BY 1
+        )
+        SELECT calendar.day::date AS day, COALESCE(daily.count, 0)::int AS count
+        FROM generate_series(CURRENT_DATE - ($2::int - 1), CURRENT_DATE, INTERVAL '1 day') AS calendar(day)
+        LEFT JOIN daily ON daily.day = calendar.day::date
+        ORDER BY calendar.day ASC
+        `,
+        [req.developer.id, days]
+      );
+      const items = result.rows.map(row => ({ date: row.day, count: Number(row.count) || 0 }));
+      res.json({ days, total: items.reduce((sum, item) => sum + item.count, 0), items });
+    } catch (error) {
+      console.error("GET analytics logins:", error);
+      res.status(500).json({ error: "Failed to fetch analytics" });
+    }
+  }
+);
+
+app.get(
   "/api/applications/:id/activity",
   requireAuth,
   async (req, res) => {
