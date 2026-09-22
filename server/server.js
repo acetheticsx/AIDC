@@ -48,13 +48,40 @@ if (!PUBLIC_ORIGIN) {
   process.exit(1);
 }
 
+let PUBLIC_ORIGIN_VALUE;
+
+try {
+  const parsedPublicOrigin = new URL(PUBLIC_ORIGIN);
+
+  if (
+    !["http:", "https:"].includes(
+      parsedPublicOrigin.protocol
+    ) ||
+    parsedPublicOrigin.username ||
+    parsedPublicOrigin.password ||
+    parsedPublicOrigin.pathname !== "/" ||
+    parsedPublicOrigin.search ||
+    parsedPublicOrigin.hash
+  ) {
+    throw new Error(
+      "AIDC_PUBLIC_ORIGIN must be a bare HTTP(S) origin"
+    );
+  }
+
+  PUBLIC_ORIGIN_VALUE = parsedPublicOrigin.origin;
+} catch {
+  console.error(
+    "Invalid AIDC_PUBLIC_ORIGIN. Use a bare origin such as https://aidc.example.com."
+  );
+  process.exit(1);
+}
+
 /*
  * IS_PRODUCTION is derived from the public origin,
  * not from NODE_ENV. One source of truth.
  */
-const IS_PRODUCTION = !/^http:\/\/(localhost|127\.0\.0\.1)/.test(
-  PUBLIC_ORIGIN
-);
+const IS_PRODUCTION =
+  new URL(PUBLIC_ORIGIN_VALUE).protocol === "https:";
 
 const SESSION_COOKIE = "aidc_session";
 const CSRF_COOKIE = "aidc_csrf";
@@ -66,8 +93,8 @@ const OAUTH_TTL_MS = 10 * 60 * 1000;             // 10 minutes
 
 const CALLBACK_PATH = "/auth/callback";
 
-const CALLBACK_URL = `${PUBLIC_ORIGIN}${CALLBACK_PATH}`;
-const POST_LOGOUT_URL = `${PUBLIC_ORIGIN}/`;
+const CALLBACK_URL = `${PUBLIC_ORIGIN_VALUE}${CALLBACK_PATH}`;
+const POST_LOGOUT_URL = `${PUBLIC_ORIGIN_VALUE}/`;
 
 /*
  * Known OAuth error codes. Never reflect the raw
@@ -2525,7 +2552,7 @@ const server = app.listen(
   "0.0.0.0",
   () => {
     console.log(`AIDC running on port ${PORT}`);
-    console.log(`Public origin: ${PUBLIC_ORIGIN}`);
+    console.log(`Public origin: ${PUBLIC_ORIGIN_VALUE}`);
     console.log(`OIDC issuer: ${ISSUER}`);
     console.log(`OIDC client: ${CLIENT_ID}`);
     console.log(
