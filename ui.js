@@ -2094,21 +2094,53 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                   <div class="aidc-cross-app-card">
                     <div class="aidc-cross-app-heading">
                       <div>
+                        <span class="aidc-eyebrow">Ace Base</span>
                         <strong>Cross-App scopes</strong>
-                        <p>Optional scopes exposed between trusted Ace apps.</p>
+                        <p>Optional permissions exposed between trusted Ace apps.</p>
                       </div>
                       ${icon("arrow-right-01")}
                     </div>
 
+                    <div class="aidc-scope-token-list">
+                      ${this.crossAppScopes.length
+                        ? this.crossAppScopes.map(scope => html`
+                            <span class="aidc-scope-token">
+                              <code>${scope}</code>
+                              <button
+                                type="button"
+                                aria-label=${`Remove ${scope}`}
+                                @click=${() => {
+                                  this.crossAppInput = this.crossAppScopes
+                                    .filter(item => item !== scope)
+                                    .join(", ");
+                                  this.crossAppScopes = this.crossAppScopes
+                                    .filter(item => item !== scope);
+                                  this.scopeDirty = true;
+                                }}
+                              >
+                                ${icon("cancel-01")}
+                              </button>
+                            </span>
+                          `)
+                        : html`<span class="aidc-scope-empty">No cross-app scopes configured.</span>`
+                      }
+                    </div>
+
                     <label class="aidc-field">
-                      <span>Scopes</span>
-                      <input type="text" autocomplete="off" spellcheck="false"
+                      <span>Scope names</span>
+                      <input
+                        type="text"
+                        autocomplete="off"
+                        spellcheck="false"
                         placeholder="source.read, source.profile"
                         .value=${this.crossAppInput}
-                        @input=${event => { this.crossAppInput = event.target.value; }}
+                        @input=${event => {
+                          this.crossAppInput = event.target.value;
+                          this.scopeDirty = true;
+                        }}
                         ?disabled=${saving || loading}
                       />
-                      <small>Comma-separated. Leave empty if this application does not expose cross-app scopes.</small>
+                      <small>Comma-separated. Use lowercase names such as source.read.</small>
                     </label>
                   </div>
 
