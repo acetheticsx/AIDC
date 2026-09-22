@@ -680,21 +680,29 @@ export function registerAIDCComponents(AIDC) {
           </header>
 
           <section class="aidc-analytics-summary">
-            <div class="aidc-analytics-total">
+            <article class="aidc-analytics-metric">
               <span>Logins</span>
               <strong>${s.total}</strong>
-              <small>within the selected range</small>
-            </div>
-            <div class="aidc-analytics-meta">
-              <span>${items.length} days</span>
-              <span>Live data</span>
-            </div>
+              <small>successful OIDC sessions</small>
+            </article>
+
+            <article class="aidc-analytics-metric">
+              <span>Unique users</span>
+              <strong>${s.uniqueUsers}</strong>
+              <small>distinct Ace ID accounts</small>
+            </article>
+
+            <article class="aidc-analytics-metric aidc-analytics-metric-warning">
+              <span>Failed attempts</span>
+              <strong>${s.failedAttempts}</strong>
+              <small>unsuccessful OIDC logins</small>
+            </article>
           </section>
 
           <section class="aidc-card aidc-analytics-card">
             <header class="aidc-card-section-header">
-              <h2>Logins</h2>
-              <p>Successful Ace ID sessions associated with your applications.</p>
+              <h2>Authentication activity</h2>
+              <p>Successful OIDC sessions and failed sign-in attempts across your applications.</p>
             </header>
             ${s.loading
               ? html`<div class="aidc-loading-card aidc-skeleton-card" aria-busy="true"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-chart"></div></div>`
