@@ -230,6 +230,16 @@ export function registerAIDCComponents(AIDC) {
               ${icon("mail-01")}<span>Help</span>${icon("arrow-up-right-01")}
             </a>
           </div>
+          
+          <div class="aidc-computer-shortcuts" aria-label="Computer shortcuts">
+            <div class="aidc-computer-shortcuts-title">
+              <span>Computer shortcuts</span>
+              <kbd>Ctrl K</kbd>
+            </div>
+            <div><span>Overview</span><kbd>G O</kbd></div>
+            <div><span>Applications</span><kbd>G A</kbd></div>
+            <div><span>Analytics</span><kbd>G N</kbd></div>
+          </div>
 
 <div class="aidc-sidebar-bottom">
 
@@ -3715,6 +3725,9 @@ await auth.signIn();</code></pre>
       },
       helpOpen: {
         state: true
+      },
+      shortcutsOpen: {
+        state: true
       }
     };
 
@@ -3723,6 +3736,9 @@ await auth.signIn();</code></pre>
 
       this.sidebarOpen = false;
       this.helpOpen = false;
+      this.shortcutsOpen = false;
+      this._shortcutPrefix = false;
+      this._shortcutTimer = null;
 
       this._closeSidebar = () => {
         this.sidebarOpen = false;
@@ -3737,6 +3753,70 @@ await auth.signIn();</code></pre>
         "aidc-close-sidebar",
         this._closeSidebar
       );
+
+      this._desktopShortcutKeydown = event => {
+        if (
+          !window.matchMedia("(min-width: 1000px) and (pointer: fine)").matches ||
+          event.defaultPrevented
+        ) {
+          return;
+        }
+
+        const target = event.target;
+        if (
+          target instanceof HTMLElement &&
+          target.matches("input, textarea, select, [contenteditable='true']")
+        ) {
+          return;
+        }
+
+        const key = event.key.toLowerCase();
+        const mod = event.ctrlKey || event.metaKey;
+
+        if (mod && key === "k") {
+          event.preventDefault();
+          this.shortcutsOpen = !this.shortcutsOpen;
+          haptic?.(8);
+          return;
+        }
+
+        if (!mod && !event.altKey && key === "?") {
+          event.preventDefault();
+          this.shortcutsOpen = true;
+          haptic?.(8);
+          return;
+        }
+
+        if (!mod && !event.altKey && key === "g") {
+          this._shortcutPrefix = true;
+          window.clearTimeout(this._shortcutTimer);
+          this._shortcutTimer = window.setTimeout(() => {
+            this._shortcutPrefix = false;
+          }, 900);
+          return;
+        }
+
+        if (!mod && !event.altKey && this._shortcutPrefix) {
+          const routes = {
+            a: "/applications",
+            n: "/analytics",
+            o: "/"
+          };
+
+          if (routes[key]) {
+            event.preventDefault();
+            this._shortcutPrefix = false;
+            window.clearTimeout(this._shortcutTimer);
+            router.navigate(routes[key]);
+            haptic?.(6);
+          }
+        }
+      };
+
+      window.addEventListener(
+        "keydown",
+        this._desktopShortcutKeydown
+      );
     }
 
     disconnectedCallback() {
@@ -3745,10 +3825,23 @@ await auth.signIn();</code></pre>
         this._closeSidebar
       );
 
+      window.removeEventListener(
+        "keydown",
+        this._desktopShortcutKeydown
+      );
+
+      window.clearTimeout(this._shortcutTimer);
+
       super.disconnectedCallback();
     }
 
     handleEscape() {
+      if (this.shortcutsOpen) {
+        this.shortcutsOpen = false;
+        haptic?.(4);
+        return;
+      }
+
       if (this.helpOpen) {
         this.helpOpen = false;
         haptic?.(4);
@@ -4075,6 +4168,30 @@ await auth.signIn();</code></pre>
               .mobileOpen=${this.sidebarOpen}
             ></aidc-sidebar>
           </div>
+
+          ${this.shortcutsOpen
+            ? html`
+                <div class="aidc-shortcuts-backdrop" @click=${() => (this.shortcutsOpen = false)}>
+                  <section class="aidc-shortcuts-panel" role="dialog" aria-modal="true" aria-labelledby="aidc-shortcuts-title">
+                    <header>
+                      <div>
+                        <span class="aidc-eyebrow">Computer</span>
+                        <h2 id="aidc-shortcuts-title">Keyboard shortcuts</h2>
+                      </div>
+                      <button class="aidc-icon-button" type="button" aria-label="Close shortcuts" @click=${() => (this.shortcutsOpen = false)}>${icon("cancel-01")}</button>
+                    </header>
+                    <div class="aidc-shortcuts-list">
+                      <div><span>Open shortcuts</span><kbd>Ctrl K</kbd><kbd>⌘ K</kbd></div>
+                      <div><span>Overview</span><kbd>G</kbd><kbd>O</kbd></div>
+                      <div><span>Applications</span><kbd>G</kbd><kbd>A</kbd></div>
+                      <div><span>Analytics</span><kbd>G</kbd><kbd>N</kbd></div>
+                      <div><span>Show shortcuts</span><kbd>?</kbd></div>
+                      <div><span>Close</span><kbd>Esc</kbd></div>
+                    </div>
+                  </section>
+                </div>
+              `
+            : ""}
 
           <main class="aidc-main">
 
