@@ -29,7 +29,7 @@ test("OIDC callback requires a local Ace ID identity", () => {
 
 test("logout remains available when discovery is unavailable", () => {
   const logout = server.match(
-    /app\.get\(["']\/auth\/logout["'][\s\S]*?\n\s*\}\);/
+    /app\.post\(\s*["']\/auth\/logout["'][\s\S]*?\n\s*\}\);/
   )?.[0] ?? "";
   assert.ok(logout.length > 0, "logout route should exist");
   assert.doesNotMatch(logout, /requireDiscovery\s*\(/);
