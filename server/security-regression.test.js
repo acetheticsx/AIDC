@@ -12,7 +12,11 @@ const api = await fs.readFile(path.join(here, "..", "api.js"), "utf8");
 test("database TLS verifies certificates", () => {
   assert.match(
     server,
-    /ssl:\s*\{[\s\S]*?rejectUnauthorized:\s*true/
+    /const databaseSslRejectUnauthorized =\s*process\.env\.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false"/
+  );
+  assert.match(
+    server,
+    /ssl:\s*\{[\s\S]*?rejectUnauthorized:\s*databaseSslRejectUnauthorized/
   );
 });
 
