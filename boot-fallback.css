@@ -10,7 +10,7 @@
   text-align: center;
 }
 
-.aidc-boot-fallback > section {
+.aidc-boot-fallback {
   width: min(560px, 100%);
 }
 
