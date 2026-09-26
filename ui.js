@@ -922,8 +922,6 @@ export function registerAIDCComponents(AIDC) {
               </div>
             </div>
           </section>
-
-          </div>
         </div>
       `;
     }
