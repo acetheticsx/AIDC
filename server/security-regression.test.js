@@ -12,6 +12,9 @@ const app = await fs.readFile(path.join(here, "..", "app.js"), "utf8");
 const ui = await fs.readFile(path.join(here, "..", "ui.js"), "utf8");
 const helpers = await fs.readFile(path.join(here, "..", "helpers.js"), "utf8");
 const style = await fs.readFile(path.join(here, "..", "style.css"), "utf8");
+const robots = await fs.readFile(path.join(here, "..", "robots.txt"), "utf8");
+const sitemap = await fs.readFile(path.join(here, "..", "sitemap.xml"), "utf8");
+const llms = await fs.readFile(path.join(here, "..", "llms.txt"), "utf8");
 
 test("database TLS verifies certificates", () => {
   assert.match(
@@ -153,4 +156,31 @@ test("analytics keeps existing ranges and adds insight presentation", () => {
   assert.match(ui, /\[7, 14, 30\]/);
   assert.match(ui, /const busiestHour = hourly\.reduce/);
   assert.match(ui, /aidc-analytics-insights/);
+});
+
+
+test("public search metadata uses a coherent entity graph", () => {
+  assert.match(index, /"@type": "Organization"/);
+  assert.match(index, /"@type": "WebSite"/);
+  assert.match(index, /"@type": "WebPage"/);
+  assert.match(index, /"@type": "WebApplication"/);
+  assert.match(index, /https:\/\/console\.ace-base\.cc\/#application/);
+  assert.match(index, /"featureList": \[/);
+  assert.match(index, /"applicationCategory": "DeveloperApplication"/);
+  assert.match(index, /<link rel="canonical" href="https:\/\/console\.ace-base\.cc\/">/);
+});
+
+test("crawl controls keep authenticated and API routes out of search", () => {
+  assert.match(robots, /Disallow: \/api\//);
+  assert.match(robots, /Disallow: \/auth\//);
+  assert.match(server, /"X-Robots-Tag"/);
+  assert.match(server, /noindex, nofollow, noarchive/);
+  assert.match(server, /app\.get\("\/sitemap\.xml"/);
+});
+
+test("public machine-readable product summary is present", () => {
+  assert.match(sitemap, /<loc>https:\/\/console\.ace-base\.cc\/<\/loc>/);
+  assert.match(llms, /AIDC is the Ace Base Identity Developer Console/);
+  assert.match(llms, /OAuth 2\.0 configuration/);
+  assert.match(llms, /OpenID Connect configuration/);
 });

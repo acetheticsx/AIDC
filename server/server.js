@@ -296,6 +296,16 @@ app.disable("x-powered-by");
 app.set("trust proxy", TRUST_PROXY_HOPS);
 
 app.use((req, res, next) => {
+  if (
+    req.path.startsWith("/api/") ||
+    req.path.startsWith("/auth/")
+  ) {
+    res.set(
+      "X-Robots-Tag",
+      "noindex, nofollow, noarchive"
+    );
+  }
+
   res.set({
     "Content-Security-Policy":
       "default-src 'self'; " +
@@ -3150,6 +3160,9 @@ function sendFrontendFile(relativePath) {
 }
 
 app.get("/", sendFrontendFile("index.html"));
+app.get("/robots.txt", sendFrontendFile("robots.txt"));
+app.get("/sitemap.xml", sendFrontendFile("sitemap.xml"));
+app.get("/llms.txt", sendFrontendFile("llms.txt"));
 app.get("/app.js", sendFrontendFile("app.js"));
 app.get("/api.js", sendFrontendFile("api.js"));
 app.get("/boot-fallback.js", sendFrontendFile("boot-fallback.js"));
