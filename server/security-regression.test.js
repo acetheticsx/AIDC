@@ -80,7 +80,7 @@ test("proxy trust is explicit and bounded", () => {
 test("rate limits protect authentication and API traffic", () => {
   assert.match(server, /\/auth\/login/);
   assert.match(server, /\/auth\/callback/);
-  assert.match(server, /rateLimit\(\{ windowMs: 60 \* 60_000, max: 120 \}\)/);
+  assert.match(server, /rateLimit\(\{ windowMs: 60_000, max: 120 \}\)/);
   assert.match(server, /status\(429\)/);
 });
 
