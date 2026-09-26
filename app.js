@@ -1176,6 +1176,10 @@ const applicationHealth = {
         ? credentialResult.value.credentials
         : [];
 
+    const activeCredentials = credentials.filter(
+      credential => !credential?.revoked_at
+    );
+
     const scopes =
       scopeResult.status === "fulfilled" &&
       Array.isArray(scopeResult.value?.scopes)
@@ -1201,10 +1205,15 @@ const applicationHealth = {
       {
         key: "origin",
         label: "Origin URL",
-        ok: Boolean(app.origin_url),
-        detail: app.origin_url
-          ? "Origin URL is configured."
-          : "Add an Origin URL before using browser authentication."
+        ok:
+          app.application_type === "native" ||
+          Boolean(app.origin_url),
+        detail:
+          app.application_type === "native"
+            ? "Not required for public native clients."
+            : app.origin_url
+              ? "Origin URL is configured."
+              : "Add an Origin URL before using browser authentication."
       },
       {
         key: "redirects",
@@ -1218,11 +1227,15 @@ const applicationHealth = {
       {
         key: "credentials",
         label: "Credentials",
-        ok: credentials.length > 0,
+        ok:
+          app.application_type === "native" ||
+          activeCredentials.length > 0,
         detail:
-          credentials.length > 0
-            ? `${credentials.length} credential${credentials.length === 1 ? "" : "s"} available.`
-            : "Create a client credential before server-side token exchange."
+          app.application_type === "native"
+            ? "Not required for public native clients."
+            : activeCredentials.length > 0
+              ? `${activeCredentials.length} active credential${activeCredentials.length === 1 ? "" : "s"} available.`
+              : "Create a client credential before server-side token exchange."
       },
       {
         key: "scopes",
