@@ -167,7 +167,7 @@ test("public search metadata uses a coherent entity graph", () => {
   assert.match(index, /https:\/\/console\.ace-base\.cc\/#application/);
   assert.match(index, /"featureList": \[/);
   assert.match(index, /"applicationCategory": "DeveloperApplication"/);
-  assert.match(index, /<link rel="canonical" href="https:\/\/console\.ace-base\.cc\/"\s*\/>/);
+  assert.match(index, /<link rel="canonical" href="https:\/\/console\.ace-base\.cc\/">/);
 });
 
 test("crawl controls keep authenticated and API routes out of search", () => {
