@@ -4391,6 +4391,36 @@ await auth.signIn();</code></pre>
                   </div>
                 </article>
               </div>
+
+              <section class="aidc-landing-faq" aria-labelledby="aidc-landing-faq-title">
+                <div class="aidc-landing-faq-heading">
+                  <span class="aidc-landing-eyebrow">Developer guide</span>
+                  <h2 id="aidc-landing-faq-title">AIDC at a glance</h2>
+                  <p>Direct answers about the Ace Base identity developer console.</p>
+                </div>
+
+                <div class="aidc-landing-faq-list">
+                  <details>
+                    <summary>What is AIDC?</summary>
+                    <p>AIDC is the Ace Base developer console for creating and managing identity applications and configuring OAuth 2.0 and OpenID Connect integrations.</p>
+                  </details>
+
+                  <details>
+                    <summary>What can AIDC manage?</summary>
+                    <p>AIDC manages application settings, redirect URIs, OAuth scopes, client credentials, branding, authentication activity, and analytics.</p>
+                  </details>
+
+                  <details>
+                    <summary>Does AIDC support OAuth 2.0 and OpenID Connect?</summary>
+                    <p>Yes. AIDC provides configuration for OAuth 2.0 and OpenID Connect applications, including PKCE, redirect URIs, scopes, and client credentials.</p>
+                  </details>
+
+                  <details>
+                    <summary>Can AIDC diagnose redirect URI configuration?</summary>
+                    <p>Yes. AIDC checks configured redirect URIs against the application type and reports production HTTPS, local loopback, native custom-scheme, and origin-mismatch conditions.</p>
+                  </details>
+                </div>
+              </section>
             </section>
 
             <aside class="aidc-landing-aside" aria-label="AIDC preview">
