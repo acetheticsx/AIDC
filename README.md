@@ -80,6 +80,16 @@ The public repository does not contain private Ace Identity infrastructure, prod
 
 - environment-specific secrets
 
+
+## Server deployment hardening
+
+The server supports explicit reverse-proxy and PostgreSQL TLS configuration.
+
+- Set `AIDC_TRUST_PROXY_HOPS` to the exact number of trusted reverse-proxy hops when the server is behind a proxy. Leave it at `0` when the server is directly exposed.
+- Set `DATABASE_SSL_CA` when the PostgreSQL provider requires a custom CA certificate.
+- Use an HTTPS `AIDC_PUBLIC_ORIGIN` in production so secure cookies and HSTS are enabled.
+- Do not set `AIDC_TRUST_PROXY_HOPS` to a guessed value. Express uses trusted proxy configuration to derive client IP information, which the rate limiter relies on.
+
 ## The Ace Base
 
 Is Where Better Begins...
