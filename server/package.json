@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch --env-file=../.env server.js"
+    "dev": "node --watch --env-file=../.env server.js",
+    "test": "node --test security-regression.test.js"
   },
   "dependencies": {
     "express": "^5.1.0",
