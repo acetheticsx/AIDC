@@ -167,7 +167,7 @@ test("public search metadata uses a coherent entity graph", () => {
   assert.match(index, /https:\/\/console\.ace-base\.cc\/#application/);
   assert.match(index, /"featureList": \[/);
   assert.match(index, /"applicationCategory": "DeveloperApplication"/);
-  assert.match(index, /"canonical"/);
+  assert.match(index, /<link rel="canonical" href="https:\/\/console\.ace-base\.cc\/"\s*\/>/);
 });
 
 test("crawl controls keep authenticated and API routes out of search", () => {
@@ -179,7 +179,7 @@ test("crawl controls keep authenticated and API routes out of search", () => {
 });
 
 test("public machine-readable product summary is present", () => {
-  assert.match(sitemap, /<loc>https:\/\/console\.ace-base\.cc<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/console\.ace-base\.cc\/<\/loc>/);
   assert.match(llms, /AIDC is the Ace Base Identity Developer Console/);
   assert.match(llms, /OAuth 2\.0 configuration/);
   assert.match(llms, /OpenID Connect configuration/);
