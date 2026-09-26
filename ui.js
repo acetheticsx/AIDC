@@ -723,6 +723,11 @@ export function registerAIDCComponents(AIDC) {
       const hourly = s.hourly || [];
       const successRate = s.successRate == null ? "—" : `${s.successRate}%`;
       const rangeLabel = s.days === 30 ? "30 days" : s.days === 14 ? "14 days" : "7 days";
+      const busiestHour = hourly.reduce(
+        (peak, item) => Number(item.count) > Number(peak?.count || -1) ? item : peak,
+        null
+      );
+      const topApplication = applications[0] || null;
 
       return html`
         <div class="aidc-page aidc-analytics-page">
@@ -889,6 +894,33 @@ export function registerAIDCComponents(AIDC) {
                   `
                 : emptyState({ iconName: "calendar-01", title: "No daily data", description: "Daily activity will appear here." })}
             </section>
+          <section class="aidc-analytics-insights" aria-label="Analytics insights">
+            <div class="aidc-analytics-insight">
+              <span class="aidc-analytics-insight-icon">${icon("clock-01")}</span>
+              <div>
+                <span class="aidc-eyebrow">Peak hour</span>
+                <strong>${busiestHour ? this.formatHour(busiestHour.hour) : "—"}</strong>
+                <small>${busiestHour ? `${busiestHour.count} login${busiestHour.count === 1 ? "" : "s"} in this hour` : "No hourly activity yet"}</small>
+              </div>
+            </div>
+            <div class="aidc-analytics-insight">
+              <span class="aidc-analytics-insight-icon">${icon("app-window")}</span>
+              <div>
+                <span class="aidc-eyebrow">Top application</span>
+                <strong>${topApplication ? topApplication.name : "—"}</strong>
+                <small>${topApplication ? `${topApplication.logins} logins · ${topApplication.uniqueUsers} users` : "No application activity yet"}</small>
+              </div>
+            </div>
+            <div class="aidc-analytics-insight">
+              <span class="aidc-analytics-insight-icon">${icon("alert-02")}</span>
+              <div>
+                <span class="aidc-eyebrow">Failures</span>
+                <strong>${s.failedAttempts}</strong>
+                <small>${s.failedAttempts ? "Authentication attempts needing review" : "No failed attempts in this range"}</small>
+              </div>
+            </div>
+          </section>
+
           </div>
         </div>
       `;
