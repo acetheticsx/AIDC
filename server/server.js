@@ -2827,14 +2827,8 @@ app.get(
         FROM public.aceid_oidc_store AS s
         WHERE s.model_name = 'Session'
           AND s.payload->>'kind' = 'Session'
-          AND COALESCE(
-            to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
-            s.created_at
-          ) >= CURRENT_DATE - ($2::int - 1)
-          AND COALESCE(
-            to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
-            s.created_at
-          ) < CURRENT_DATE + INTERVAL '1 day'
+          AND CASE WHEN COALESCE(s.payload->>'loginTs', '') ~ '^-?[0-9]+(?:\\.[0-9]+)?$' THEN to_timestamp((s.payload->>'loginTs')::double precision) ELSE s.created_at END >= CURRENT_DATE - ($2::int - 1)
+          AND CASE WHEN COALESCE(s.payload->>'loginTs', '') ~ '^-?[0-9]+(?:\\.[0-9]+)?$' THEN to_timestamp((s.payload->>'loginTs')::double precision) ELSE s.created_at END < CURRENT_DATE + INTERVAL '1 day'
           AND EXISTS (
             SELECT 1
             FROM owned_clients AS c
@@ -2873,14 +2867,8 @@ app.get(
                 ON COALESCE(s.payload->'authorizations', '{}'::jsonb) ? c.client_id
               WHERE s.model_name = 'Session'
                 AND s.payload->>'kind' = 'Session'
-                AND COALESCE(
-                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
-                  s.created_at
-                ) >= CURRENT_DATE - ($2::int - 1)
-                AND COALESCE(
-                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
-                  s.created_at
-                ) < CURRENT_DATE + INTERVAL '1 day'
+                AND CASE WHEN COALESCE(s.payload->>'loginTs', '') ~ '^-?[0-9]+(?:\\.[0-9]+)?$' THEN to_timestamp((s.payload->>'loginTs')::double precision) ELSE s.created_at END >= CURRENT_DATE - ($2::int - 1)
+                AND CASE WHEN COALESCE(s.payload->>'loginTs', '') ~ '^-?[0-9]+(?:\\.[0-9]+)?$' THEN to_timestamp((s.payload->>'loginTs')::double precision) ELSE s.created_at END < CURRENT_DATE + INTERVAL '1 day'
             ),
             success AS (
               SELECT application_id,
@@ -2955,10 +2943,7 @@ app.get(
             ),
             sessions AS (
               SELECT DISTINCT s.id,
-                COALESCE(
-                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
-                  s.created_at
-                ) AS login_at
+                CASE WHEN COALESCE(s.payload->>'loginTs', '') ~ '^-?[0-9]+(?:\\.[0-9]+)?$' THEN to_timestamp((s.payload->>'loginTs')::double precision) ELSE s.created_at END AS login_at
               FROM public.aceid_oidc_store s
               WHERE s.model_name = 'Session'
                 AND s.payload->>'kind' = 'Session'
