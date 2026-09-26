@@ -5008,6 +5008,111 @@ body:has(
 }
 
 /* ─────────────────────────────────────────────
+   Analytics mobile + typography correction
+───────────────────────────────────────────── */
+
+/*
+ * Keep the established AIDC type system explicit here.
+ * The display face is used for editorial headings and
+ * Satoshi remains the UI/data face.
+ */
+.aidc-analytics-page h1,
+.aidc-analytics-page h2,
+.aidc-analytics-page h3{
+  font-family:var(--aidc-font-display);
+  font-weight:400;
+}
+
+.aidc-analytics-page,
+.aidc-analytics-page select,
+.aidc-analytics-page table{
+  font-family:var(--aidc-font-sans);
+}
+
+.aidc-analytics-page .aidc-eyebrow,
+.aidc-analytics-page .aidc-analytics-card-meta{
+  font-family:var(--aidc-font-mono);
+}
+
+.aidc-analytics-metric strong{
+  font-family:var(--aidc-font-sans);
+  font-variant-numeric:tabular-nums;
+}
+
+@media(max-width:760px){
+  /*
+   * The profile control is rendered separately from the
+   * mobile header. Keeping the desktop control visible
+   * creates the duplicated avatar shown on mobile.
+   */
+  .aidc-profile-desktop{
+    display:none;
+  }
+
+  /*
+   * Reserve the full fixed-nav footprint so the last
+   * analytics card can never sit underneath the nav.
+   */
+  .aidc-content{
+    padding-bottom:calc(128px + env(safe-area-inset-bottom));
+  }
+
+  .aidc-mobile-actions{
+    bottom:calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .aidc-analytics-page .aidc-page-header{
+    align-items:stretch;
+    gap:22px;
+    margin-bottom:28px;
+  }
+
+  .aidc-analytics-page .aidc-page-header p{
+    max-width:32rem;
+  }
+
+  .aidc-analytics-range{
+    min-width:0;
+  }
+
+  .aidc-analytics-range select{
+    min-width:0;
+    max-width:none;
+  }
+
+  .aidc-analytics-summary{
+    gap:8px;
+  }
+
+  .aidc-analytics-metric{
+    padding:16px;
+    border-radius:14px;
+  }
+
+  .aidc-analytics-metric strong{
+    font-size:28px;
+  }
+
+  .aidc-analytics-card .aidc-card-section-header{
+    align-items:flex-start;
+  }
+}
+
+@media(max-width:480px){
+  .aidc-content{
+    padding-bottom:calc(128px + env(safe-area-inset-bottom));
+  }
+
+  .aidc-analytics-page h1{
+    font-size:clamp(2.45rem,13vw,3.2rem);
+  }
+
+  .aidc-analytics-page .aidc-card-section-header h2{
+    font-size:24px;
+  }
+}
+
+/* ─────────────────────────────────────────────
    Analytics dashboard refinement
 ───────────────────────────────────────────── */
 .aidc-analytics-summary{
