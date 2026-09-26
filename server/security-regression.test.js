@@ -29,7 +29,7 @@ test("OIDC callback requires a local Ace ID identity", () => {
 
 test("logout remains available when discovery is unavailable", () => {
   const logout = server.match(
-    /app\.get\(["']\/auth\/logout["'][\s\S]*?\n\s*\}\);/
+    /app\.post\(\s*["']\/auth\/logout["'][\s\S]*?\n\s*\}\);/
   )?.[0] ?? "";
   assert.ok(logout.length > 0, "logout route should exist");
   assert.doesNotMatch(logout, /requireDiscovery\s*\(/);
@@ -85,9 +85,17 @@ test("rate limits protect authentication and API traffic", () => {
 });
 
 test("redirect URI listing does not validate an undefined request body value", () => {
-  const route = server.match(
-    /app\.get\(\s*["']\/api\/applications\/:id\/redirect-uris["'][\s\S]*?\n\s*\}\);/
-  )?.[0] ?? "";
+  const start = server.indexOf(
+    'app.get(\n  "/api/applications/:id/redirect-uris"'
+  );
+  const end = server.indexOf(
+    'app.post(\n  "/api/applications/:id/redirect-uris"',
+    start
+  );
+  const route =
+    start >= 0 && end > start
+      ? server.slice(start, end)
+      : "";
   assert.ok(route.length > 0, "redirect URI list route should exist");
   assert.doesNotMatch(route, /validateRedirectUri\(uri/);
   assert.match(route, /SELECT[\s\S]*?FROM public\.redirect_uris/);
