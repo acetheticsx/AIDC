@@ -133,12 +133,24 @@ const OAUTH_ERROR_MESSAGES = {
 /*
  * Supabase PostgreSQL
  */
+const databaseSslRejectUnauthorized =
+  process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false";
+
+const databaseSslCa =
+  typeof process.env.DATABASE_SSL_CA === "string" &&
+  process.env.DATABASE_SSL_CA.trim()
+    ? process.env.DATABASE_SSL_CA
+    : undefined;
+
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: {
-    rejectUnauthorized: true,
-    ...(process.env.DATABASE_SSL_CA
-      ? { ca: process.env.DATABASE_SSL_CA }
+    // Keep certificate verification enabled by default. Render/Supabase
+    // can explicitly opt into encrypted-but-unverified TLS when the
+    // configured CA chain is unavailable.
+    rejectUnauthorized: databaseSslRejectUnauthorized,
+    ...(databaseSslCa
+      ? { ca: databaseSslCa }
       : {})
   },
   max: 10,
