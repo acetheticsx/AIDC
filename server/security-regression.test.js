@@ -12,6 +12,9 @@ const app = await fs.readFile(path.join(here, "..", "app.js"), "utf8");
 const ui = await fs.readFile(path.join(here, "..", "ui.js"), "utf8");
 const helpers = await fs.readFile(path.join(here, "..", "helpers.js"), "utf8");
 const style = await fs.readFile(path.join(here, "..", "style.css"), "utf8");
+const robots = await fs.readFile(path.join(here, "..", "robots.txt"), "utf8");
+const sitemap = await fs.readFile(path.join(here, "..", "sitemap.xml"), "utf8");
+const llms = await fs.readFile(path.join(here, "..", "llms.txt"), "utf8");
 
 test("database TLS verifies certificates", () => {
   assert.match(
