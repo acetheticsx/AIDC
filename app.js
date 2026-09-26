@@ -1549,6 +1549,8 @@ const AIDC = {
 
   activity,
 
+  applicationHealth,
+
   analytics,
 
   playground,
