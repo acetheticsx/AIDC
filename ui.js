@@ -645,6 +645,17 @@ export function registerAIDCComponents(AIDC) {
       await AIDC.analytics.load(days);
     }
 
+    formatHour(hour) {
+      const h = Number(hour);
+      const suffix = h >= 12 ? "PM" : "AM";
+      const display = h % 12 || 12;
+      return `${display} ${suffix}`;
+    }
+
+    formatDateTime(value) {
+      return value ? formatDate(value) : "—";
+    }
+
     renderChart(items) {
       const max = Math.max(1, ...items.map(item => Number(item.count) || 0));
       const points = items.map((item, index) => {
@@ -653,6 +664,7 @@ export function registerAIDCComponents(AIDC) {
         return { ...item, x, y };
       });
       const line = points.map(p => `${p.x},${p.y}`).join(" ");
+
       return html`
         <div class="aidc-analytics-chart">
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
@@ -668,16 +680,38 @@ export function registerAIDCComponents(AIDC) {
       `;
     }
 
+    renderHourly(hourly) {
+      const max = Math.max(1, ...hourly.map(item => Number(item.count) || 0));
+
+      return html`
+        <div class="aidc-analytics-hourly">
+          ${hourly.map(item => html`
+            <div class="aidc-analytics-hour">
+              <div class="aidc-analytics-hour-bar">
+                <span style="height:${Math.max(4, (Number(item.count) / max) * 100)}%"></span>
+              </div>
+              <small>${Number(item.hour) % 3 === 0 ? this.formatHour(item.hour) : ""}</small>
+            </div>
+          `)}
+        </div>
+      `;
+    }
+
     render() {
       const s = state.analytics;
       const items = s.items || [];
+      const applications = s.applications || [];
+      const topUsers = s.topUsers || [];
+      const hourly = s.hourly || [];
+      const successRate = s.successRate == null ? "—" : `${s.successRate}%`;
+
       return html`
         <div class="aidc-page aidc-analytics-page">
           <header class="aidc-page-header">
             <div>
               <span class="aidc-eyebrow">AIDC</span>
               <h1>Analytics</h1>
-              <p>Authentication activity across your applications.</p>
+              <p>Authentication, users, applications, and security activity in one place.</p>
             </div>
             <label class="aidc-analytics-range">
               <span>Range</span>
@@ -689,40 +723,143 @@ export function registerAIDCComponents(AIDC) {
             </label>
           </header>
 
+          ${s.error
+            ? html`
+                <section class="aidc-card aidc-analytics-alert">
+                  ${icon("alert-02")}
+                  <div><strong>Analytics unavailable</strong><p>${s.error}</p></div>
+                </section>
+              `
+            : ""}
+
           <section class="aidc-analytics-summary">
             <article class="aidc-analytics-metric">
               <span>Logins</span>
               <strong>${s.total}</strong>
               <small>successful OIDC sessions</small>
             </article>
-
             <article class="aidc-analytics-metric">
-              <span>Unique users</span>
-              <strong>${s.uniqueUsers}</strong>
-              <small>distinct Ace ID accounts</small>
+              <span>Active users</span>
+              <strong>${s.activeUsers || s.uniqueUsers}</strong>
+              <small>distinct accounts in range</small>
             </article>
-
-            <article class="aidc-analytics-metric aidc-analytics-metric-warning">
-              <span>Failed attempts</span>
-              <strong>${s.failedAttempts}</strong>
-              <small>unsuccessful OIDC logins</small>
+            <article class="aidc-analytics-metric">
+              <span>Success rate</span>
+              <strong>${successRate}</strong>
+              <small>${s.failedAttempts} failed attempts</small>
+            </article>
+            <article class="aidc-analytics-metric">
+              <span>Peak day</span>
+              <strong>${s.peakDay?.count || 0}</strong>
+              <small>${s.peakDay?.date || "No activity"}</small>
             </article>
           </section>
 
           <section class="aidc-card aidc-analytics-card">
             <header class="aidc-card-section-header">
-              <h2>Authentication activity</h2>
-              <p>Successful OIDC sessions and failed sign-in attempts across your applications.</p>
+              <div>
+                <h2>Authentication trend</h2>
+                <p>Successful sessions across your applications.</p>
+              </div>
+              <span class="aidc-analytics-card-meta">${s.days} days</span>
             </header>
             ${s.loading
               ? html`<div class="aidc-loading-card aidc-skeleton-card" aria-busy="true"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-chart"></div></div>`
-              : s.error
-                ? emptyState({ iconName: "chart-02", title: "Analytics unavailable", description: s.error })
-                : items.length
-                  ? this.renderChart(items)
-                  : emptyState({ iconName: "chart-02", title: "No login activity yet", description: "Login activity will appear here when users authenticate through your applications." })
-            }
+              : items.length
+                ? this.renderChart(items)
+                : emptyState({ iconName: "chart-02", title: "No login activity yet", description: "Login activity will appear here when users authenticate through your applications." })}
           </section>
+
+          <div class="aidc-analytics-grid">
+            <section class="aidc-card">
+              <header class="aidc-card-section-header">
+                <div><h2>Application performance</h2><p>Authentication volume and reliability by application.</p></div>
+              </header>
+              ${applications.length
+                ? html`
+                    <div class="aidc-analytics-table-wrap">
+                      <table class="aidc-analytics-table">
+                        <thead><tr><th>Application</th><th>Logins</th><th>Users</th><th>Failed</th><th>Success</th></tr></thead>
+                        <tbody>
+                          ${applications.map(app => html`
+                            <tr>
+                              <td><strong>${app.name}</strong></td>
+                              <td>${app.logins}</td>
+                              <td>${app.uniqueUsers}</td>
+                              <td>${app.failedAttempts}</td>
+                              <td>${app.successRate == null ? "—" : `${app.successRate}%`}</td>
+                            </tr>
+                          `)}
+                        </tbody>
+                      </table>
+                    </div>
+                  `
+                : emptyState({ iconName: "app-window", title: "No application activity", description: "Application-level metrics will appear here." })}
+            </section>
+
+            <section class="aidc-card">
+              <header class="aidc-card-section-header">
+                <div><h2>Activity by hour</h2><p>When users authenticate most often.</p></div>
+              </header>
+              ${hourly.length ? this.renderHourly(hourly) : emptyState({ iconName: "clock-01", title: "No hourly data", description: "Hourly authentication data will appear here." })}
+            </section>
+          </div>
+
+          <div class="aidc-analytics-grid">
+            <section class="aidc-card">
+              <header class="aidc-card-section-header">
+                <div><h2>Most active users</h2><p>Accounts with the most successful sessions in this range.</p></div>
+              </header>
+              ${topUsers.length
+                ? html`
+                    <div class="aidc-analytics-users">
+                      ${topUsers.map(user => html`
+                        <div class="aidc-analytics-user">
+                          <div class="aidc-analytics-user-avatar">
+                            ${user.avatarUrl
+                              ? html`<img src="${user.avatarUrl}" alt="" loading="lazy">`
+                              : icon("user-circle")}
+                          </div>
+                          <div class="aidc-analytics-user-copy">
+                            <strong>${user.displayName || user.username || user.email || user.id}</strong>
+                            <span>${user.email || user.username || user.id}</span>
+                          </div>
+                          <div class="aidc-analytics-user-stat">
+                            <strong>${user.logins}</strong>
+                            <span>logins</span>
+                          </div>
+                        </div>
+                      `)}
+                    </div>
+                  `
+                : emptyState({ iconName: "user-group", title: "No active users", description: "User activity will appear here after authentication." })}
+            </section>
+
+            <section class="aidc-card">
+              <header class="aidc-card-section-header">
+                <div><h2>Daily breakdown</h2><p>Logins, unique users, and failed attempts.</p></div>
+              </header>
+              ${items.length
+                ? html`
+                    <div class="aidc-analytics-table-wrap">
+                      <table class="aidc-analytics-table">
+                        <thead><tr><th>Date</th><th>Logins</th><th>Users</th><th>Failed</th></tr></thead>
+                        <tbody>
+                          ${items.map(item => html`
+                            <tr>
+                              <td>${item.date}</td>
+                              <td>${item.count}</td>
+                              <td>${item.uniqueUsers}</td>
+                              <td>${item.failedAttempts}</td>
+                            </tr>
+                          `)}
+                        </tbody>
+                      </table>
+                    </div>
+                  `
+                : emptyState({ iconName: "calendar-01", title: "No daily data", description: "Daily authentication data will appear here." })}
+            </section>
+          </div>
         </div>
       `;
     }
