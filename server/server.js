@@ -83,6 +83,22 @@ try {
 const IS_PRODUCTION =
   new URL(PUBLIC_ORIGIN_VALUE).protocol === "https:";
 
+const TRUST_PROXY_HOPS = Number.parseInt(
+  process.env.AIDC_TRUST_PROXY_HOPS || "0",
+  10
+);
+
+if (
+  !Number.isInteger(TRUST_PROXY_HOPS) ||
+  TRUST_PROXY_HOPS < 0 ||
+  TRUST_PROXY_HOPS > 5
+) {
+  console.error(
+    "Invalid AIDC_TRUST_PROXY_HOPS. Use an integer from 0 to 5."
+  );
+  process.exit(1);
+}
+
 const SESSION_COOKIE = "aidc_session";
 const CSRF_COOKIE = "aidc_csrf";
 const OAUTH_STATE_COOKIE = "aidc_oauth_state";
@@ -265,6 +281,7 @@ setInterval(
  * Middleware
  */
 app.disable("x-powered-by");
+app.set("trust proxy", TRUST_PROXY_HOPS);
 
 app.use((req, res, next) => {
   res.set({
@@ -283,11 +300,79 @@ app.use((req, res, next) => {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Permissions-Policy":
-      "camera=(), microphone=(), geolocation=(), payment=()"
+      "camera=(), microphone=(), geolocation=(), payment=()",
+    "Cache-Control": "no-store",
+    ...(IS_PRODUCTION
+      ? {
+          "Strict-Transport-Security":
+            "max-age=31536000; includeSubDomains"
+        }
+      : {})
   });
 
   next();
 });
+
+const rateLimitBuckets = new Map();
+
+function rateLimit({
+  windowMs = 60_000,
+  max = 120
+} = {}) {
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = req.ip || req.socket.remoteAddress || "unknown";
+    const current = rateLimitBuckets.get(key);
+
+    if (!current || current.resetAt <= now) {
+      rateLimitBuckets.set(key, {
+        count: 1,
+        resetAt: now + windowMs
+      });
+      return next();
+    }
+
+    current.count += 1;
+
+    if (current.count > max) {
+      const retryAfter = Math.max(
+        1,
+        Math.ceil((current.resetAt - now) / 1000)
+      );
+
+      res.set("Retry-After", String(retryAfter));
+      return res
+        .status(429)
+        .json({ error: "Too many requests. Try again later." });
+    }
+
+    return next();
+  };
+}
+
+setInterval(() => {
+  const now = Date.now();
+
+  for (const [key, bucket] of rateLimitBuckets) {
+    if (bucket.resetAt <= now) {
+      rateLimitBuckets.delete(key);
+    }
+  }
+
+  if (rateLimitBuckets.size > 10_000) {
+    rateLimitBuckets.clear();
+  }
+}, 5 * 60_000).unref();
+
+app.use(
+  ["/auth/login", "/auth/callback"],
+  rateLimit({ windowMs: 10 * 60_000, max: 20 })
+);
+
+app.use(
+  "/api",
+  rateLimit({ windowMs: 60_000, max: 120 })
+);
 
 app.use(express.json({ limit: "1mb" }));
 
