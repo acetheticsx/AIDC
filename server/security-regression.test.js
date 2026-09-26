@@ -84,6 +84,26 @@ test("rate limits protect authentication and API traffic", () => {
   assert.match(server, /status\(429\)/);
 });
 
+test("redirect URI listing does not validate an undefined request body value", () => {
+  const route = server.match(
+    /app\.get\(\s*["']\/api\/applications\/:id\/redirect-uris["'][\s\S]*?\n\s*\}\);/
+  )?.[0] ?? "";
+  assert.ok(route.length > 0, "redirect URI list route should exist");
+  assert.doesNotMatch(route, /validateRedirectUri\(uri/);
+  assert.match(route, /SELECT[\s\S]*?FROM public\.redirect_uris/);
+});
+
+test("analytics ignores malformed login timestamps", () => {
+  assert.match(
+    server,
+    /COALESCE\(s\.payload->>'loginTs', ''\) ~/
+  );
+  assert.match(
+    server,
+    /THEN to_timestamp\(\(s\.payload->>'loginTs'\)::double precision\)/
+  );
+});
+
 test("frontend uses the first-party boot fallback", () => {
   assert.match(index, /<script src=["']\/boot-fallback\.js["'] defer><\/script>/);
   assert.doesNotMatch(index, /setTimeout\(function \(\) \{[\s\S]*Failed to load AIDC/);
