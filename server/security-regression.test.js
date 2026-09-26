@@ -63,6 +63,27 @@ test("application lookup no longer falls back to a broad list request", () => {
   );
 });
 
+test("security headers remain restrictive", () => {
+  assert.doesNotMatch(server, /connect-src ['"]self['"] https:/);
+  assert.match(server, /frame-ancestors ['"]none['"]/);
+  assert.match(server, /object-src ['"]none['"]/);
+  assert.match(server, /base-uri ['"]self['"]/);
+  assert.match(server, /Strict-Transport-Security/);
+});
+
+test("proxy trust is explicit and bounded", () => {
+  assert.match(server, /AIDC_TRUST_PROXY_HOPS/);
+  assert.match(server, /TRUST_PROXY_HOPS > 5/);
+  assert.match(server, /app\.set\(["']trust proxy["'], TRUST_PROXY_HOPS\)/);
+});
+
+test("rate limits protect authentication and API traffic", () => {
+  assert.match(server, /\/auth\/login/);
+  assert.match(server, /\/auth\/callback/);
+  assert.match(server, /rateLimit\(\{ windowMs: 60 \* 60_000, max: 120 \}\)/);
+  assert.match(server, /status\(429\)/);
+});
+
 test("frontend uses the first-party boot fallback", () => {
   assert.match(index, /<script src=["']\/boot-fallback\.js["'] defer><\/script>/);
   assert.doesNotMatch(index, /setTimeout\(function \(\) \{[\s\S]*Failed to load AIDC/);
