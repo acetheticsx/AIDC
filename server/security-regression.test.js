@@ -154,3 +154,30 @@ test("analytics keeps existing ranges and adds insight presentation", () => {
   assert.match(ui, /const busiestHour = hourly\.reduce/);
   assert.match(ui, /aidc-analytics-insights/);
 });
+
+
+test("public search metadata uses a coherent entity graph", () => {
+  assert.match(index, /"@type": "Organization"/);
+  assert.match(index, /"@type": "WebSite"/);
+  assert.match(index, /"@type": "WebPage"/);
+  assert.match(index, /"@type": "WebApplication"/);
+  assert.match(index, /https:\/\/console\.ace-base\.cc\/#application/);
+  assert.match(index, /"featureList": \[/);
+  assert.match(index, /"applicationCategory": "DeveloperApplication"/);
+  assert.match(index, /"canonical"/);
+});
+
+test("crawl controls keep authenticated and API routes out of search", () => {
+  assert.match(robots, /Disallow: \/api\//);
+  assert.match(robots, /Disallow: \/auth\//);
+  assert.match(server, /"X-Robots-Tag"/);
+  assert.match(server, /noindex, nofollow, noarchive/);
+  assert.match(server, /app\.get\("\/sitemap\.xml"/);
+});
+
+test("public machine-readable product summary is present", () => {
+  assert.match(sitemap, /<loc>https:\/\/console\.ace-base\.cc<\/loc>/);
+  assert.match(llms, /AIDC is the Ace Base Identity Developer Console/);
+  assert.match(llms, /OAuth 2\.0 configuration/);
+  assert.match(llms, /OpenID Connect configuration/);
+});
