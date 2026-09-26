@@ -1668,8 +1668,8 @@ app.patch(
           cross_app_scopes = CASE WHEN $9::boolean THEN $10 ELSE cross_app_scopes END,
           status = CASE WHEN $11::boolean THEN $12 ELSE status END,
           updated_at = now()
-        WHERE id = $7
-          AND owner_id = $8
+        WHERE id = $13
+          AND owner_id = $14
         RETURNING
           id,
           name,
