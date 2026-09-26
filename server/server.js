@@ -291,7 +291,7 @@ app.use((req, res, next) => {
       "style-src 'self' https://use.hugeicons.com; " +
       "font-src 'self' https://use.hugeicons.com https://fonts.gstatic.com data:; " +
       "img-src 'self' https: data:; " +
-      "connect-src 'self' https:; " +
+      "connect-src 'self'; " +
       "frame-ancestors 'none'; " +
       "base-uri 'self'; " +
       "object-src 'none'; " +
@@ -301,7 +301,6 @@ app.use((req, res, next) => {
     "X-Frame-Options": "DENY",
     "Permissions-Policy":
       "camera=(), microphone=(), geolocation=(), payment=()",
-    "Cache-Control": "no-store",
     ...(IS_PRODUCTION
       ? {
           "Strict-Transport-Security":
