@@ -2858,11 +2858,200 @@ app.get(
       const uniqueUsers =
         Number(uniqueUsersResult.rows[0]?.count) || 0;
 
+      const [applicationResult, topUsersResult, hourlyResult] =
+        await Promise.all([
+          pool.query(
+            `
+            WITH owned_clients AS (
+              SELECT id, name, client_id
+              FROM public.applications
+              WHERE owner_id = $1
+            ),
+            sessions AS (
+              SELECT DISTINCT s.id,
+                COALESCE(
+                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
+                  s.created_at
+                ) AS login_at,
+                NULLIF(s.payload->>'accountId', '') AS account_id,
+                c.id AS application_id
+              FROM public.aceid_oidc_store s
+              JOIN owned_clients c
+                ON COALESCE(s.payload->'authorizations', '{}'::jsonb) ? c.client_id
+              WHERE s.model_name = 'Session'
+                AND s.payload->>'kind' = 'Session'
+                AND COALESCE(
+                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
+                  s.created_at
+                ) >= CURRENT_DATE - ($2::int - 1)
+                AND COALESCE(
+                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
+                  s.created_at
+                ) < CURRENT_DATE + INTERVAL '1 day'
+            ),
+            success AS (
+              SELECT application_id,
+                COUNT(*)::int AS logins,
+                COUNT(DISTINCT account_id)::int AS unique_users
+              FROM sessions
+              GROUP BY application_id
+            ),
+            failures AS (
+              SELECT c.id AS application_id, COUNT(*)::int AS failed_attempts
+              FROM public.aceid_auth_events e
+              JOIN owned_clients c ON c.client_id = e.client_id
+              WHERE e.event_type = 'login_failed'
+                AND e.created_at >= CURRENT_DATE - ($2::int - 1)
+                AND e.created_at < CURRENT_DATE + INTERVAL '1 day'
+              GROUP BY c.id
+            )
+            SELECT c.id, c.name,
+              COALESCE(s.logins, 0)::int AS logins,
+              COALESCE(s.unique_users, 0)::int AS unique_users,
+              COALESCE(f.failed_attempts, 0)::int AS failed_attempts
+            FROM owned_clients c
+            LEFT JOIN success s ON s.application_id = c.id
+            LEFT JOIN failures f ON f.application_id = c.id
+            ORDER BY logins DESC, c.name ASC
+            `,
+            [req.developer.id, days]
+          ),
+          pool.query(
+            `
+            WITH owned_clients AS (
+              SELECT client_id
+              FROM public.applications
+              WHERE owner_id = $1
+            ),
+            sessions AS (
+              SELECT DISTINCT s.id,
+                COALESCE(
+                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
+                  s.created_at
+                ) AS login_at,
+                NULLIF(s.payload->>'accountId', '') AS account_id
+              FROM public.aceid_oidc_store s
+              WHERE s.model_name = 'Session'
+                AND s.payload->>'kind' = 'Session'
+                AND EXISTS (
+                  SELECT 1 FROM owned_clients c
+                  WHERE COALESCE(s.payload->'authorizations', '{}'::jsonb) ? c.client_id
+                )
+            )
+            SELECT u.id, u.email, u.display_name, u.username, u.avatar_url,
+              COUNT(*)::int AS logins,
+              MIN(s.login_at) AS first_seen,
+              MAX(s.login_at) AS last_seen
+            FROM sessions s
+            JOIN public.aceid_users u ON u.id::text = s.account_id
+            WHERE s.login_at >= CURRENT_DATE - ($2::int - 1)
+              AND s.login_at < CURRENT_DATE + INTERVAL '1 day'
+            GROUP BY u.id, u.email, u.display_name, u.username, u.avatar_url
+            ORDER BY logins DESC, last_seen DESC
+            LIMIT 10
+            `,
+            [req.developer.id, days]
+          ),
+          pool.query(
+            `
+            WITH owned_clients AS (
+              SELECT client_id
+              FROM public.applications
+              WHERE owner_id = $1
+            ),
+            sessions AS (
+              SELECT DISTINCT s.id,
+                COALESCE(
+                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
+                  s.created_at
+                ) AS login_at
+              FROM public.aceid_oidc_store s
+              WHERE s.model_name = 'Session'
+                AND s.payload->>'kind' = 'Session'
+                AND EXISTS (
+                  SELECT 1 FROM owned_clients c
+                  WHERE COALESCE(s.payload->'authorizations', '{}'::jsonb) ? c.client_id
+                )
+            )
+            SELECT EXTRACT(HOUR FROM login_at)::int AS hour,
+              COUNT(*)::int AS count
+            FROM sessions
+            WHERE login_at >= CURRENT_DATE - ($2::int - 1)
+              AND login_at < CURRENT_DATE + INTERVAL '1 day'
+            GROUP BY 1
+            ORDER BY 1
+            `,
+            [req.developer.id, days]
+          )
+        ]);
+
+      const applications = applicationResult.rows.map(row => {
+        const logins = Number(row.logins) || 0;
+        const failed = Number(row.failed_attempts) || 0;
+
+        return {
+          id: row.id,
+          name: row.name,
+          logins,
+          uniqueUsers: Number(row.unique_users) || 0,
+          failedAttempts: failed,
+          successRate: logins + failed
+            ? Math.round((logins / (logins + failed)) * 1000) / 10
+            : null
+        };
+      });
+
+      const topUsers = topUsersResult.rows.map(row => ({
+        id: row.id,
+        email: row.email,
+        displayName: row.display_name,
+        username: row.username,
+        avatarUrl: row.avatar_url,
+        logins: Number(row.logins) || 0,
+        firstSeen: row.first_seen,
+        lastSeen: row.last_seen
+      }));
+
+      const hourly = Array.from(
+        { length: 24 },
+        (_, hour) => ({ hour, count: 0 })
+      );
+
+      for (const row of hourlyResult.rows) {
+        const hour = Number(row.hour);
+
+        if (hour >= 0 && hour < 24) {
+          hourly[hour].count = Number(row.count) || 0;
+        }
+      }
+
+      const peakDay = items.reduce(
+        (peak, item) =>
+          item.count > (peak?.count ?? -1) ? item : peak,
+        null
+      );
+
       res.json({
         days,
         total,
         uniqueUsers,
         failedAttempts,
+        successRate:
+          total + failedAttempts
+            ? Math.round(
+                (total / (total + failedAttempts)) * 1000
+              ) / 10
+            : null,
+        activeUsers: uniqueUsers,
+        peakDay: peakDay
+          ? {
+              date: peakDay.date,
+              count: peakDay.count
+            }
+          : null,
+        applications,
+        topUsers,
+        hourly,
         items
       });
     } catch (error) {
