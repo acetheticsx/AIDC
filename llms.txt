@@ -1,0 +1,34 @@
+# AIDC
+
+> AIDC is the Ace Base Identity Developer Console.
+
+## About
+
+AIDC is a web developer console for creating and managing Ace Base Identity applications and configuring OAuth 2.0 and OpenID Connect integrations.
+
+## Capabilities
+
+- Identity application management
+- OAuth 2.0 configuration
+- OpenID Connect configuration
+- PKCE configuration
+- Redirect URI management and diagnostics
+- OAuth scope management
+- Client credential management
+- Application branding
+- Authentication analytics
+- Application activity and audit events
+
+## Public resources
+
+- Website: https://console.ace-base.cc/
+- Ace Base: https://ace-base.cc/
+- Documentation: https://docs.ace-base.cc/
+
+## Search and indexing
+
+The public landing page is the canonical source for product information. Authenticated console routes and API endpoints are not public documentation.
+
+## Terminology
+
+AIDC means Ace Identity Developer Console. Ace ID is the identity service used by AIDC.
