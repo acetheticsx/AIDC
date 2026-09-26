@@ -2079,56 +2079,59 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                     <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading redirect URIs"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-row"></div><div class="aidc-skeleton aidc-skeleton-row short"></div><div class="aidc-skeleton aidc-skeleton-row"></div></div>
                   `
                 : items.length
-                  ? items.map(
-                      item => html`
-                        <div
-                          class="aidc-detail-field"
-                        >
+                  ? html`
+                      <div class="aidc-redirect-diagnostics">
+                        ${items.map(item => {
+                          const diagnostic = diagnoseRedirectUri(
+                            item.uri,
+                            application?.application_type || "web",
+                            application?.origin_url || ""
+                          );
 
-                          <span>
-                            Redirect URI
-                          </span>
+                          return html`
+                            <div class="aidc-redirect-item">
+                              <div class="aidc-redirect-item-head">
+                                <span class="aidc-redirect-state ${diagnostic.severity}">
+                                  ${icon(diagnostic.severity === "success" ? "checkmark-circle-02" : "alert-02")}
+                                  ${diagnostic.label}
+                                </span>
+                                <span class="aidc-redirect-type">
+                                  ${application?.application_type === "native" ? "Native" : "Web"}
+                                </span>
+                              </div>
 
-                          <div
-                            class="aidc-copy-field"
-                          >
+                              <div class="aidc-detail-field">
+                                <span>Redirect URI</span>
+                                <div class="aidc-copy-field">
+                                  <code class="aidc-mono">${item.uri}</code>
+                                  <button
+                                    class="aidc-icon-button"
+                                    title="Copy URI"
+                                    aria-label="Copy redirect URI"
+                                    @click=${() => this.copyUri(item.uri)}
+                                  >
+                                    ${icon("copy-01")}
+                                  </button>
+                                  <button
+                                    class="aidc-icon-button"
+                                    title="Delete URI"
+                                    aria-label="Delete redirect URI"
+                                    @click=${() => this.removeUri(item)}
+                                  >
+                                    ${icon("delete-02")}
+                                  </button>
+                                </div>
+                              </div>
 
-                            <code
-                              class="aidc-mono"
-                            >
-                              ${item.uri}
-                            </code>
-
-                            <button
-                              class="aidc-icon-button"
-                              title="Copy URI"
-                              aria-label="Copy redirect URI"
-                              @click=${() =>
-                                this.copyUri(
-                                  item.uri
-                                )}
-                            >
-                              ${icon("copy-01")}
-                            </button>
-
-                            <button
-                              class="aidc-icon-button"
-                              title="Delete URI"
-                              aria-label="Delete redirect URI"
-                              @click=${() =>
-                                this.removeUri(
-                                  item
-                                )}
-                            >
-                              ${icon("delete-02")}
-                            </button>
-
-                          </div>
-
-                        </div>
-                      `
-                    )
-                  : emptyState({
+                              <p class="aidc-redirect-diagnostic-copy">
+                                ${diagnostic.message}
+                              </p>
+                            </div>
+                          `;
+                        })}
+                      </div>
+                    `
+                                    : emptyState({
                       iconName:
                         "link-01",
                       title:
