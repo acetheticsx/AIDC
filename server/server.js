@@ -1899,15 +1899,6 @@ app.get(
         });
       }
 
-      const applicationType = application.rows[0]?.application_type || "web";
-      const validation = validateRedirectUri(uri, { applicationType });
-
-      if (!validation.valid) {
-        return res.status(400).json({
-          error: validation.error
-        });
-      }
-
       const result = await pool.query(
         `
         SELECT
@@ -2735,10 +2726,11 @@ app.get(
         oidc_logins AS (
           SELECT DISTINCT
             s.id,
-            COALESCE(
-              to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
-              s.created_at
-            ) AS login_at,
+            CASE
+              WHEN COALESCE(s.payload->>'loginTs', '') ~ '^-?[0-9]+(?:\\.[0-9]+)?$'
+                THEN to_timestamp((s.payload->>'loginTs')::double precision)
+              ELSE s.created_at
+            END AS login_at,
             NULLIF(s.payload->>'accountId', '') AS account_id
           FROM public.aceid_oidc_store AS s
           WHERE s.model_name = 'Session'
@@ -2869,10 +2861,11 @@ app.get(
             ),
             sessions AS (
               SELECT DISTINCT s.id,
-                COALESCE(
-                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
-                  s.created_at
-                ) AS login_at,
+                CASE
+              WHEN COALESCE(s.payload->>'loginTs', '') ~ '^-?[0-9]+(?:\\.[0-9]+)?$'
+                THEN to_timestamp((s.payload->>'loginTs')::double precision)
+              ELSE s.created_at
+            END AS login_at,
                 NULLIF(s.payload->>'accountId', '') AS account_id,
                 c.id AS application_id
               FROM public.aceid_oidc_store s
@@ -2925,10 +2918,11 @@ app.get(
             ),
             sessions AS (
               SELECT DISTINCT s.id,
-                COALESCE(
-                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
-                  s.created_at
-                ) AS login_at,
+                CASE
+              WHEN COALESCE(s.payload->>'loginTs', '') ~ '^-?[0-9]+(?:\\.[0-9]+)?$'
+                THEN to_timestamp((s.payload->>'loginTs')::double precision)
+              ELSE s.created_at
+            END AS login_at,
                 NULLIF(s.payload->>'accountId', '') AS account_id
               FROM public.aceid_oidc_store s
               WHERE s.model_name = 'Session'
