@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /auth/
+Disallow: /applications/
+Disallow: /analytics
 
 Sitemap: https://console.ace-base.cc/sitemap.xml
