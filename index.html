@@ -5,36 +5,109 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light">
-  <meta name="description" content="AIDC is The Ace Base developer console for registering applications and configuring OAuth 2.0, OpenID Connect, redirects, scopes, credentials, branding, and activity.">
+  <meta name="description" content="AIDC is the Ace Base developer console for managing identity applications, OAuth 2.0, OpenID Connect, PKCE, redirect URIs, scopes, credentials, branding, and authentication activity.">
   <meta name="application-name" content="AIDC">
-  <meta name="keywords" content="AIDC, Ace Base Identity Developer Console, OAuth 2.0, OpenID Connect, OIDC, developer portal, identity platform, application authentication, PKCE">
+  <meta name="author" content="The Ace Base">
+  <meta name="theme-color" content="#111111">
+  <meta name="keywords" content="AIDC, Ace Identity Developer Console, Ace Base, OAuth 2.0, OpenID Connect, OIDC, PKCE, identity developer console, authentication developer portal, redirect URI, client credentials">
   <link rel="canonical" href="https://console.ace-base.cc/">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="AIDC | Ace Base Developer Console">
-  <meta property="og:description" content="Developer console for Ace Base Identity applications, OAuth, OpenID Connect, credentials, redirects, scopes, and branding.">
+  <meta property="og:site_name" content="Ace Base">
+  <meta property="og:title" content="AIDC | Ace Base Identity Developer Console">
+  <meta property="og:description" content="Manage Ace Base Identity applications, OAuth 2.0, OpenID Connect, PKCE, redirect URIs, scopes, credentials, branding, and authentication activity.">
   <meta property="og:url" content="https://console.ace-base.cc/">
   <meta property="og:image" content="https://console.ace-base.cc/assets/icon.png">
+  <meta property="og:image:alt" content="AIDC logo">
+  <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="AIDC | Ace Base Developer Console">
-  <meta name="twitter:description" content="Manage Ace Base Identity applications and OAuth/OIDC configuration.">
+  <meta name="twitter:title" content="AIDC | Ace Base Identity Developer Console">
+  <meta name="twitter:description" content="Manage Ace Base Identity applications and OAuth/OIDC configuration from one developer console.">
+  <meta name="twitter:image" content="https://console.ace-base.cc/assets/icon.png">
+  <meta name="twitter:image:alt" content="AIDC logo">
   <meta name="referrer" content="strict-origin-when-cross-origin">
 
   <title>AIDC | Ace Base Developer Console</title>
 
   <script type="application/ld+json">
   {
-    "@context":"https://schema.org",
-    "@type":"WebApplication",
-    "name":"AIDC",
-    "url":"https://console.ace-base.cc/",
-    "description":"The Ace Base developer console for Identity applications, OAuth, OpenID Connect, credentials, redirects, scopes, and branding.",
-    "applicationCategory":"DeveloperApplication",
-    "operatingSystem":"Web Browser",
-    "publisher":{
-      "@type":"Organization",
-      "name":"The Ace Base",
-      "url":"https://ace-base.cc/"
-    }
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://ace-base.cc/#organization",
+        "name": "The Ace Base",
+        "url": "https://ace-base.cc/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://console.ace-base.cc/assets/icon.png"
+        },
+        "sameAs": [
+          "https://ace-base.cc/"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://console.ace-base.cc/#website",
+        "url": "https://console.ace-base.cc/",
+        "name": "AIDC",
+        "alternateName": "Ace Base Identity Developer Console",
+        "description": "The Ace Base developer console for managing identity applications and OAuth 2.0 and OpenID Connect configuration.",
+        "publisher": {
+          "@id": "https://ace-base.cc/#organization"
+        },
+        "inLanguage": "en"
+      },
+      {
+        "@type": "WebPage",
+        "@id": "https://console.ace-base.cc/#webpage",
+        "url": "https://console.ace-base.cc/",
+        "name": "AIDC | Ace Base Identity Developer Console",
+        "description": "Manage Ace Base Identity applications, OAuth 2.0, OpenID Connect, PKCE, redirect URIs, scopes, credentials, branding, and authentication activity.",
+        "isPartOf": {
+          "@id": "https://console.ace-base.cc/#website"
+        },
+        "about": {
+          "@id": "https://console.ace-base.cc/#application"
+        },
+        "mainEntity": {
+          "@id": "https://console.ace-base.cc/#application"
+        },
+        "inLanguage": "en"
+      },
+      {
+        "@type": "WebApplication",
+        "@id": "https://console.ace-base.cc/#application",
+        "name": "AIDC",
+        "alternateName": "Ace Base Identity Developer Console",
+        "url": "https://console.ace-base.cc/",
+        "description": "A web developer console for creating and managing Ace Base Identity applications and configuring OAuth 2.0, OpenID Connect, PKCE, redirect URIs, scopes, client credentials, branding, and authentication activity.",
+        "applicationCategory": "DeveloperApplication",
+        "applicationSubCategory": "Identity and Access Management",
+        "operatingSystem": "Web Browser",
+        "browserRequirements": "Requires JavaScript and a modern web browser.",
+        "featureList": [
+          "Identity application management",
+          "OAuth 2.0 configuration",
+          "OpenID Connect configuration",
+          "PKCE configuration",
+          "Redirect URI management",
+          "OAuth scope management",
+          "Client credential management",
+          "Application branding",
+          "Authentication analytics",
+          "Application activity and audit events"
+        ],
+        "publisher": {
+          "@id": "https://ace-base.cc/#organization"
+        },
+        "isPartOf": {
+          "@id": "https://console.ace-base.cc/#website"
+        },
+        "mainEntityOfPage": {
+          "@id": "https://console.ace-base.cc/#webpage"
+        }
+      }
+    ]
   }
   </script>
 
