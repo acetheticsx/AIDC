@@ -8,6 +8,10 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const server = await fs.readFile(path.join(here, "server.js"), "utf8");
 const index = await fs.readFile(path.join(here, "..", "index.html"), "utf8");
 const api = await fs.readFile(path.join(here, "..", "api.js"), "utf8");
+const app = await fs.readFile(path.join(here, "..", "app.js"), "utf8");
+const ui = await fs.readFile(path.join(here, "..", "ui.js"), "utf8");
+const helpers = await fs.readFile(path.join(here, "..", "helpers.js"), "utf8");
+const style = await fs.readFile(path.join(here, "..", "style.css"), "utf8");
 
 test("database TLS verifies certificates", () => {
   assert.match(
@@ -119,4 +123,34 @@ test("analytics ignores malformed login timestamps", () => {
 test("frontend uses the first-party boot fallback", () => {
   assert.match(index, /<script src=["']\/boot-fallback\.js["'] defer><\/script>/);
   assert.doesNotMatch(index, /setTimeout\(function \(\) \{[\s\S]*Failed to load AIDC/);
+});
+
+
+test("application health checks reuse authenticated configuration endpoints", () => {
+  assert.match(app, /const applicationHealth = \{/);
+  assert.match(app, /api\.redirectUris\.list\(applicationId\)/);
+  assert.match(app, /api\.credentials\.list\(applicationId\)/);
+  assert.match(app, /api\.scopes\.list\(applicationId\)/);
+  assert.match(app, /Promise\.allSettled/);
+  assert.match(app, /activeCredentials/);
+});
+
+test("redirect URI diagnostics reuse the same validation rules", () => {
+  assert.match(helpers, /export function diagnoseRedirectUri/);
+  assert.match(helpers, /validateRedirectUri\(value, applicationType\)/);
+  assert.match(ui, /diagnoseRedirectUri\(/);
+  assert.match(ui, /aidc-redirect-diagnostics/);
+});
+
+test("mobile navigation exposes applications without changing desktop routes", () => {
+  assert.match(ui, /class="aidc-mobile-nav-item.*href="#\/applications"/);
+  assert.match(ui, /class="aidc-mobile-menu"/);
+  assert.match(style, /\.aidc-mobile-menu/);
+  assert.match(style, /grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+});
+
+test("analytics keeps existing ranges and adds insight presentation", () => {
+  assert.match(ui, /\[7, 14, 30\]/);
+  assert.match(ui, /const busiestHour = hourly\.reduce/);
+  assert.match(ui, /aidc-analytics-insights/);
 });

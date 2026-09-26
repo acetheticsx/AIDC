@@ -102,6 +102,75 @@ export function emptyState({
   `;
 }
 
+export function diagnoseRedirectUri(value, applicationType = "web", originUrl = "") {
+  const validation = validateRedirectUri(value, applicationType);
+
+  if (!validation.valid) {
+    return {
+      valid: false,
+      severity: "error",
+      label: "Needs attention",
+      message: validation.error
+    };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(validation.value);
+  } catch {
+    return {
+      valid: false,
+      severity: "error",
+      label: "Needs attention",
+      message: "Enter a valid redirect URI."
+    };
+  }
+
+  const details = [];
+  let label = "Ready";
+  let severity = "success";
+
+  if (applicationType === "native") {
+    if (parsed.protocol === "http:") {
+      label = "Loopback only";
+      severity = "warning";
+      details.push("HTTP is limited to local loopback development.");
+    } else if (parsed.protocol === "https:") {
+      details.push("HTTPS redirect is suitable for a native client.");
+    } else {
+      label = "Custom scheme";
+      details.push("Reverse-domain custom scheme is configured for this native client.");
+    }
+  } else if (parsed.protocol === "http:") {
+    label = "Local development";
+    severity = "warning";
+    details.push("HTTP redirects are limited to localhost development.");
+  } else {
+    details.push("HTTPS redirect is ready for production use.");
+  }
+
+  if (originUrl && parsed.protocol.startsWith("http")) {
+    try {
+      const origin = new URL(originUrl);
+      if (origin.origin !== parsed.origin) {
+        label = "Review origin";
+        severity = severity === "error" ? severity : "warning";
+        details.push("This callback origin differs from the application's Origin URL.");
+      }
+    } catch {
+      // The application origin is validated by the server.
+    }
+  }
+
+  return {
+    valid: true,
+    severity,
+    label,
+    message: details.join(" "),
+    details
+  };
+}
+
 export function getApplication(source, applicationId) {
   const state =
     source?.state?.applications

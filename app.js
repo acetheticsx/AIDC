@@ -1148,6 +1148,121 @@ const activity = {
 };
 
 /* ─────────────────────────────────────────────
+   Application Health
+───────────────────────────────────────────── */
+
+const applicationHealth = {
+  async check(applicationId) {
+    if (!applicationId) {
+      return null;
+    }
+
+    const [redirectResult, credentialResult, scopeResult] =
+      await Promise.allSettled([
+        api.redirectUris.list(applicationId),
+        api.credentials.list(applicationId),
+        api.scopes.list(applicationId)
+      ]);
+
+    const redirectUris =
+      redirectResult.status === "fulfilled" &&
+      Array.isArray(redirectResult.value?.redirect_uris)
+        ? redirectResult.value.redirect_uris
+        : [];
+
+    const credentials =
+      credentialResult.status === "fulfilled" &&
+      Array.isArray(credentialResult.value?.credentials)
+        ? credentialResult.value.credentials
+        : [];
+
+    const activeCredentials = credentials.filter(
+      credential => !credential?.revoked_at
+    );
+
+    const scopes =
+      scopeResult.status === "fulfilled" &&
+      Array.isArray(scopeResult.value?.scopes)
+        ? scopeResult.value.scopes
+        : [];
+
+    const app = applications.find(applicationId);
+
+    if (!app) {
+      return null;
+    }
+
+    const checks = [
+      {
+        key: "status",
+        label: "Application status",
+        ok: String(app.status || "active").toLowerCase() === "active",
+        detail:
+          String(app.status || "active").toLowerCase() === "active"
+            ? "Application is active."
+            : "Enable the application before accepting sign-ins."
+      },
+      {
+        key: "origin",
+        label: "Origin URL",
+        ok:
+          app.application_type === "native" ||
+          Boolean(app.origin_url),
+        detail:
+          app.application_type === "native"
+            ? "Not required for public native clients."
+            : app.origin_url
+              ? "Origin URL is configured."
+              : "Add an Origin URL before using browser authentication."
+      },
+      {
+        key: "redirects",
+        label: "Redirect URI",
+        ok: redirectUris.length > 0,
+        detail:
+          redirectUris.length > 0
+            ? `${redirectUris.length} redirect URI${redirectUris.length === 1 ? "" : "s"} configured.`
+            : "Add at least one callback URL for OAuth redirects."
+      },
+      {
+        key: "credentials",
+        label: "Credentials",
+        ok:
+          app.application_type === "native" ||
+          activeCredentials.length > 0,
+        detail:
+          app.application_type === "native"
+            ? "Not required for public native clients."
+            : activeCredentials.length > 0
+              ? `${activeCredentials.length} active credential${activeCredentials.length === 1 ? "" : "s"} available.`
+              : "Create a client credential before server-side token exchange."
+      },
+      {
+        key: "scopes",
+        label: "OpenID scope",
+        ok: scopes.includes("openid"),
+        detail: scopes.includes("openid")
+          ? "The required openid scope is enabled."
+          : "Enable openid so the application can use OpenID Connect."
+      }
+    ];
+
+    const passed = checks.filter(check => check.ok).length;
+
+    return {
+      checks,
+      passed,
+      total: checks.length,
+      healthy: passed === checks.length,
+      redirectUris,
+      credentials,
+      scopes
+    };
+  }
+};
+
+
+/* ─────────────────────────────────────────────
    Router
 ───────────────────────────────────────────── */
 
@@ -1446,6 +1561,8 @@ const AIDC = {
   branding,
 
   activity,
+
+  applicationHealth,
 
   analytics,
 

@@ -5895,3 +5895,465 @@ body:has(
     transition:none;
   }
 }
+
+
+/* ═══════════════════════════════════════
+   HEALTH / REDIRECT DIAGNOSTICS / MOBILE
+   ═══════════════════════════════════════ */
+
+.aidc-health-card{
+  grid-column:1 / -1;
+  overflow:hidden;
+}
+
+.aidc-section-kicker{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-bottom:6px;
+  color:var(--aidc-muted);
+  font-family:var(--aidc-font-mono);
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.aidc-section-kicker .aidc-icon{
+  width:13px;
+  height:13px;
+}
+
+.aidc-health-score{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:54px;
+  height:38px;
+  padding:0 10px;
+  border:1px solid var(--aidc-border);
+  border-radius:12px;
+  background:var(--aidc-surface-soft);
+  color:var(--aidc-muted);
+  font-family:var(--aidc-font-mono);
+  font-size:12px;
+  font-weight:700;
+}
+
+.aidc-health-score.is-healthy{
+  color:var(--aidc-text);
+  border-color:var(--aidc-text);
+}
+
+.aidc-health-checks{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--aidc-border);
+}
+
+.aidc-health-check{
+  display:grid;
+  grid-template-columns:30px minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+  min-height:66px;
+  padding:12px 14px;
+  border-right:1px solid var(--aidc-border);
+  border-bottom:1px solid var(--aidc-border);
+}
+
+.aidc-health-check:nth-child(2n){
+  border-right:0;
+}
+
+.aidc-health-check:nth-last-child(-n+2){
+  border-bottom:0;
+}
+
+.aidc-health-check-icon{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:30px;
+  height:30px;
+  border:1px solid var(--aidc-border);
+  border-radius:9px;
+  background:var(--aidc-surface-soft);
+}
+
+.aidc-health-check-icon.is-ok{
+  color:var(--aidc-text);
+}
+
+.aidc-health-check-icon.is-warning{
+  color:var(--aidc-muted);
+}
+
+.aidc-health-check-copy{
+  display:grid;
+  gap:3px;
+  min-width:0;
+}
+
+.aidc-health-check-copy strong{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:12px;
+}
+
+.aidc-health-check-copy small{
+  color:var(--aidc-muted);
+  font-size:10px;
+  line-height:1.4;
+}
+
+.aidc-health-check-state{
+  color:var(--aidc-muted);
+  font-family:var(--aidc-font-mono);
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.aidc-health-check-loading{
+  grid-template-columns:30px minmax(0,1fr);
+}
+
+.aidc-health-check-loading .aidc-skeleton:first-child{
+  width:30px;
+  height:30px;
+  border-radius:9px;
+}
+
+.aidc-health-check-loading .aidc-skeleton:last-child{
+  width:70%;
+  height:10px;
+}
+
+.aidc-redirect-diagnostics{
+  display:grid;
+  gap:0;
+}
+
+.aidc-redirect-item{
+  padding:14px 0;
+  border-bottom:1px solid var(--aidc-border);
+}
+
+.aidc-redirect-item:last-child{
+  border-bottom:0;
+}
+
+.aidc-redirect-item-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:7px;
+}
+
+.aidc-redirect-state{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:24px;
+  padding:4px 7px;
+  border:1px solid var(--aidc-border);
+  border-radius:7px;
+  background:var(--aidc-surface-soft);
+  font-family:var(--aidc-font-mono);
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+
+.aidc-redirect-state.success{
+  color:var(--aidc-text);
+  border-color:var(--aidc-text);
+}
+
+.aidc-redirect-state.warning{
+  color:var(--aidc-muted);
+}
+
+.aidc-redirect-state.error{
+  color:var(--aidc-text);
+  border-color:var(--aidc-text);
+}
+
+.aidc-redirect-state .aidc-icon{
+  width:12px;
+  height:12px;
+}
+
+.aidc-redirect-type{
+  color:var(--aidc-muted);
+  font-family:var(--aidc-font-mono);
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.aidc-redirect-diagnostic-copy{
+  margin:7px 0 0;
+  color:var(--aidc-muted);
+  font-size:10px;
+  line-height:1.45;
+}
+
+.aidc-analytics-insights{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:0;
+  margin-top:18px;
+  border:1px solid var(--aidc-border);
+  border-radius:14px;
+  background:var(--aidc-surface);
+  overflow:hidden;
+}
+
+.aidc-analytics-insight{
+  display:grid;
+  grid-template-columns:32px minmax(0,1fr);
+  gap:10px;
+  align-items:start;
+  min-height:90px;
+  padding:15px;
+  border-right:1px solid var(--aidc-border);
+}
+
+.aidc-analytics-insight:last-child{
+  border-right:0;
+}
+
+.aidc-analytics-insight-icon{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:32px;
+  height:32px;
+  border:1px solid var(--aidc-border);
+  border-radius:9px;
+  background:var(--aidc-surface-soft);
+}
+
+.aidc-analytics-insight > div{
+  display:grid;
+  gap:3px;
+  min-width:0;
+}
+
+.aidc-analytics-insight strong{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:13px;
+}
+
+.aidc-analytics-insight small{
+  color:var(--aidc-muted);
+  font-size:9px;
+  line-height:1.4;
+}
+
+.aidc-mobile-menu{
+  display:none;
+  align-items:center;
+  justify-content:center;
+  width:38px;
+  height:38px;
+  padding:0;
+  border:1px solid var(--aidc-border);
+  border-radius:11px;
+  background:var(--aidc-surface);
+  color:var(--aidc-text);
+  -webkit-tap-highlight-color:transparent;
+}
+
+.aidc-mobile-header-spacer{
+  flex:1;
+}
+
+@media (max-width:760px){
+  .aidc-health-checks{
+    grid-template-columns:1fr;
+  }
+
+  .aidc-health-check{
+    border-right:0;
+  }
+
+  .aidc-health-check:nth-last-child(-n+2){
+    border-bottom:1px solid var(--aidc-border);
+  }
+
+  .aidc-health-check:last-child{
+    border-bottom:0;
+  }
+
+  .aidc-analytics-insights{
+    grid-template-columns:1fr;
+    border-radius:14px;
+  }
+
+  .aidc-analytics-insight{
+    min-height:74px;
+    border-right:0;
+    border-bottom:1px solid var(--aidc-border);
+  }
+
+  .aidc-analytics-insight:last-child{
+    border-bottom:0;
+  }
+
+  .aidc-mobile-menu{
+    display:flex;
+  }
+
+  .aidc-mobile-header{
+    min-height:60px;
+    height:auto;
+    padding-top:max(8px, env(safe-area-inset-top));
+    padding-bottom:8px;
+  }
+
+  .aidc-mobile-nav{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    width:min(100% - 82px,360px);
+    min-height:58px;
+    padding:4px;
+    border:1px solid var(--aidc-border);
+    border-radius:19px;
+    background:var(--aidc-surface);
+    box-shadow:0 10px 30px rgb(0 0 0 / .12);
+    overflow:hidden;
+  }
+
+  .aidc-mobile-nav-item{
+    display:grid;
+    place-items:center;
+    align-content:center;
+    gap:3px;
+    min-width:0;
+    min-height:50px;
+    border-radius:14px;
+    color:var(--aidc-muted);
+    font-family:var(--aidc-font-mono);
+    font-size:8px;
+    font-weight:700;
+    letter-spacing:.04em;
+    text-decoration:none;
+    text-transform:uppercase;
+    -webkit-tap-highlight-color:transparent;
+    transition:background 160ms ease,color 160ms ease,transform 160ms ease;
+  }
+
+  .aidc-mobile-nav-item .aidc-icon{
+    width:18px;
+    height:18px;
+  }
+
+  .aidc-mobile-nav-item.active{
+    background:var(--aidc-text);
+    color:var(--aidc-surface);
+  }
+
+  .aidc-mobile-nav-item:active{
+    transform:scale(.96);
+  }
+
+  .aidc-mobile-actions{
+    bottom:calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .aidc-help-fab{
+    border-radius:17px;
+  }
+
+  .aidc-profile-button{
+    width:38px;
+    height:38px;
+    min-width:38px;
+    border-radius:12px;
+  }
+
+  .aidc-mobile-brand{
+    display:grid;
+    gap:1px;
+    line-height:1;
+  }
+
+  .aidc-mobile-brand small{
+    display:block;
+    color:var(--aidc-muted);
+    font-family:var(--aidc-font-mono);
+    font-size:7px;
+    font-weight:700;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+  }
+
+  .aidc-content{
+    scroll-padding-bottom:130px;
+  }
+
+  .aidc-redirect-item{
+    padding:12px 0;
+  }
+
+  .aidc-redirect-item .aidc-detail-field{
+    gap:7px;
+  }
+
+  .aidc-redirect-diagnostic-copy{
+    font-size:9px;
+  }
+}
+
+@media (max-width:480px){
+  .aidc-health-card .aidc-card-section-header{
+    padding-inline:0;
+  }
+
+  .aidc-health-score{
+    min-width:48px;
+    height:34px;
+  }
+
+  .aidc-health-check{
+    grid-template-columns:28px minmax(0,1fr) auto;
+    padding:11px 0;
+  }
+
+  .aidc-health-check-icon{
+    width:28px;
+    height:28px;
+  }
+
+  .aidc-health-check-copy small{
+    font-size:9px;
+  }
+
+  .aidc-analytics-insight{
+    padding:13px;
+  }
+
+  .aidc-mobile-nav{
+    min-height:56px;
+  }
+
+  .aidc-mobile-nav-item{
+    min-height:48px;
+  }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .aidc-mobile-nav-item{
+    transition:none;
+  }
+}

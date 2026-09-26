@@ -11,7 +11,8 @@ import {
   getApplication,
   statusBadge,
   emptyState,
-  validateRedirectUri
+  validateRedirectUri,
+  diagnoseRedirectUri
 } from "./helpers.js";
 
 export function registerAIDCComponents(AIDC) {
@@ -24,6 +25,7 @@ export function registerAIDCComponents(AIDC) {
     credentials,
     branding,
     activity,
+    applicationHealth,
     router,
     copyToClipboard,
     modals,
@@ -721,6 +723,11 @@ export function registerAIDCComponents(AIDC) {
       const hourly = s.hourly || [];
       const successRate = s.successRate == null ? "—" : `${s.successRate}%`;
       const rangeLabel = s.days === 30 ? "30 days" : s.days === 14 ? "14 days" : "7 days";
+      const busiestHour = hourly.reduce(
+        (peak, item) => Number(item.count) > Number(peak?.count || -1) ? item : peak,
+        null
+      );
+      const topApplication = applications[0] || null;
 
       return html`
         <div class="aidc-page aidc-analytics-page">
@@ -888,6 +895,33 @@ export function registerAIDCComponents(AIDC) {
                 : emptyState({ iconName: "calendar-01", title: "No daily data", description: "Daily activity will appear here." })}
             </section>
           </div>
+
+          <section class="aidc-analytics-insights" aria-label="Analytics insights">
+            <div class="aidc-analytics-insight">
+              <span class="aidc-analytics-insight-icon">${icon("clock-01")}</span>
+              <div>
+                <span class="aidc-eyebrow">Peak hour</span>
+                <strong>${busiestHour ? this.formatHour(busiestHour.hour) : "—"}</strong>
+                <small>${busiestHour ? `${busiestHour.count} login${busiestHour.count === 1 ? "" : "s"} in this hour` : "No hourly activity yet"}</small>
+              </div>
+            </div>
+            <div class="aidc-analytics-insight">
+              <span class="aidc-analytics-insight-icon">${icon("app-window")}</span>
+              <div>
+                <span class="aidc-eyebrow">Top application</span>
+                <strong>${topApplication ? topApplication.name : "—"}</strong>
+                <small>${topApplication ? `${topApplication.logins} logins · ${topApplication.uniqueUsers} users` : "No application activity yet"}</small>
+              </div>
+            </div>
+            <div class="aidc-analytics-insight">
+              <span class="aidc-analytics-insight-icon">${icon("alert-02")}</span>
+              <div>
+                <span class="aidc-eyebrow">Failures</span>
+                <strong>${s.failedAttempts}</strong>
+                <small>${s.failedAttempts ? "Authentication attempts needing review" : "No failed attempts in this range"}</small>
+              </div>
+            </div>
+          </section>
         </div>
       `;
     }
@@ -1315,6 +1349,12 @@ export function registerAIDCComponents(AIDC) {
       },
       savingClientType: {
         state: true
+      },
+      health: {
+        state: true
+      },
+      healthLoading: {
+        state: true
       }
     };
 
@@ -1322,12 +1362,114 @@ export function registerAIDCComponents(AIDC) {
       super();
       this.clientType = "web";
       this.savingClientType = false;
+      this.health = null;
+      this.healthLoading = false;
+      this._healthApplicationId = null;
     }
 
     updated(changed) {
       if (changed.has("application")) {
         this.clientType = this.application?.application_type || "web";
+
+        const id = this.application?.id || null;
+        if (id && id !== this._healthApplicationId) {
+          this._healthApplicationId = id;
+          this.loadHealth(id);
+        }
       }
+    }
+
+    async loadHealth(applicationId) {
+      this.healthLoading = true;
+
+      try {
+        const result = await applicationHealth.check(applicationId);
+
+        if (this.application?.id === applicationId) {
+          this.health = result;
+        }
+      } catch (error) {
+        if (this.application?.id === applicationId) {
+          this.health = null;
+        }
+        console.error("Application health check failed:", error);
+      } finally {
+        if (this.application?.id === applicationId) {
+          this.healthLoading = false;
+        }
+      }
+    }
+
+    renderHealth() {
+      const health = this.health;
+      const checks = health?.checks || [];
+      const passed = health?.passed || 0;
+      const total = health?.total || 0;
+      const healthy = health?.healthy === true;
+
+      return html`
+        <section class="aidc-card aidc-health-card" aria-labelledby="aidc-health-title">
+          <header class="aidc-card-section-header">
+            <div>
+              <div class="aidc-section-kicker">
+                ${icon("activity-01")}
+                Application health
+              </div>
+              <h2 id="aidc-health-title">
+                ${this.healthLoading
+                  ? "Checking configuration"
+                  : healthy
+                    ? "Ready for authentication"
+                    : "Configuration needs attention"}
+              </h2>
+              <p>
+                ${this.healthLoading
+                  ? "Checking application configuration…"
+                  : total
+                    ? `${passed}/${total} checks passing`
+                    : "Health data unavailable"}
+              </p>
+            </div>
+            <span class="aidc-health-score ${healthy ? "is-healthy" : ""}">
+              ${this.healthLoading ? "…" : total ? `${passed}/${total}` : "—"}
+            </span>
+          </header>
+
+          ${this.healthLoading
+            ? html`
+                <div class="aidc-health-checks" aria-busy="true">
+                  ${[1, 2, 3, 4, 5].map(() => html`
+                    <div class="aidc-health-check aidc-health-check-loading">
+                      <span class="aidc-skeleton"></span>
+                      <span class="aidc-skeleton"></span>
+                    </div>
+                  `)}
+                </div>
+              `
+            : checks.length
+              ? html`
+                  <div class="aidc-health-checks">
+                    ${checks.map(check => html`
+                      <div class="aidc-health-check">
+                        <span class="aidc-health-check-icon ${check.ok ? "is-ok" : "is-warning"}">
+                          ${icon(check.ok ? "checkmark-circle-02" : "alert-02")}
+                        </span>
+                        <span class="aidc-health-check-copy">
+                          <strong>${check.label}</strong>
+                          <small>${check.detail}</small>
+                        </span>
+                        <span class="aidc-health-check-state">${check.ok ? "Ready" : "Fix"}</span>
+                      </div>
+                    `)}
+                  </div>
+                `
+              : emptyState({
+                  iconName: "activity-01",
+                  title: "Health data unavailable",
+                  description: "The application configuration could not be checked right now."
+                })}
+        </section>
+      `;
     }
 
     async saveClientType(event) {
@@ -1394,6 +1536,8 @@ export function registerAIDCComponents(AIDC) {
 
       return html`
         <div class="aidc-detail-grid">
+
+          ${this.renderHealth()}
 
           <section class="aidc-card">
 
@@ -1967,56 +2111,59 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                     <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading redirect URIs"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-row"></div><div class="aidc-skeleton aidc-skeleton-row short"></div><div class="aidc-skeleton aidc-skeleton-row"></div></div>
                   `
                 : items.length
-                  ? items.map(
-                      item => html`
-                        <div
-                          class="aidc-detail-field"
-                        >
+                  ? html`
+                      <div class="aidc-redirect-diagnostics">
+                        ${items.map(item => {
+                          const diagnostic = diagnoseRedirectUri(
+                            item.uri,
+                            application?.application_type || "web",
+                            application?.origin_url || ""
+                          );
 
-                          <span>
-                            Redirect URI
-                          </span>
+                          return html`
+                            <div class="aidc-redirect-item">
+                              <div class="aidc-redirect-item-head">
+                                <span class="aidc-redirect-state ${diagnostic.severity}">
+                                  ${icon(diagnostic.severity === "success" ? "checkmark-circle-02" : "alert-02")}
+                                  ${diagnostic.label}
+                                </span>
+                                <span class="aidc-redirect-type">
+                                  ${application?.application_type === "native" ? "Native" : "Web"}
+                                </span>
+                              </div>
 
-                          <div
-                            class="aidc-copy-field"
-                          >
+                              <div class="aidc-detail-field">
+                                <span>Redirect URI</span>
+                                <div class="aidc-copy-field">
+                                  <code class="aidc-mono">${item.uri}</code>
+                                  <button
+                                    class="aidc-icon-button"
+                                    title="Copy URI"
+                                    aria-label="Copy redirect URI"
+                                    @click=${() => this.copyUri(item.uri)}
+                                  >
+                                    ${icon("copy-01")}
+                                  </button>
+                                  <button
+                                    class="aidc-icon-button"
+                                    title="Delete URI"
+                                    aria-label="Delete redirect URI"
+                                    @click=${() => this.removeUri(item)}
+                                  >
+                                    ${icon("delete-02")}
+                                  </button>
+                                </div>
+                              </div>
 
-                            <code
-                              class="aidc-mono"
-                            >
-                              ${item.uri}
-                            </code>
-
-                            <button
-                              class="aidc-icon-button"
-                              title="Copy URI"
-                              aria-label="Copy redirect URI"
-                              @click=${() =>
-                                this.copyUri(
-                                  item.uri
-                                )}
-                            >
-                              ${icon("copy-01")}
-                            </button>
-
-                            <button
-                              class="aidc-icon-button"
-                              title="Delete URI"
-                              aria-label="Delete redirect URI"
-                              @click=${() =>
-                                this.removeUri(
-                                  item
-                                )}
-                            >
-                              ${icon("delete-02")}
-                            </button>
-
-                          </div>
-
-                        </div>
-                      `
-                    )
-                  : emptyState({
+                              <p class="aidc-redirect-diagnostic-copy">
+                                ${diagnostic.message}
+                              </p>
+                            </div>
+                          `;
+                        })}
+                      </div>
+                    `
+                                    : emptyState({
                       iconName:
                         "link-01",
                       title:
@@ -4411,7 +4558,21 @@ await auth.signIn();</code></pre>
           <main class="aidc-main">
 
             <header class="aidc-mobile-header">
-              <a class="aidc-mobile-brand" href="#/" aria-label="AIDC overview"><span>AIDC</span></a>
+              <button
+                class="aidc-mobile-menu"
+                type="button"
+                aria-label="Open navigation"
+                @click=${() => (this.sidebarOpen = true)}
+              >
+                ${icon("menu-01")}
+              </button>
+
+              <a class="aidc-mobile-brand" href="#/" aria-label="AIDC overview">
+                <span>AIDC</span>
+                <small>Console</small>
+              </a>
+
+              <span class="aidc-mobile-header-spacer"></span>
 
               <a class="aidc-profile-button" href="https://identity.ace-base.cc/account" aria-label="Open Ace ID" title="Ace ID">
                 ${state.user ? userAvatar(state.user, "aidc-profile-avatar") : icon("user-01")}
@@ -4433,6 +4594,10 @@ await auth.signIn();</code></pre>
               <a class="aidc-mobile-nav-item ${router.parse().path === "/" ? "active" : ""}" href="#/" aria-label="Overview">
                 ${icon("home-01")}
                 <span>Overview</span>
+              </a>
+              <a class="aidc-mobile-nav-item ${router.parse().path === "/applications" || router.parse().path === "/applications/:id" ? "active" : ""}" href="#/applications" aria-label="Applications">
+                ${icon("app-window")}
+                <span>Apps</span>
               </a>
               <a class="aidc-mobile-nav-item ${router.parse().path === "/analytics" ? "active" : ""}" href="#/analytics" aria-label="Analytics">
                 ${icon("chart-02")}
