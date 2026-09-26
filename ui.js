@@ -4526,7 +4526,21 @@ await auth.signIn();</code></pre>
           <main class="aidc-main">
 
             <header class="aidc-mobile-header">
-              <a class="aidc-mobile-brand" href="#/" aria-label="AIDC overview"><span>AIDC</span></a>
+              <button
+                class="aidc-mobile-menu"
+                type="button"
+                aria-label="Open navigation"
+                @click=${() => (this.sidebarOpen = true)}
+              >
+                ${icon("menu-01")}
+              </button>
+
+              <a class="aidc-mobile-brand" href="#/" aria-label="AIDC overview">
+                <span>AIDC</span>
+                <small>Console</small>
+              </a>
+
+              <span class="aidc-mobile-header-spacer"></span>
 
               <a class="aidc-profile-button" href="https://identity.ace-base.cc/account" aria-label="Open Ace ID" title="Ace ID">
                 ${state.user ? userAvatar(state.user, "aidc-profile-avatar") : icon("user-01")}
@@ -4548,6 +4562,10 @@ await auth.signIn();</code></pre>
               <a class="aidc-mobile-nav-item ${router.parse().path === "/" ? "active" : ""}" href="#/" aria-label="Overview">
                 ${icon("home-01")}
                 <span>Overview</span>
+              </a>
+              <a class="aidc-mobile-nav-item ${router.parse().path === "/applications" || router.parse().path === "/applications/:id" ? "active" : ""}" href="#/applications" aria-label="Applications">
+                ${icon("app-window")}
+                <span>Apps</span>
               </a>
               <a class="aidc-mobile-nav-item ${router.parse().path === "/analytics" ? "active" : ""}" href="#/analytics" aria-label="Analytics">
                 ${icon("chart-02")}
