@@ -265,6 +265,30 @@ setInterval(
  * Middleware
  */
 app.disable("x-powered-by");
+
+app.use((req, res, next) => {
+  res.set({
+    "Content-Security-Policy":
+      "default-src 'self'; " +
+      "script-src 'self' https://cdn.jsdelivr.net; " +
+      "style-src 'self' 'unsafe-inline' https://use.hugeicons.com; " +
+      "font-src 'self' https://use.hugeicons.com https://fonts.gstatic.com data:; " +
+      "img-src 'self' https: data:; " +
+      "connect-src 'self' https:; " +
+      "frame-ancestors 'none'; " +
+      "base-uri 'self'; " +
+      "object-src 'none'; " +
+      "form-action 'self' https://identity.ace-base.cc",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy":
+      "camera=(), microphone=(), geolocation=(), payment=()"
+  });
+
+  next();
+});
+
 app.use(express.json({ limit: "1mb" }));
 
 /*
