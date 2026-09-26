@@ -120,7 +120,10 @@ const OAUTH_ERROR_MESSAGES = {
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false
+    rejectUnauthorized: true,
+    ...(process.env.DATABASE_SSL_CA
+      ? { ca: process.env.DATABASE_SSL_CA }
+      : {})
   },
   max: 10,
   idleTimeoutMillis: 30_000,
@@ -526,11 +529,22 @@ function normalizeCrossAppScopes(value) {
     return { valid: true, scopes: [] };
   }
 
-  const values = Array.isArray(value) ? value : String(value).split(",");
+  const values = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : null;
+
+  if (!values || values.some(item => typeof item !== "string")) {
+    return {
+      valid: false,
+      error: "Cross-app scopes must be strings"
+    };
+  }
+
   const scopes = [
     ...new Set(
       values
-        .filter(item => typeof item === "string")
         .map(item => item.trim().toLowerCase())
         .filter(Boolean)
     )
@@ -585,13 +599,11 @@ function validateBranding(payload) {
       const parsed = new URL(logo_url);
 
       if (
-        !["https:", "http:"].includes(
-          parsed.protocol
-        ) ||
+        parsed.protocol !== "https:" ||
         parsed.username ||
         parsed.password
       ) {
-        return "Logo URL must be a valid HTTP or HTTPS URL";
+        return "Logo URL must use HTTPS and cannot contain credentials";
       }
     } catch {
       return "Logo URL must be a valid URL";
@@ -1038,11 +1050,21 @@ app.get(
           username
         FROM public.aceid_users
         WHERE id = $1
+        LIMIT 1
         `,
         [payload.sub]
       );
 
-      const identityUser = identity.rows[0] || null;
+      if (!identity.rows.length) {
+        res.set("Set-Cookie", clearOauthCookies);
+
+        return res
+          .status(403)
+          .type("text")
+          .send("Ace ID account not found");
+      }
+
+      const identityUser = identity.rows[0];
 
       const session = await createSession({
         developerId: payload.sub,
@@ -1097,7 +1119,6 @@ app.get(
  */
 app.post(
   "/auth/logout",
-  requireDiscovery,
   async (req, res) => {
     const token = getCookie(req, SESSION_COOKIE);
 
@@ -1116,14 +1137,16 @@ app.post(
 
     res.set("Set-Cookie", cookies);
 
-    const endSessionUrl =
-      `${discoveryState.doc.end_session_endpoint}` +
-      `?client_id=${encodeURIComponent(CLIENT_ID)}` +
-      `&post_logout_redirect_uri=${encodeURIComponent(
-        POST_LOGOUT_URL
-      )}`;
+    const logoutUrl =
+      discoveryState.status === "ready"
+        ? `${discoveryState.doc.end_session_endpoint}` +
+          `?client_id=${encodeURIComponent(CLIENT_ID)}` +
+          `&post_logout_redirect_uri=${encodeURIComponent(
+            POST_LOGOUT_URL
+          )}`
+        : null;
 
-    res.json({ logout_url: endSessionUrl });
+    res.json({ logout_url: logoutUrl });
   }
 );
 
@@ -1290,12 +1313,31 @@ app.post(
       application_type = "web"
     } = req.body ?? {};
 
-    if (typeof name !== "string" || !name.trim()) {
-      return res.status(400).json({ error: "Application name is required" });
+    if (
+      typeof name !== "string" ||
+      !name.trim()
+    ) {
+      return res.status(400).json({
+        error: "Application name is required"
+      });
+    }
+
+    if (name.trim().length > 120) {
+      return res.status(400).json({
+        error: "Application name must be 120 characters or fewer"
+      });
     }
 
     if (typeof description !== "string") {
-      return res.status(400).json({ error: "Description must be a string" });
+      return res.status(400).json({
+        error: "Description must be a string"
+      });
+    }
+
+    if (description.length > 2000) {
+      return res.status(400).json({
+        error: "Description must be 2000 characters or fewer"
+      });
     }
 
     if (!["web", "native"].includes(application_type)) {
@@ -1476,8 +1518,32 @@ app.patch(
       return res.status(400).json({ error: "Application name cannot be empty" });
     }
 
-    if (description !== undefined && typeof description !== "string") {
-      return res.status(400).json({ error: "Description must be a string" });
+    if (
+      description !== undefined &&
+      description !== null &&
+      typeof description !== "string"
+    ) {
+      return res.status(400).json({
+        error: "Description must be a string"
+      });
+    }
+
+    if (
+      typeof name === "string" &&
+      name.trim().length > 120
+    ) {
+      return res.status(400).json({
+        error: "Application name must be 120 characters or fewer"
+      });
+    }
+
+    if (
+      typeof description === "string" &&
+      description.length > 2000
+    ) {
+      return res.status(400).json({
+        error: "Description must be 2000 characters or fewer"
+      });
     }
 
     if (
@@ -1490,7 +1556,7 @@ app.patch(
     }
 
     let origin = null;
-    if (origin_url !== undefined) {
+    if (origin_url !== undefined && origin_url !== null) {
       const originValidation = validateOriginUrl(origin_url, { required: true });
       if (!originValidation.valid) {
         return res.status(400).json({ error: originValidation.error });
@@ -1523,6 +1589,22 @@ app.patch(
     }
 
     if (application_type !== undefined) {
+      const applicationResult = await pool.query(
+        `
+        SELECT id
+        FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        `,
+        [id, req.developer.id]
+      );
+
+      if (!applicationResult.rows.length) {
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
       const redirectResult = await pool.query(
         `
         SELECT uri
@@ -1555,12 +1637,12 @@ app.patch(
         `
         UPDATE public.applications
         SET
-          name = COALESCE($1, name),
-          description = COALESCE($2, description),
-          application_type = COALESCE($3, application_type),
-          origin_url = COALESCE($4, origin_url),
-          cross_app_scopes = COALESCE($5, cross_app_scopes),
-          status = COALESCE($6, status),
+          name = CASE WHEN $1::boolean THEN $2 ELSE name END,
+          description = CASE WHEN $3::boolean THEN $4 ELSE description END,
+          application_type = CASE WHEN $5::boolean THEN $6 ELSE application_type END,
+          origin_url = CASE WHEN $7::boolean THEN $8 ELSE origin_url END,
+          cross_app_scopes = CASE WHEN $9::boolean THEN $10 ELSE cross_app_scopes END,
+          status = CASE WHEN $11::boolean THEN $12 ELSE status END,
           updated_at = now()
         WHERE id = $7
           AND owner_id = $8
@@ -1578,11 +1660,21 @@ app.patch(
           (SELECT logo_url FROM public.application_branding WHERE application_id = public.applications.id) AS logo_url
         `,
         [
+          name !== undefined,
           name !== undefined ? name.trim() : null,
-          description !== undefined ? description.trim() : null,
+          description !== undefined,
+          description !== undefined
+            ? description === null
+              ? null
+              : description.trim()
+            : null,
+          application_type !== undefined,
           application_type ?? null,
+          origin_url !== undefined,
           origin,
+          cross_app_scopes !== undefined,
           scopes,
+          status !== undefined,
           status ?? null,
           id,
           req.developer.id
