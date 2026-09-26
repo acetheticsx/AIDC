@@ -1,0 +1,28 @@
+.aidc-boot-fallback {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #111;
+  background: #fff;
+  text-align: center;
+}
+
+.aidc-boot-fallback > section {
+  width: min(560px, 100%);
+}
+
+.aidc-boot-fallback h1 {
+  margin: 0 0 10px;
+  font-size: 24px;
+  line-height: 1.15;
+}
+
+.aidc-boot-fallback p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.6;
+}
