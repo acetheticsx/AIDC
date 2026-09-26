@@ -894,6 +894,8 @@ export function registerAIDCComponents(AIDC) {
                   `
                 : emptyState({ iconName: "calendar-01", title: "No daily data", description: "Daily activity will appear here." })}
             </section>
+          </div>
+
           <section class="aidc-analytics-insights" aria-label="Analytics insights">
             <div class="aidc-analytics-insight">
               <span class="aidc-analytics-insight-icon">${icon("clock-01")}</span>
