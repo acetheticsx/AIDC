@@ -11,7 +11,8 @@ import {
   getApplication,
   statusBadge,
   emptyState,
-  validateRedirectUri
+  validateRedirectUri,
+  diagnoseRedirectUri
 } from "./helpers.js";
 
 export function registerAIDCComponents(AIDC) {
@@ -24,6 +25,7 @@ export function registerAIDCComponents(AIDC) {
     credentials,
     branding,
     activity,
+    applicationHealth,
     router,
     copyToClipboard,
     modals,
@@ -1315,6 +1317,12 @@ export function registerAIDCComponents(AIDC) {
       },
       savingClientType: {
         state: true
+      },
+      health: {
+        state: true
+      },
+      healthLoading: {
+        state: true
       }
     };
 
@@ -1322,12 +1330,114 @@ export function registerAIDCComponents(AIDC) {
       super();
       this.clientType = "web";
       this.savingClientType = false;
+      this.health = null;
+      this.healthLoading = false;
+      this._healthApplicationId = null;
     }
 
     updated(changed) {
       if (changed.has("application")) {
         this.clientType = this.application?.application_type || "web";
+
+        const id = this.application?.id || null;
+        if (id && id !== this._healthApplicationId) {
+          this._healthApplicationId = id;
+          this.loadHealth(id);
+        }
       }
+    }
+
+    async loadHealth(applicationId) {
+      this.healthLoading = true;
+
+      try {
+        const result = await applicationHealth.check(applicationId);
+
+        if (this.application?.id === applicationId) {
+          this.health = result;
+        }
+      } catch (error) {
+        if (this.application?.id === applicationId) {
+          this.health = null;
+        }
+        console.error("Application health check failed:", error);
+      } finally {
+        if (this.application?.id === applicationId) {
+          this.healthLoading = false;
+        }
+      }
+    }
+
+    renderHealth() {
+      const health = this.health;
+      const checks = health?.checks || [];
+      const passed = health?.passed || 0;
+      const total = health?.total || 0;
+      const healthy = health?.healthy === true;
+
+      return html`
+        <section class="aidc-card aidc-health-card" aria-labelledby="aidc-health-title">
+          <header class="aidc-card-section-header">
+            <div>
+              <div class="aidc-section-kicker">
+                ${icon("activity-01")}
+                Application health
+              </div>
+              <h2 id="aidc-health-title">
+                ${this.healthLoading
+                  ? "Checking configuration"
+                  : healthy
+                    ? "Ready for authentication"
+                    : "Configuration needs attention"}
+              </h2>
+              <p>
+                ${this.healthLoading
+                  ? "Checking application configuration…"
+                  : total
+                    ? `${passed}/${total} checks passing`
+                    : "Health data unavailable"}
+              </p>
+            </div>
+            <span class="aidc-health-score ${healthy ? "is-healthy" : ""}">
+              ${this.healthLoading ? "…" : total ? `${passed}/${total}` : "—"}
+            </span>
+          </header>
+
+          ${this.healthLoading
+            ? html`
+                <div class="aidc-health-checks" aria-busy="true">
+                  ${[1, 2, 3, 4, 5].map(() => html`
+                    <div class="aidc-health-check aidc-health-check-loading">
+                      <span class="aidc-skeleton"></span>
+                      <span class="aidc-skeleton"></span>
+                    </div>
+                  `)}
+                </div>
+              `
+            : checks.length
+              ? html`
+                  <div class="aidc-health-checks">
+                    ${checks.map(check => html`
+                      <div class="aidc-health-check">
+                        <span class="aidc-health-check-icon ${check.ok ? "is-ok" : "is-warning"}">
+                          ${icon(check.ok ? "checkmark-circle-02" : "alert-02")}
+                        </span>
+                        <span class="aidc-health-check-copy">
+                          <strong>${check.label}</strong>
+                          <small>${check.detail}</small>
+                        </span>
+                        <span class="aidc-health-check-state">${check.ok ? "Ready" : "Fix"}</span>
+                      </div>
+                    `)}
+                  </div>
+                `
+              : emptyState({
+                  iconName: "activity-01",
+                  title: "Health data unavailable",
+                  description: "The application configuration could not be checked right now."
+                })}
+        </section>
+      `;
     }
 
     async saveClientType(event) {
@@ -1394,6 +1504,8 @@ export function registerAIDCComponents(AIDC) {
 
       return html`
         <div class="aidc-detail-grid">
+
+          ${this.renderHealth()}
 
           <section class="aidc-card">
 
