@@ -4,7 +4,6 @@
   <meta charset="utf-8">
 
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f7f7f5">
   <meta name="color-scheme" content="light">
   <meta name="description" content="AIDC is The Ace Base developer console for registering applications and configuring OAuth 2.0, OpenID Connect, redirects, scopes, credentials, branding, and activity.">
   <meta name="application-name" content="AIDC">
@@ -40,24 +39,15 @@
   </script>
 
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
-
   <link rel="icon" type="image/png" href="/assets/icon.png">
   <link rel="apple-touch-icon" href="/assets/icon.png">
 
   <link rel="stylesheet" href="https://use.hugeicons.com/font/icons.css">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/monochrome.css">
+  <link rel="stylesheet" href="/boot-fallback.css">
   <meta name="robots" content="index, follow, max-image-preview:large">
-  <meta name="theme-color" content="#f7f7f5">
-  <meta property="og:url" content="https://console.ace-base.cc/">
   <meta property="og:site_name" content="Ace Base">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="AIDC | Ace Base Developer Console">
-  <meta name="twitter:description" content="Build and manage applications with Ace Base Identity, OAuth 2.0, OpenID Connect, PKCE, scopes, redirect URIs, credentials, and branding.">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"AIDC","alternateName":"Ace Base Identity Developer Console","url":"https://console.ace-base.cc/","description":"Developer console for building and managing applications with Ace Base Identity, OAuth 2.0, OpenID Connect, PKCE, scopes, redirect URIs, credentials, and branding.","applicationCategory":"DeveloperApplication","operatingSystem":"Web","publisher":{"@type":"Organization","name":"The Ace Base","url":"https://ace-base.cc/"}}</script>
 </head>
 
 <body>
@@ -74,41 +64,7 @@
     </noscript>
   </main>
 
-  <script>
-    /*
-     * Fallback UI for the case where app.js (or one of its
-     * imports such as api.js) fails to load. Without this,
-     * the page is left blank because <aidc-app> never gets
-     * registered as a custom element.
-     */
-    window.setTimeout(function () {
-      if (customElements.get("aidc-app")) {
-        return;
-      }
-
-      var app = document.getElementById("app");
-
-      if (!app || app.textContent.trim()) {
-        return;
-      }
-
-      app.innerHTML =
-        '<section style="padding:2rem;' +
-        'font:14px/1.55 ui-sans-serif,system-ui,sans-serif;' +
-        'color:#111110;max-width:36rem;margin:0 auto">' +
-        '<h1 style="margin:0 0 8px;font-size:20px;font-weight:600">' +
-        "Failed to load AIDC" +
-        "</h1>" +
-        '<p style="margin:0;color:#777773">' +
-        "The interface could not be initialised. Open the browser " +
-        "console for details — most commonly this means a module " +
-        "failed to load." +
-        "</p>" +
-        "</section>";
-    }, 2500);
-  </script>
-
-    <noscript><p>AIDC is the developer console for Ace Base Identity. JavaScript is required to manage applications and OAuth/OIDC configuration.</p></noscript>
+<script src="/boot-fallback.js" defer></script>
 <script type="module" src="/profile-ui.js"></script>
   <script type="module" src="/app.js"></script>
 </body>

@@ -83,6 +83,22 @@ try {
 const IS_PRODUCTION =
   new URL(PUBLIC_ORIGIN_VALUE).protocol === "https:";
 
+const TRUST_PROXY_HOPS = Number.parseInt(
+  process.env.AIDC_TRUST_PROXY_HOPS || "0",
+  10
+);
+
+if (
+  !Number.isInteger(TRUST_PROXY_HOPS) ||
+  TRUST_PROXY_HOPS < 0 ||
+  TRUST_PROXY_HOPS > 5
+) {
+  console.error(
+    "Invalid AIDC_TRUST_PROXY_HOPS. Use an integer from 0 to 5."
+  );
+  process.exit(1);
+}
+
 const SESSION_COOKIE = "aidc_session";
 const CSRF_COOKIE = "aidc_csrf";
 const OAUTH_STATE_COOKIE = "aidc_oauth_state";
@@ -120,7 +136,10 @@ const OAUTH_ERROR_MESSAGES = {
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false
+    rejectUnauthorized: true,
+    ...(process.env.DATABASE_SSL_CA
+      ? { ca: process.env.DATABASE_SSL_CA }
+      : {})
   },
   max: 10,
   idleTimeoutMillis: 30_000,
@@ -262,6 +281,98 @@ setInterval(
  * Middleware
  */
 app.disable("x-powered-by");
+app.set("trust proxy", TRUST_PROXY_HOPS);
+
+app.use((req, res, next) => {
+  res.set({
+    "Content-Security-Policy":
+      "default-src 'self'; " +
+      "script-src 'self' https://cdn.jsdelivr.net; " +
+      "style-src 'self' https://use.hugeicons.com; " +
+      "font-src 'self' https://use.hugeicons.com https://fonts.gstatic.com data:; " +
+      "img-src 'self' https: data:; " +
+      "connect-src 'self'; " +
+      "frame-ancestors 'none'; " +
+      "base-uri 'self'; " +
+      "object-src 'none'; " +
+      "form-action 'self' https://identity.ace-base.cc",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy":
+      "camera=(), microphone=(), geolocation=(), payment=()",
+    ...(IS_PRODUCTION
+      ? {
+          "Strict-Transport-Security":
+            "max-age=31536000; includeSubDomains"
+        }
+      : {})
+  });
+
+  next();
+});
+
+const rateLimitBuckets = new Map();
+
+function rateLimit({
+  windowMs = 60_000,
+  max = 120
+} = {}) {
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = req.ip || req.socket.remoteAddress || "unknown";
+    const current = rateLimitBuckets.get(key);
+
+    if (!current || current.resetAt <= now) {
+      rateLimitBuckets.set(key, {
+        count: 1,
+        resetAt: now + windowMs
+      });
+      return next();
+    }
+
+    current.count += 1;
+
+    if (current.count > max) {
+      const retryAfter = Math.max(
+        1,
+        Math.ceil((current.resetAt - now) / 1000)
+      );
+
+      res.set("Retry-After", String(retryAfter));
+      return res
+        .status(429)
+        .json({ error: "Too many requests. Try again later." });
+    }
+
+    return next();
+  };
+}
+
+setInterval(() => {
+  const now = Date.now();
+
+  for (const [key, bucket] of rateLimitBuckets) {
+    if (bucket.resetAt <= now) {
+      rateLimitBuckets.delete(key);
+    }
+  }
+
+  if (rateLimitBuckets.size > 10_000) {
+    rateLimitBuckets.clear();
+  }
+}, 5 * 60_000).unref();
+
+app.use(
+  ["/auth/login", "/auth/callback"],
+  rateLimit({ windowMs: 10 * 60_000, max: 20 })
+);
+
+app.use(
+  "/api",
+  rateLimit({ windowMs: 60_000, max: 120 })
+);
+
 app.use(express.json({ limit: "1mb" }));
 
 /*
@@ -526,11 +637,22 @@ function normalizeCrossAppScopes(value) {
     return { valid: true, scopes: [] };
   }
 
-  const values = Array.isArray(value) ? value : String(value).split(",");
+  const values = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : null;
+
+  if (!values || values.some(item => typeof item !== "string")) {
+    return {
+      valid: false,
+      error: "Cross-app scopes must be strings"
+    };
+  }
+
   const scopes = [
     ...new Set(
       values
-        .filter(item => typeof item === "string")
         .map(item => item.trim().toLowerCase())
         .filter(Boolean)
     )
@@ -585,13 +707,11 @@ function validateBranding(payload) {
       const parsed = new URL(logo_url);
 
       if (
-        !["https:", "http:"].includes(
-          parsed.protocol
-        ) ||
+        parsed.protocol !== "https:" ||
         parsed.username ||
         parsed.password
       ) {
-        return "Logo URL must be a valid HTTP or HTTPS URL";
+        return "Logo URL must use HTTPS and cannot contain credentials";
       }
     } catch {
       return "Logo URL must be a valid URL";
@@ -1038,11 +1158,21 @@ app.get(
           username
         FROM public.aceid_users
         WHERE id = $1
+        LIMIT 1
         `,
         [payload.sub]
       );
 
-      const identityUser = identity.rows[0] || null;
+      if (!identity.rows.length) {
+        res.set("Set-Cookie", clearOauthCookies);
+
+        return res
+          .status(403)
+          .type("text")
+          .send("Ace ID account not found");
+      }
+
+      const identityUser = identity.rows[0];
 
       const session = await createSession({
         developerId: payload.sub,
@@ -1097,7 +1227,6 @@ app.get(
  */
 app.post(
   "/auth/logout",
-  requireDiscovery,
   async (req, res) => {
     const token = getCookie(req, SESSION_COOKIE);
 
@@ -1116,14 +1245,16 @@ app.post(
 
     res.set("Set-Cookie", cookies);
 
-    const endSessionUrl =
-      `${discoveryState.doc.end_session_endpoint}` +
-      `?client_id=${encodeURIComponent(CLIENT_ID)}` +
-      `&post_logout_redirect_uri=${encodeURIComponent(
-        POST_LOGOUT_URL
-      )}`;
+    const logoutUrl =
+      discoveryState.status === "ready"
+        ? `${discoveryState.doc.end_session_endpoint}` +
+          `?client_id=${encodeURIComponent(CLIENT_ID)}` +
+          `&post_logout_redirect_uri=${encodeURIComponent(
+            POST_LOGOUT_URL
+          )}`
+        : null;
 
-    res.json({ logout_url: endSessionUrl });
+    res.json({ logout_url: logoutUrl });
   }
 );
 
@@ -1290,12 +1421,31 @@ app.post(
       application_type = "web"
     } = req.body ?? {};
 
-    if (typeof name !== "string" || !name.trim()) {
-      return res.status(400).json({ error: "Application name is required" });
+    if (
+      typeof name !== "string" ||
+      !name.trim()
+    ) {
+      return res.status(400).json({
+        error: "Application name is required"
+      });
+    }
+
+    if (name.trim().length > 120) {
+      return res.status(400).json({
+        error: "Application name must be 120 characters or fewer"
+      });
     }
 
     if (typeof description !== "string") {
-      return res.status(400).json({ error: "Description must be a string" });
+      return res.status(400).json({
+        error: "Description must be a string"
+      });
+    }
+
+    if (description.length > 2000) {
+      return res.status(400).json({
+        error: "Description must be 2000 characters or fewer"
+      });
     }
 
     if (!["web", "native"].includes(application_type)) {
@@ -1476,8 +1626,32 @@ app.patch(
       return res.status(400).json({ error: "Application name cannot be empty" });
     }
 
-    if (description !== undefined && typeof description !== "string") {
-      return res.status(400).json({ error: "Description must be a string" });
+    if (
+      description !== undefined &&
+      description !== null &&
+      typeof description !== "string"
+    ) {
+      return res.status(400).json({
+        error: "Description must be a string"
+      });
+    }
+
+    if (
+      typeof name === "string" &&
+      name.trim().length > 120
+    ) {
+      return res.status(400).json({
+        error: "Application name must be 120 characters or fewer"
+      });
+    }
+
+    if (
+      typeof description === "string" &&
+      description.length > 2000
+    ) {
+      return res.status(400).json({
+        error: "Description must be 2000 characters or fewer"
+      });
     }
 
     if (
@@ -1490,7 +1664,7 @@ app.patch(
     }
 
     let origin = null;
-    if (origin_url !== undefined) {
+    if (origin_url !== undefined && origin_url !== null) {
       const originValidation = validateOriginUrl(origin_url, { required: true });
       if (!originValidation.valid) {
         return res.status(400).json({ error: originValidation.error });
@@ -1523,6 +1697,22 @@ app.patch(
     }
 
     if (application_type !== undefined) {
+      const applicationResult = await pool.query(
+        `
+        SELECT id
+        FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        `,
+        [id, req.developer.id]
+      );
+
+      if (!applicationResult.rows.length) {
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
       const redirectResult = await pool.query(
         `
         SELECT uri
@@ -1555,15 +1745,15 @@ app.patch(
         `
         UPDATE public.applications
         SET
-          name = COALESCE($1, name),
-          description = COALESCE($2, description),
-          application_type = COALESCE($3, application_type),
-          origin_url = COALESCE($4, origin_url),
-          cross_app_scopes = COALESCE($5, cross_app_scopes),
-          status = COALESCE($6, status),
+          name = CASE WHEN $1::boolean THEN $2 ELSE name END,
+          description = CASE WHEN $3::boolean THEN $4 ELSE description END,
+          application_type = CASE WHEN $5::boolean THEN $6 ELSE application_type END,
+          origin_url = CASE WHEN $7::boolean THEN $8 ELSE origin_url END,
+          cross_app_scopes = CASE WHEN $9::boolean THEN $10 ELSE cross_app_scopes END,
+          status = CASE WHEN $11::boolean THEN $12 ELSE status END,
           updated_at = now()
-        WHERE id = $7
-          AND owner_id = $8
+        WHERE id = $13
+          AND owner_id = $14
         RETURNING
           id,
           name,
@@ -1578,11 +1768,21 @@ app.patch(
           (SELECT logo_url FROM public.application_branding WHERE application_id = public.applications.id) AS logo_url
         `,
         [
+          name !== undefined,
           name !== undefined ? name.trim() : null,
-          description !== undefined ? description.trim() : null,
+          description !== undefined,
+          description !== undefined
+            ? description === null
+              ? null
+              : description.trim()
+            : null,
+          application_type !== undefined,
           application_type ?? null,
+          origin_url !== undefined,
           origin,
+          cross_app_scopes !== undefined,
           scopes,
+          status !== undefined,
           status ?? null,
           id,
           req.developer.id
@@ -2658,11 +2858,200 @@ app.get(
       const uniqueUsers =
         Number(uniqueUsersResult.rows[0]?.count) || 0;
 
+      const [applicationResult, topUsersResult, hourlyResult] =
+        await Promise.all([
+          pool.query(
+            `
+            WITH owned_clients AS (
+              SELECT id, name, client_id
+              FROM public.applications
+              WHERE owner_id = $1
+            ),
+            sessions AS (
+              SELECT DISTINCT s.id,
+                COALESCE(
+                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
+                  s.created_at
+                ) AS login_at,
+                NULLIF(s.payload->>'accountId', '') AS account_id,
+                c.id AS application_id
+              FROM public.aceid_oidc_store s
+              JOIN owned_clients c
+                ON COALESCE(s.payload->'authorizations', '{}'::jsonb) ? c.client_id
+              WHERE s.model_name = 'Session'
+                AND s.payload->>'kind' = 'Session'
+                AND COALESCE(
+                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
+                  s.created_at
+                ) >= CURRENT_DATE - ($2::int - 1)
+                AND COALESCE(
+                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
+                  s.created_at
+                ) < CURRENT_DATE + INTERVAL '1 day'
+            ),
+            success AS (
+              SELECT application_id,
+                COUNT(*)::int AS logins,
+                COUNT(DISTINCT account_id)::int AS unique_users
+              FROM sessions
+              GROUP BY application_id
+            ),
+            failures AS (
+              SELECT c.id AS application_id, COUNT(*)::int AS failed_attempts
+              FROM public.aceid_auth_events e
+              JOIN owned_clients c ON c.client_id = e.client_id
+              WHERE e.event_type = 'login_failed'
+                AND e.created_at >= CURRENT_DATE - ($2::int - 1)
+                AND e.created_at < CURRENT_DATE + INTERVAL '1 day'
+              GROUP BY c.id
+            )
+            SELECT c.id, c.name,
+              COALESCE(s.logins, 0)::int AS logins,
+              COALESCE(s.unique_users, 0)::int AS unique_users,
+              COALESCE(f.failed_attempts, 0)::int AS failed_attempts
+            FROM owned_clients c
+            LEFT JOIN success s ON s.application_id = c.id
+            LEFT JOIN failures f ON f.application_id = c.id
+            ORDER BY logins DESC, c.name ASC
+            `,
+            [req.developer.id, days]
+          ),
+          pool.query(
+            `
+            WITH owned_clients AS (
+              SELECT client_id
+              FROM public.applications
+              WHERE owner_id = $1
+            ),
+            sessions AS (
+              SELECT DISTINCT s.id,
+                COALESCE(
+                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
+                  s.created_at
+                ) AS login_at,
+                NULLIF(s.payload->>'accountId', '') AS account_id
+              FROM public.aceid_oidc_store s
+              WHERE s.model_name = 'Session'
+                AND s.payload->>'kind' = 'Session'
+                AND EXISTS (
+                  SELECT 1 FROM owned_clients c
+                  WHERE COALESCE(s.payload->'authorizations', '{}'::jsonb) ? c.client_id
+                )
+            )
+            SELECT u.id, u.email, u.display_name, u.username, u.avatar_url,
+              COUNT(*)::int AS logins,
+              MIN(s.login_at) AS first_seen,
+              MAX(s.login_at) AS last_seen
+            FROM sessions s
+            JOIN public.aceid_users u ON u.id::text = s.account_id
+            WHERE s.login_at >= CURRENT_DATE - ($2::int - 1)
+              AND s.login_at < CURRENT_DATE + INTERVAL '1 day'
+            GROUP BY u.id, u.email, u.display_name, u.username, u.avatar_url
+            ORDER BY logins DESC, last_seen DESC
+            LIMIT 10
+            `,
+            [req.developer.id, days]
+          ),
+          pool.query(
+            `
+            WITH owned_clients AS (
+              SELECT client_id
+              FROM public.applications
+              WHERE owner_id = $1
+            ),
+            sessions AS (
+              SELECT DISTINCT s.id,
+                COALESCE(
+                  to_timestamp(NULLIF(s.payload->>'loginTs', '')::double precision),
+                  s.created_at
+                ) AS login_at
+              FROM public.aceid_oidc_store s
+              WHERE s.model_name = 'Session'
+                AND s.payload->>'kind' = 'Session'
+                AND EXISTS (
+                  SELECT 1 FROM owned_clients c
+                  WHERE COALESCE(s.payload->'authorizations', '{}'::jsonb) ? c.client_id
+                )
+            )
+            SELECT EXTRACT(HOUR FROM login_at)::int AS hour,
+              COUNT(*)::int AS count
+            FROM sessions
+            WHERE login_at >= CURRENT_DATE - ($2::int - 1)
+              AND login_at < CURRENT_DATE + INTERVAL '1 day'
+            GROUP BY 1
+            ORDER BY 1
+            `,
+            [req.developer.id, days]
+          )
+        ]);
+
+      const applications = applicationResult.rows.map(row => {
+        const logins = Number(row.logins) || 0;
+        const failed = Number(row.failed_attempts) || 0;
+
+        return {
+          id: row.id,
+          name: row.name,
+          logins,
+          uniqueUsers: Number(row.unique_users) || 0,
+          failedAttempts: failed,
+          successRate: logins + failed
+            ? Math.round((logins / (logins + failed)) * 1000) / 10
+            : null
+        };
+      });
+
+      const topUsers = topUsersResult.rows.map(row => ({
+        id: row.id,
+        email: row.email,
+        displayName: row.display_name,
+        username: row.username,
+        avatarUrl: row.avatar_url,
+        logins: Number(row.logins) || 0,
+        firstSeen: row.first_seen,
+        lastSeen: row.last_seen
+      }));
+
+      const hourly = Array.from(
+        { length: 24 },
+        (_, hour) => ({ hour, count: 0 })
+      );
+
+      for (const row of hourlyResult.rows) {
+        const hour = Number(row.hour);
+
+        if (hour >= 0 && hour < 24) {
+          hourly[hour].count = Number(row.count) || 0;
+        }
+      }
+
+      const peakDay = items.reduce(
+        (peak, item) =>
+          item.count > (peak?.count ?? -1) ? item : peak,
+        null
+      );
+
       res.json({
         days,
         total,
         uniqueUsers,
         failedAttempts,
+        successRate:
+          total + failedAttempts
+            ? Math.round(
+                (total / (total + failedAttempts)) * 1000
+              ) / 10
+            : null,
+        activeUsers: uniqueUsers,
+        peakDay: peakDay
+          ? {
+              date: peakDay.date,
+              count: peakDay.count
+            }
+          : null,
+        applications,
+        topUsers,
+        hourly,
         items
       });
     } catch (error) {
@@ -2772,6 +3161,7 @@ function sendFrontendFile(relativePath) {
 app.get("/", sendFrontendFile("index.html"));
 app.get("/app.js", sendFrontendFile("app.js"));
 app.get("/api.js", sendFrontendFile("api.js"));
+app.get("/boot-fallback.js", sendFrontendFile("boot-fallback.js"));
 app.get(
   "/ui.js",
   sendFrontendFile("ui.js")

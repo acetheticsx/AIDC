@@ -120,38 +120,10 @@ export const api = {
       return request("/applications");
     },
 
-    async get(applicationId) {
-      try {
-        return await request(
-          `/applications/${id(applicationId)}`
-        );
-      } catch (error) {
-        /*
-         * Older AIDC API deployments may not expose
-         * the single-application endpoint yet. The
-         * authenticated applications list contains the
-         * same application records, so use it as a safe
-         * compatibility fallback instead of showing a
-         * misleading "API endpoint not found" toast.
-         */
-        if (error?.status !== 404) {
-          throw error;
-        }
-
-        const data = await request("/applications");
-        const application =
-          data?.applications?.find(
-            item =>
-              String(item?.id) ===
-              String(applicationId)
-          );
-
-        if (!application) {
-          throw error;
-        }
-
-        return { application };
-      }
+    get(applicationId) {
+      return request(
+        `/applications/${id(applicationId)}`
+      );
     },
 
     create(payload) {
