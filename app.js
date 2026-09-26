@@ -30,7 +30,21 @@ const state = {
   applications: [],
   applicationsError: null,
 
-  analytics: { days: 7, items: [], total: 0, uniqueUsers: 0, failedAttempts: 0, loading: false, error: null },
+  analytics: {
+    days: 7,
+    items: [],
+    total: 0,
+    uniqueUsers: 0,
+    failedAttempts: 0,
+    successRate: null,
+    activeUsers: 0,
+    peakDay: null,
+    applications: [],
+    topUsers: [],
+    hourly: [],
+    loading: false,
+    error: null
+  },
   quota: {
     verified: false,
     count: 0,
@@ -1075,6 +1089,12 @@ const analytics = {
         total: Number(data?.total) || 0,
         uniqueUsers: Number(data?.uniqueUsers) || 0,
         failedAttempts: Number(data?.failedAttempts) || 0,
+        successRate: Number.isFinite(Number(data?.successRate)) ? Number(data.successRate) : null,
+        activeUsers: Number(data?.activeUsers) || 0,
+        peakDay: data?.peakDay || null,
+        applications: Array.isArray(data?.applications) ? data.applications : [],
+        topUsers: Array.isArray(data?.topUsers) ? data.topUsers : [],
+        hourly: Array.isArray(data?.hourly) ? data.hourly : [],
         loading: false,
         error: null
       };
