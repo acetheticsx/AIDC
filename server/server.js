@@ -271,7 +271,7 @@ app.use((req, res, next) => {
     "Content-Security-Policy":
       "default-src 'self'; " +
       "script-src 'self' https://cdn.jsdelivr.net; " +
-      "style-src 'self' 'unsafe-inline' https://use.hugeicons.com; " +
+      "style-src 'self' https://use.hugeicons.com; " +
       "font-src 'self' https://use.hugeicons.com https://fonts.gstatic.com data:; " +
       "img-src 'self' https: data:; " +
       "connect-src 'self' https:; " +
@@ -2888,6 +2888,7 @@ function sendFrontendFile(relativePath) {
 app.get("/", sendFrontendFile("index.html"));
 app.get("/app.js", sendFrontendFile("app.js"));
 app.get("/api.js", sendFrontendFile("api.js"));
+app.get("/boot-fallback.js", sendFrontendFile("boot-fallback.js"));
 app.get(
   "/ui.js",
   sendFrontendFile("ui.js")
