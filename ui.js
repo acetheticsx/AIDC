@@ -117,12 +117,26 @@ export function registerAIDCComponents(AIDC) {
       mobileOpen: {
         type: Boolean,
         attribute: false
+      },
+      theme: {
+        type: String,
+        attribute: false
       }
     };
 
     constructor() {
       super();
       this.mobileOpen = false;
+      this.theme = "light";
+    }
+
+    toggleTheme() {
+      this.dispatchEvent(
+        new CustomEvent("aidc-toggle-theme", {
+          bubbles: true,
+          composed: true
+        })
+      );
     }
 
     closeMobile() {
@@ -4982,7 +4996,7 @@ await auth.signIn();</code></pre>
           <div>
             <aidc-sidebar
               .mobileOpen=${this.sidebarOpen}
-            ></aidc-sidebar>
+             .theme=\${this.theme} @aidc-toggle-theme=\${this.toggleTheme}></aidc-sidebar>
           </div>
 
           ${this.shortcutsOpen
