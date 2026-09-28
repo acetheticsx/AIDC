@@ -4900,16 +4900,6 @@ await auth.signIn();</code></pre>
           <main class="aidc-main">
 
             <header class="aidc-mobile-header">
-              <button
-                class="aidc-mobile-help"
-                type="button"
-                aria-label="Help and resources"
-                title="Help"
-                @click=${this.openHelp}
-              >
-                ${icon("information-circle")}
-              </button>
-
               <a class="aidc-mobile-brand" href="#/" aria-label="AIDC overview">
                 <span>AIDC</span>
               </a>
@@ -5001,14 +4991,13 @@ await auth.signIn();</code></pre>
             </nav>
 
             <button
-              class="aidc-mobile-account"
+              class="aidc-mobile-help-fab"
               type="button"
-              aria-label="Open account menu"
-              aria-haspopup="menu"
-              aria-expanded=${this.accountMenuOpen}
-              @click=${() => (this.accountMenuOpen = !this.accountMenuOpen)}
+              aria-label="Help and resources"
+              title="Help"
+              @click=${this.openHelp}
             >
-              ${state.user ? userAvatar(state.user, "aidc-mobile-account-avatar") : icon("user-01")}
+              <span aria-hidden="true">?</span>
             </button>
           </div>
 
