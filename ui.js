@@ -5053,54 +5053,7 @@ await auth.signIn();</code></pre>
               ${this.renderPage()}
             </div>
 
-            ${this.accountMenuOpen
-              ? html`
-                  <div class="aidc-account-menu" role="menu" aria-label="Account">
-                    <div class="aidc-account-menu-identity">
-                      ${state.user ? userAvatar(state.user, "aidc-account-menu-avatar") : icon("user-01")}
-                      <div>
-                        <strong>${text(state.user?.name || state.user?.email || "Ace ID")}</strong>
-                        ${state.user?.email ? html`<span>${text(state.user.email)}</span>` : ""}
-                      </div>
-                    </div>
 
-                    <div class="aidc-account-menu-divider"></div>
-
-                    <a
-                      class="aidc-account-menu-item"
-                      role="menuitem"
-                      href="https://identity.ace-base.cc/account"
-                      @click=${() => (this.accountMenuOpen = false)}
-                    >
-                      ${icon("user-01")}
-                      <span>Account</span>
-                    </a>
-
-                    <a
-                      class="aidc-account-menu-item"
-                      role="menuitem"
-                      href="https://identity.ace-base.cc/login?switch=1"
-                      @click=${() => (this.accountMenuOpen = false)}
-                    >
-                      ${icon("refresh-01")}
-                      <span>Switch account</span>
-                    </a>
-
-                    <button
-                      class="aidc-account-menu-item danger"
-                      type="button"
-                      role="menuitem"
-                      @click=${async () => {
-                        this.accountMenuOpen = false;
-                        await auth.logout();
-                      }}
-                    >
-                      ${icon("logout-01")}
-                      <span>Log out</span>
-                    </button>
-                  </div>
-                `
-              : ""}
 
           </main>
 
