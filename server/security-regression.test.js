@@ -16,6 +16,36 @@ const robots = await fs.readFile(path.join(here, "..", "robots.txt"), "utf8");
 const sitemap = await fs.readFile(path.join(here, "..", "sitemap.xml"), "utf8");
 const llms = await fs.readFile(path.join(here, "..", "llms.txt"), "utf8");
 
+
+test("API and auth responses are not cacheable", () => {
+  assert.match(server, /"Cache-Control": "no-store"/);
+});
+
+test("responses have server-generated request correlation IDs", () => {
+  assert.match(server, /crypto\\.randomUUID\\(\\)/);
+  assert.match(server, /X-Request-ID/);
+  assert.match(server, /request_id: req\\.requestId/);
+});
+
+test("rate-limit buckets are isolated by traffic class", () => {
+  assert.match(server, /name = "default"/);
+  assert.match(server, /const key = .*name.*ip/);
+  assert.match(server, /name: "auth"/);
+  assert.match(server, /name: "api"/);
+});
+
+test("HTTP server has bounded request and header timeouts", () => {
+  assert.match(server, /server\\.requestTimeout = 30_000/);
+  assert.match(server, /server\\.headersTimeout = 35_000/);
+  assert.match(server, /server\\.keepAliveTimeout = 65_000/);
+});
+
+test("shutdown is idempotent and has a force-exit safety timer", () => {
+  assert.match(server, /let shuttingDown = false/);
+  assert.match(server, /if \\(shuttingDown\\)/);
+  assert.match(server, /Forced shutdown after timeout/);
+});
+
 test("database TLS verifies certificates", () => {
   assert.match(
     server,
