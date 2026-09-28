@@ -6868,3 +6868,107 @@ body:has(
   .aidc-about-list > div { display: grid; gap: 3px; }
   .aidc-about-list strong { text-align: left; }
 }
+
+
+/* Final responsive overview + mobile navigation correction. */
+.aidc-metric-segments{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:0;
+  margin:0 0 42px;
+  border:1px solid var(--aidc-border);
+  border-radius:16px;
+  overflow:hidden;
+}
+.aidc-metric-segment{
+  min-height:72px;
+  padding:14px 16px;
+  border:0;
+  border-right:1px solid var(--aidc-border);
+  border-radius:0;
+  background:var(--aidc-surface-soft);
+}
+.aidc-metric-segment:last-child{
+  border-right:0;
+}
+
+@media (max-width:760px){
+  .aidc-mobile-brand small{
+    display:none !important;
+  }
+
+  .aidc-mobile-actions{
+    width:max-content !important;
+    max-width:calc(100vw - 16px) !important;
+  }
+
+  .aidc-mobile-nav{
+    width:max-content !important;
+    max-width:none !important;
+    grid-template-columns:none !important;
+  }
+
+  .aidc-mobile-nav-item{
+    width:42px !important;
+    min-width:42px !important;
+    max-width:42px !important;
+    flex:0 0 42px !important;
+    text-transform:none !important;
+  }
+
+  .aidc-mobile-nav-item.active{
+    width:100px !important;
+    min-width:100px !important;
+    max-width:100px !important;
+    flex-basis:100px !important;
+  }
+
+  .aidc-metric-segments{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:0;
+    margin-bottom:32px;
+    border-radius:14px;
+  }
+
+  .aidc-metric-segment{
+    min-height:68px;
+    padding:12px 10px;
+    gap:7px;
+  }
+
+  .aidc-metric-segment span{
+    font-size:10px;
+  }
+
+  .aidc-metric-segment strong{
+    font-size:21px;
+  }
+
+  .aidc-metric-segment small{
+    font-size:8px;
+  }
+
+  .aidc-metric-segment > .aidc-icon{
+    width:30px;
+    height:30px;
+  }
+}
+
+@media (max-width:430px){
+  .aidc-metric-segment{
+    min-height:64px;
+    padding:10px 8px;
+  }
+
+  .aidc-metric-segment > .aidc-icon{
+    display:none;
+  }
+
+  .aidc-metric-segment span{
+    font-size:9px;
+  }
+
+  .aidc-metric-segment strong{
+    font-size:20px;
+  }
+}
