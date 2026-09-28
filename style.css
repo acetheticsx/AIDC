@@ -3611,46 +3611,6 @@ body:has(
 .aidc-scope-input:focus-visible{outline:2px solid var(--aidc-text);outline-offset:2px}
 .aidc-scope-input:disabled{cursor:not-allowed;opacity:.5}
 
-.aidc-cross-app-card{margin-top:14px;padding:14px;border:1px solid var(--aidc-border);border-radius:12px;background:var(--aidc-surface-soft)}
-.aidc-cross-app-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
-.aidc-cross-app-heading strong{display:block;font-size:12px;font-weight:650}
-.aidc-cross-app-heading p{margin:4px 0 0;color:var(--aidc-muted);font-size:11px;line-height:1.45}
-.aidc-cross-app-heading>.aidc-icon{flex-shrink:0;color:var(--aidc-muted)}
-.aidc-origin-warning{margin-top:9px;border-color:#dfd5bf;background:#f7f2e7;color:#6f5d38}
-.aidc-dialog-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:18px}
-@media (max-width:900px){.aidc-scope-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:600px){.aidc-scope-grid{grid-template-columns:1fr}.aidc-tabs{gap:18px}.aidc-detail-header{align-items:flex-start}.aidc-page-header{align-items:flex-start}}
-
-.aidc-scope-grid .aidc-config-item{min-height:148px}
-.aidc-scope-grid{align-items:stretch}
-.aidc-scope-grid .aidc-config-value{min-width:0}
-.aidc-dialog-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:18px}
-@media (max-width:900px){.aidc-scope-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:600px){.aidc-scope-grid{grid-template-columns:1fr}.aidc-tabs{gap:18px}.aidc-detail-header{align-items:flex-start}.aidc-page-header{align-items:flex-start}}
-
-.aidc-overview-activity{margin-top:16px}
-.aidc-overview-activity .aidc-card-section-header{display:flex;align-items:center;justify-content:space-between;gap:16px}
-.aidc-inline-button{min-height:34px;padding:0 10px;text-decoration:none;white-space:nowrap}
-.aidc-inline-button>.aidc-icon:last-child{margin-left:4px}
-.aidc-overview-activity-body>.aidc-card{border:0;padding:0;background:transparent;box-shadow:none}
-.aidc-overview-activity-body>.aidc-card>.aidc-card-section-header{display:none}
-.aidc-overview-activity-body .aidc-detail-fields{border-top:1px solid var(--aidc-border-soft)}
-.aidc-activity-list{display:grid;border-top:1px solid var(--aidc-border-soft)}
-.aidc-activity-row{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:58px;padding:10px 0;border-bottom:1px solid var(--aidc-border-soft)}
-.aidc-activity-row:last-child{border-bottom:0}
-.aidc-activity-main{display:flex;align-items:center;gap:10px;min-width:0}
-.aidc-activity-main>div{display:grid;gap:2px;min-width:0}
-.aidc-activity-icon{display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border:1px solid var(--aidc-border);border-radius:8px;background:var(--aidc-surface)}
-.aidc-activity-main strong{font-size:12px;font-weight:650}
-.aidc-activity-status{font-size:10px;color:var(--aidc-muted)}
-.aidc-activity-status.is-success{color:var(--aidc-text-secondary)}
-.aidc-activity-status.is-failed{color:var(--aidc-danger)}
-.aidc-activity-row time{flex:0 0 auto;color:var(--aidc-muted);font-size:10px}
-@media (max-width:600px){.aidc-overview-activity .aidc-card-section-header{align-items:flex-start}.aidc-overview-activity .aidc-card-section-header>.aidc-inline-button{flex:0 0 auto}.aidc-activity-row{align-items:flex-start}.aidc-activity-row time{padding-top:2px}}
-
-.aidc-url-config-stack{display:grid;gap:18px}.aidc-inline-meta{color:var(--aidc-muted);font-size:11px;font-weight:600}
-
-
 /* ═══════════════════════════════════════════
    RESPONSIVE / APPLICATION DETAIL REFINEMENT
    ═══════════════════════════════════════════ */
@@ -6455,5 +6415,137 @@ body:has(
 
   .aidc-landing-faq-list details p{
     padding:0 14px 14px;
+  }
+}
+
+
+.aidc-origin-verification{
+  margin-top:14px;
+  padding:16px;
+  border:1px solid var(--aidc-border);
+  border-radius:14px;
+  background:var(--aidc-surface-soft);
+}
+
+.aidc-origin-verification-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+}
+
+.aidc-origin-verification-head strong{
+  display:block;
+  margin-top:3px;
+  font-size:13px;
+}
+
+.aidc-origin-verification-head p{
+  max-width:620px;
+  margin:5px 0 0;
+  color:var(--aidc-muted);
+  font-size:10px;
+  line-height:1.5;
+}
+
+.aidc-origin-verification-badge{
+  flex:0 0 auto;
+  padding:5px 8px;
+  border:1px solid var(--aidc-border);
+  border-radius:7px;
+  color:var(--aidc-muted);
+  font-family:var(--aidc-font-mono);
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+
+.aidc-origin-verification-badge.is-verified{
+  border-color:var(--aidc-text);
+  color:var(--aidc-text);
+}
+
+.aidc-dns-record{
+  display:grid;
+  margin-top:14px;
+  border:1px solid var(--aidc-border);
+  border-radius:10px;
+  background:var(--aidc-surface);
+  overflow:hidden;
+}
+
+.aidc-dns-row{
+  display:grid;
+  grid-template-columns:48px minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+  padding:10px 12px;
+  border-bottom:1px solid var(--aidc-border);
+}
+
+.aidc-dns-row:last-child{
+  border-bottom:0;
+}
+
+.aidc-dns-row > span{
+  color:var(--aidc-muted);
+  font-family:var(--aidc-font-mono);
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+
+.aidc-dns-row code{
+  min-width:0;
+  overflow:auto;
+  color:var(--aidc-text);
+  font-family:var(--aidc-font-mono);
+  font-size:9px;
+  line-height:1.5;
+  white-space:nowrap;
+  scrollbar-width:thin;
+}
+
+.aidc-icon-button{
+  display:grid;
+  place-items:center;
+  width:30px;
+  height:30px;
+  padding:0;
+  border:1px solid var(--aidc-border);
+  border-radius:8px;
+  background:var(--aidc-surface);
+  color:var(--aidc-muted);
+  cursor:pointer;
+}
+
+.aidc-icon-button:hover{
+  color:var(--aidc-text);
+}
+
+@media (max-width:480px){
+  .aidc-origin-verification{
+    padding:13px;
+  }
+
+  .aidc-origin-verification-head{
+    flex-direction:column;
+    gap:9px;
+  }
+
+  .aidc-dns-row{
+    grid-template-columns:1fr auto;
+    gap:6px 9px;
+  }
+
+  .aidc-dns-row > span{
+    grid-column:1 / -1;
+  }
+
+  .aidc-dns-row code{
+    max-width:calc(100vw - 86px);
   }
 }
