@@ -2860,11 +2860,10 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
 
     updated(changed) {
       /*
-       * Clear the one-time secret on app
-       * switch. Doing this here — and not in
-       * load() — means rotate() → load() does
-       * not wipe the secret that was just
-       * displayed.
+       * Clear the one-time secret on app switch.
+       * Doing this here - and not in load() - means
+       * rotate() -> load() does not wipe the secret
+       * that was just displayed.
        */
       if (changed.has("applicationId")) {
         this.secret = "";
@@ -2876,6 +2875,15 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       ) {
         this.load();
       }
+    }
+
+    disconnectedCallback() {
+      /*
+       * Clear the secret when the component is removed
+       * from the DOM to prevent memory retention.
+       */
+      this.secret = "";
+      super.disconnectedCallback?.();
     }
 
     async load() {
@@ -2918,6 +2926,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       }
 
       this.rotating = true;
+      this.secret = "";
 
       try {
         const credential =
@@ -2926,6 +2935,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
           );
 
         this.secret = credential.secret;
+        this.requestUpdate();
 
         await this.load();
       } finally {
@@ -2964,6 +2974,13 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
 
       if (copied) {
         notify("Client secret copied");
+
+        /*
+         * Clear the secret after successful copy as a
+         * convenience to encourage one-time use.
+         */
+        this.secret = "";
+        this.requestUpdate();
       }
     }
 
