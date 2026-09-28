@@ -226,6 +226,9 @@ export function registerAIDCComponents(AIDC) {
           <div class="aidc-sidebar-spacer"></div>
 
           <div class="aidc-sidebar-links">
+            <button class="aidc-sidebar-link" type="button" @click=${() => this.dispatchEvent(new CustomEvent("aidc-open-about", { bubbles: true, composed: true }))}>
+              ${icon("information-circle")}<span>About</span>
+            </button>
             <a class="aidc-sidebar-link" href="https://docs.ace-base.cc" target="_blank" rel="noreferrer">
               ${icon("book-01")}<span>Docs</span>${icon("arrow-up-right-01")}
             </a>
@@ -4336,6 +4339,9 @@ await auth.signIn();</code></pre>
       },
       accountMenuOpen: {
         state: true
+      },
+      aboutOpen: {
+        state: true
       }
     };
 
@@ -4346,6 +4352,7 @@ await auth.signIn();</code></pre>
       this.helpOpen = false;
       this.shortcutsOpen = false;
       this.accountMenuOpen = false;
+      this.aboutOpen = false;
       this._shortcutPrefix = false;
       this._shortcutTimer = null;
 
@@ -4361,6 +4368,16 @@ await auth.signIn();</code></pre>
       window.addEventListener(
         "aidc-close-sidebar",
         this._closeSidebar
+      );
+
+      this._openAbout = () => {
+        this.aboutOpen = true;
+        this.sidebarOpen = false;
+      };
+
+      window.addEventListener(
+        "aidc-open-about",
+        this._openAbout
       );
 
       this._desktopShortcutKeydown = event => {
@@ -4435,6 +4452,11 @@ await auth.signIn();</code></pre>
       );
 
       window.removeEventListener(
+        "aidc-open-about",
+        this._openAbout
+      );
+
+      window.removeEventListener(
         "keydown",
         this._desktopShortcutKeydown
       );
@@ -4463,6 +4485,12 @@ await auth.signIn();</code></pre>
         return;
       }
 
+      if (this.aboutOpen) {
+        this.aboutOpen = false;
+        haptic?.(4);
+        return;
+      }
+
       this.sidebarOpen = false;
     }
 
@@ -4473,6 +4501,16 @@ await auth.signIn();</code></pre>
 
     closeHelp() {
       this.helpOpen = false;
+      haptic?.(4);
+    }
+
+    openAbout() {
+      this.aboutOpen = true;
+      haptic?.(8);
+    }
+
+    closeAbout() {
+      this.aboutOpen = false;
       haptic?.(4);
     }
 
@@ -4502,7 +4540,6 @@ await auth.signIn();</code></pre>
               />
               <span>
                 <strong>AIDC</strong>
-                <small>Developer Console</small>
               </span>
             </a>
 
@@ -4585,7 +4622,7 @@ await auth.signIn();</code></pre>
                   <span>
                     ${state.authReady
                       ? signedIn
-                        ? "Open developer console"
+                        ? "Open AIDC"
                         : "Continue with Ace ID"
                       : "Checking Ace ID…"}
                   </span>
@@ -4680,7 +4717,7 @@ await auth.signIn();</code></pre>
               <div class="aidc-landing-preview">
                 <div class="aidc-landing-preview-top">
                   <span></span>
-                  <small>AIDC / CONSOLE</small>
+                  <small>AIDC</small>
                   <span></span>
                 </div>
 
@@ -4949,6 +4986,34 @@ await auth.signIn();</code></pre>
               ${icon("help-circle")}
             </button>
           </div>
+
+          ${
+            this.aboutOpen
+              ? html`
+                  <div class="aidc-about-layer">
+                    <button class="aidc-about-backdrop" type="button" aria-label="Close About" @click=${this.closeAbout}></button>
+                    <section class="aidc-about-dialog" role="dialog" aria-modal="true" aria-labelledby="aidc-about-title">
+                      <header class="aidc-about-header">
+                        <div>
+                          <span class="aidc-eyebrow">AIDC</span>
+                          <h2 id="aidc-about-title">About AIDC</h2>
+                        </div>
+                        <button class="aidc-icon-button" type="button" aria-label="Close About" @click=${this.closeAbout}>
+                          ${icon("cancel-01")}
+                        </button>
+                      </header>
+                      <div class="aidc-about-body">
+                        <p>AIDC is the identity workspace for creating and managing applications connected to Ace ID.</p>
+                        <div class="aidc-about-list">
+                          <div><span>Applications</span><strong>OAuth and OpenID Connect</strong></div>
+                          <div><span>Configuration</span><strong>Redirect URIs, scopes, credentials</strong></div>
+                          <div><span>Insights</span><strong>Authentication activity and analytics</strong></div>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                `
+              : ""}
 
           ${
             this.helpOpen
