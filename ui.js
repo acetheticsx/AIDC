@@ -131,12 +131,23 @@ export function registerAIDCComponents(AIDC) {
     }
 
     toggleTheme() {
-      this.dispatchEvent(
-        new CustomEvent("aidc-toggle-theme", {
-          bubbles: true,
-          composed: true
+      const nextTheme =
+        document.documentElement.dataset.theme === "dark"
+          ? "light"
+          : "dark";
+
+      document.documentElement.dataset.theme = nextTheme;
+      document.documentElement.style.colorScheme = nextTheme;
+      localStorage.setItem("aidc-theme", nextTheme);
+
+      this.theme = nextTheme;
+      window.dispatchEvent(
+        new CustomEvent("aidc-theme-change", {
+          detail: { theme: nextTheme }
         })
       );
+
+      haptic?.(6);
     }
 
     closeMobile() {
@@ -4455,6 +4466,16 @@ await auth.signIn();</code></pre>
         localStorage.getItem("aidc-theme") ||
         (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
       this.applyTheme();
+
+      this._themeChange = event => {
+        this.theme = event.detail?.theme === "dark" ? "dark" : "light";
+        this.applyTheme();
+      };
+
+      window.addEventListener(
+        "aidc-theme-change",
+        this._themeChange
+      );
 
       window.addEventListener(
         "aidc-close-sidebar",
