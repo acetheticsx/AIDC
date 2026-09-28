@@ -4711,13 +4711,13 @@ await auth.signIn();</code></pre>
                 <div class="aidc-landing-faq-heading">
                   <span class="aidc-landing-eyebrow">Developer guide</span>
                   <h2 id="aidc-landing-faq-title">AIDC at a glance</h2>
-                  <p>Direct answers about the Ace Base identity developer console.</p>
+                  <p>Direct answers about AIDC.</p>
                 </div>
 
                 <div class="aidc-landing-faq-list">
                   <details>
                     <summary>What is AIDC?</summary>
-                    <p>AIDC is the Ace Base developer console for creating and managing identity applications and configuring OAuth 2.0 and OpenID Connect integrations.</p>
+                    <p>AIDC creates and manages identity applications and OAuth 2.0 and OpenID Connect integrations.</p>
                   </details>
 
                   <details>
