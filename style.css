@@ -2551,7 +2551,7 @@ body:has(
    TABLET
    ═══════════════════════════════════════ */
 
-@media (max-width: 900px) {
+@media (max-width:760px) {
   .aidc-sidebar {
     width: 210px;
     min-width: 210px;
@@ -3476,7 +3476,7 @@ body:has(
   text-transform: uppercase;
 }
 
-@media (max-width: 900px) {
+@media (max-width:760px) {
   .aidc-landing-main {
     grid-template-columns: 1fr;
     gap: 54px;
@@ -3736,7 +3736,7 @@ body:has(
   }
 }
 
-@media (max-width:900px){
+@media (max-width:760px){
   .aidc-content{
     padding:32px 24px 56px;
   }
@@ -4982,7 +4982,7 @@ body:has(
   }
 }
 
-@media (max-width:900px){
+@media (max-width:760px){
   .aidc-analytics-summary,
   .aidc-branding-layout,
   .aidc-playground-grid{
@@ -5251,7 +5251,7 @@ body:has(
 }
 .aidc-analytics-user-stat strong{font-size:14px}
 .aidc-analytics-user-stat span{color:var(--aidc-muted);font-size:9px}
-@media(max-width:900px){
+@media (max-width:760px){
   .aidc-analytics-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
   .aidc-analytics-grid{grid-template-columns:1fr}
 }
@@ -6975,7 +6975,7 @@ body:has(
 
 
 /* Final tablet/mobile layout boundary. */
-@media (max-width: 900px) {
+@media (max-width:760px) {
   .aidc-shell {
     grid-template-columns: 1fr !important;
   }
@@ -7149,7 +7149,7 @@ body:has(
 
 
 /* AIDC mobile navigation theme. */
-@media (max-width: 900px) {
+@media (max-width:760px) {
   .aidc-mobile-actions {
     gap: 7px;
     padding: 5px;
@@ -7282,7 +7282,7 @@ body:has(
 
 
 /* Final mobile navigation composition: nav pill + separate profile FAB. */
-@media (max-width: 900px) {
+@media (max-width:760px) {
   .aidc-mobile-header {
     position: sticky;
     display: grid !important;
@@ -7386,7 +7386,7 @@ body:has(
 
 
 /* Final tablet boundary: one header profile + one separated profile FAB. */
-@media (max-width: 1100px) {
+@media (max-width:760px) {
   .aidc-shell {
     grid-template-columns: 1fr !important;
   }
@@ -7481,5 +7481,51 @@ body:has(
     flex-basis: 46px !important;
     width: 46px !important;
     height: 46px !important;
+  }
+}
+
+
+/* Final responsive boundary, help layering, and link reset. */
+.aidc-shell a,
+.aidc-shell a:visited,
+.aidc-shell a:hover,
+.aidc-shell a:active,
+.aidc-shell a:focus {
+  text-decoration: none;
+}
+
+.aidc-help-sheet-layer {
+  z-index: 300 !important;
+}
+
+@media (min-width:761px) {
+  .aidc-sidebar {
+    display: flex !important;
+  }
+
+  .aidc-mobile-header,
+  .aidc-mobile-actions,
+  .aidc-mobile-menu,
+  .aidc-sidebar-overlay,
+  .aidc-mobile-close {
+    display: none !important;
+  }
+
+  .aidc-profile-desktop {
+    display: flex !important;
+  }
+
+  .aidc-shell {
+    display: flex !important;
+  }
+}
+
+@media (max-width:760px) {
+  .aidc-help-sheet-layer {
+    z-index: 300 !important;
+  }
+
+  .aidc-mobile-actions {
+    z-index: 120 !important;
   }
 }
