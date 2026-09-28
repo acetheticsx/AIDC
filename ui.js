@@ -4333,6 +4333,9 @@ await auth.signIn();</code></pre>
       },
       shortcutsOpen: {
         state: true
+      },
+      accountMenuOpen: {
+        state: true
       }
     };
 
@@ -4342,6 +4345,7 @@ await auth.signIn();</code></pre>
       this.sidebarOpen = false;
       this.helpOpen = false;
       this.shortcutsOpen = false;
+      this.accountMenuOpen = false;
       this._shortcutPrefix = false;
       this._shortcutTimer = null;
 
@@ -4449,6 +4453,12 @@ await auth.signIn();</code></pre>
 
       if (this.helpOpen) {
         this.helpOpen = false;
+        haptic?.(4);
+        return;
+      }
+
+      if (this.accountMenuOpen) {
+        this.accountMenuOpen = false;
         haptic?.(4);
         return;
       }
@@ -4835,23 +4845,87 @@ await auth.signIn();</code></pre>
 
               <a class="aidc-mobile-brand" href="#/" aria-label="AIDC overview">
                 <span>AIDC</span>
-                <small>Console</small>
               </a>
 
               <span class="aidc-mobile-header-spacer"></span>
 
-              <a class="aidc-profile-button" href="https://identity.ace-base.cc/account" aria-label="Open Ace ID" title="Ace ID">
+              <button
+                class="aidc-profile-button"
+                type="button"
+                aria-label="Open account menu"
+                aria-haspopup="menu"
+                aria-expanded=${this.accountMenuOpen}
+                title="Account"
+                @click=${() => (this.accountMenuOpen = !this.accountMenuOpen)}
+              >
                 ${state.user ? userAvatar(state.user, "aidc-profile-avatar") : icon("user-01")}
-              </a>
+              </button>
             </header>
 
             <div class="aidc-content">
               ${this.renderPage()}
             </div>
 
-            <a class="aidc-profile-desktop" href="https://identity.ace-base.cc/account" aria-label="Open Ace ID" title="Ace ID">
+            <button
+              class="aidc-profile-desktop"
+              type="button"
+              aria-label="Open account menu"
+              aria-haspopup="menu"
+              aria-expanded=${this.accountMenuOpen}
+              title="Account"
+              @click=${() => (this.accountMenuOpen = !this.accountMenuOpen)}
+            >
               ${state.user ? userAvatar(state.user, "aidc-profile-avatar") : icon("user-01")}
-            </a>
+            </button>
+
+            ${this.accountMenuOpen
+              ? html`
+                  <div class="aidc-account-menu" role="menu" aria-label="Account">
+                    <div class="aidc-account-menu-identity">
+                      ${state.user ? userAvatar(state.user, "aidc-account-menu-avatar") : icon("user-01")}
+                      <div>
+                        <strong>${text(state.user?.name || state.user?.email || "Ace ID")}</strong>
+                        ${state.user?.email ? html`<span>${text(state.user.email)}</span>` : ""}
+                      </div>
+                    </div>
+
+                    <div class="aidc-account-menu-divider"></div>
+
+                    <a
+                      class="aidc-account-menu-item"
+                      role="menuitem"
+                      href="https://identity.ace-base.cc/account"
+                      @click=${() => (this.accountMenuOpen = false)}
+                    >
+                      ${icon("user-01")}
+                      <span>Account</span>
+                    </a>
+
+                    <a
+                      class="aidc-account-menu-item"
+                      role="menuitem"
+                      href="https://identity.ace-base.cc/login?switch=1"
+                      @click=${() => (this.accountMenuOpen = false)}
+                    >
+                      ${icon("refresh-01")}
+                      <span>Switch account</span>
+                    </a>
+
+                    <button
+                      class="aidc-account-menu-item danger"
+                      type="button"
+                      role="menuitem"
+                      @click=${async () => {
+                        this.accountMenuOpen = false;
+                        await auth.logout();
+                      }}
+                    >
+                      ${icon("logout-01")}
+                      <span>Log out</span>
+                    </button>
+                  </div>
+                `
+              : ""}
 
           </main>
 
