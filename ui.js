@@ -2091,6 +2091,19 @@ export function registerAIDCComponents(AIDC) {
             </div>
           </div>
 
+          ${v.records?.length
+            ? html`
+                <div class="aidc-dns-records-found">
+                  <span>Records found</span>
+                  <div>
+                    ${v.records.map(record => html`
+                      <code>${record}</code>
+                    `)}
+                  </div>
+                </div>
+              `
+            : ""}
+
           <div class="aidc-dialog-note">
             ${icon(v.verified ? "checkmark-circle-02" : "information-circle")}
             <span>${v.verified
