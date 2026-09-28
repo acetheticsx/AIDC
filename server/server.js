@@ -1655,7 +1655,6 @@ app.get(
           public.applications.client_id,
           COALESCE(aceid.application_type, public.applications.application_type, 'web') AS application_type,
           public.applications.origin_url,
-          public.applications.cross_app_scopes,
           public.applications.status,
           public.applications.created_at,
           public.applications.updated_at,
