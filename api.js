@@ -188,6 +188,18 @@ export const api = {
         { method: "POST" }
       );
     }
+
+    addCloudflareRecord(applicationId, apiToken) {
+      return request(
+        `/applications/${id(applicationId)}/origin-verification/cloudflare`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            api_token: apiToken
+          })
+        }
+      );
+    }
   },
 
   redirectUris: {
