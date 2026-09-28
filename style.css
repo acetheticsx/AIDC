@@ -7567,3 +7567,155 @@ body:has(
     font-size: 20px;
   }
 }
+
+
+/* Theme controls, account FAB, and top-right help. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --aidc-bg:#10100f;
+  --aidc-surface:#171715;
+  --aidc-surface-soft:#20201d;
+  --aidc-border:#343430;
+  --aidc-border-soft:#292926;
+  --aidc-text:#f1f1ed;
+  --aidc-text-secondary:#d0d0ca;
+  --aidc-muted:#999993;
+  --aidc-disabled:#666661;
+  --aidc-black:#f1f1ed;
+  --aidc-white:#10100f;
+  --aidc-hover:#242420;
+  --aidc-active:#2d2d28;
+  --aidc-danger:#ffb4b4;
+  --aidc-danger-hover:#ffcaca;
+  --aidc-danger-soft:#3a2020;
+  --aidc-shadow:0 1px 2px rgb(0 0 0 / .25),0 8px 24px rgb(0 0 0 / .25);
+  --aidc-shadow-dialog:0 24px 70px rgb(0 0 0 / .45),0 4px 18px rgb(0 0 0 / .28);
+}
+
+.aidc-theme-toggle{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  min-height:36px;
+  border:1px solid var(--aidc-border);
+  border-radius:10px;
+  background:var(--aidc-surface);
+  color:var(--aidc-text);
+  cursor:pointer;
+  transition:background var(--aidc-fast),transform var(--aidc-fast),border-color var(--aidc-fast);
+}
+.aidc-theme-toggle:hover{background:var(--aidc-hover)}
+.aidc-theme-toggle:active{transform:scale(.95)}
+.aidc-theme-toggle .aidc-icon{width:17px;height:17px}
+.aidc-theme-toggle-sidebar{
+  width:calc(100% - 24px);
+  margin:0 12px 12px;
+  justify-content:flex-start;
+  padding:8px 11px;
+  font-size:11px;
+  font-weight:650;
+}
+.aidc-theme-toggle-mobile{display:none}
+
+.aidc-help-top{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:38px;
+  height:38px;
+  padding:0;
+  border:1px solid var(--aidc-border);
+  border-radius:11px;
+  background:var(--aidc-surface);
+  color:var(--aidc-text);
+  box-shadow:var(--aidc-shadow);
+  cursor:pointer;
+  transition:transform var(--aidc-fast),background var(--aidc-fast);
+}
+.aidc-help-top:hover{background:var(--aidc-hover)}
+.aidc-help-top:active{transform:scale(.92)}
+.aidc-help-top .aidc-icon{width:18px;height:18px}
+.aidc-help-top-desktop{
+  position:fixed;
+  top:18px;
+  right:70px;
+  z-index:80;
+}
+
+.aidc-account-fab{display:none}
+.aidc-health-check-fix{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  min-height:30px;
+  padding:5px 9px;
+  border:1px solid var(--aidc-border);
+  border-radius:8px;
+  background:var(--aidc-surface);
+  color:var(--aidc-text);
+  font:600 10px/1 var(--aidc-font-sans);
+  cursor:pointer;
+  white-space:nowrap;
+}
+.aidc-health-check-fix:hover{background:var(--aidc-hover)}
+.aidc-health-check-fix .aidc-icon{width:13px;height:13px}
+
+@media(max-width:760px){
+  .aidc-mobile-header{
+    position:relative;
+    display:flex;
+    align-items:center;
+    min-height:60px;
+    padding-inline:14px;
+  }
+  .aidc-theme-toggle-mobile{
+    display:inline-flex;
+    width:38px;
+    height:38px;
+    flex:0 0 38px;
+    border-radius:11px;
+  }
+  .aidc-mobile-brand{margin-inline:auto}
+  .aidc-mobile-header-spacer{display:none}
+  .aidc-help-top-desktop{display:none}
+  .aidc-mobile-header .aidc-help-top{width:38px;height:38px;flex:0 0 38px}
+
+  .aidc-account-fab{
+    position:fixed;
+    right:max(16px,env(safe-area-inset-right));
+    bottom:calc(82px + env(safe-area-inset-bottom));
+    z-index:70;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:48px;
+    height:48px;
+    padding:0;
+    border:1px solid var(--aidc-border);
+    border-radius:15px;
+    background:var(--aidc-surface);
+    color:var(--aidc-text);
+    box-shadow:0 12px 32px rgb(0 0 0 / .16);
+    cursor:pointer;
+    transition:transform var(--aidc-fast),background var(--aidc-fast);
+  }
+  .aidc-account-fab:active{transform:scale(.92)}
+  .aidc-account-fab .aidc-user-avatar{width:30px;height:30px;flex-basis:30px}
+  .aidc-account-fab .aidc-icon{width:19px;height:19px}
+
+  .aidc-account-menu{top:auto;right:16px;bottom:calc(138px + env(safe-area-inset-bottom));}
+  .aidc-health-check{grid-template-columns:30px minmax(0,1fr) auto}
+}
+
+@media(min-width:761px){
+  .aidc-help-top-desktop{display:inline-flex}
+}
+
+@media(max-width:520px){
+  .aidc-health-checks{grid-template-columns:1fr}
+  .aidc-health-check{border-right:0!important}
+  .aidc-health-check:nth-last-child(-n+2){border-bottom:1px solid var(--aidc-border)}
+  .aidc-health-check:last-child{border-bottom:0}
+}
