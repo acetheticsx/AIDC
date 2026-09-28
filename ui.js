@@ -4409,6 +4409,9 @@ await auth.signIn();</code></pre>
       },
       aboutOpen: {
         state: true
+      },
+      cookiePolicyOpen: {
+        state: true
       }
     };
 
@@ -4421,6 +4424,7 @@ await auth.signIn();</code></pre>
       this.shortcutsOpen = false;
       this.accountMenuOpen = false;
       this.aboutOpen = false;
+      this.cookiePolicyOpen = false;
       this._shortcutPrefix = false;
       this._shortcutTimer = null;
 
@@ -4573,6 +4577,12 @@ await auth.signIn();</code></pre>
         return;
       }
 
+      if (this.cookiePolicyOpen) {
+        this.cookiePolicyOpen = false;
+        haptic?.(4);
+        return;
+      }
+
       if (this.aboutOpen) {
         this.aboutOpen = false;
         haptic?.(4);
@@ -4602,6 +4612,18 @@ await auth.signIn();</code></pre>
 
     closeHelp() {
       this.helpOpen = false;
+      haptic?.(4);
+    }
+
+    openCookiePolicy() {
+      this.cookiePolicyOpen = true;
+      this.helpOpen = false;
+      this.accountMenuOpen = false;
+      haptic?.(6);
+    }
+
+    closeCookiePolicy() {
+      this.cookiePolicyOpen = false;
       haptic?.(4);
     }
 
@@ -4863,6 +4885,7 @@ await auth.signIn();</code></pre>
 
           <footer class="aidc-landing-footer">
             <span>Built for the Ace Base developer ecosystem.</span>
+            <button class="aidc-cookie-link" type="button" @click=${this.openCookiePolicy}>Cookie policy</button>
             <span>© AIDC</span>
           </footer>
         </div>
@@ -5030,18 +5053,6 @@ await auth.signIn();</code></pre>
               ${this.renderPage()}
             </div>
 
-            <button
-              class="aidc-profile-desktop"
-              type="button"
-              aria-label="Open account menu"
-              aria-haspopup="menu"
-              aria-expanded=${this.accountMenuOpen}
-              title="Account"
-              @click=${() => (this.accountMenuOpen = !this.accountMenuOpen)}
-            >
-              ${state.user ? userAvatar(state.user, "aidc-profile-avatar") : icon("user-01")}
-            </button>
-
             ${this.accountMenuOpen
               ? html`
                   <div class="aidc-account-menu" role="menu" aria-label="Account">
@@ -5109,6 +5120,14 @@ await auth.signIn();</code></pre>
               </a>
             </nav>
 
+            <div class="aidc-account-fab-wrap">
+              ${this.accountMenuOpen ? html`
+                <div class="aidc-account-fab-options" role="menu" aria-label="Account actions">
+                  <a class="aidc-account-fab-option" role="menuitem" href="https://identity.ace-base.cc/account" @click=${() => (this.accountMenuOpen = false)}>${icon("user-01")}<span>Account</span></a>
+                  <a class="aidc-account-fab-option" role="menuitem" href="https://identity.ace-base.cc/login?switch=1" @click=${() => (this.accountMenuOpen = false)}>${icon("refresh-01")}<span>Switch</span></a>
+                  <button class="aidc-account-fab-option danger" type="button" role="menuitem" @click=${async () => { this.accountMenuOpen = false; await auth.logout(); }}>${icon("logout-01")}<span>Log out</span></button>
+                </div>
+              ` : ""}
             <button
               class="aidc-account-fab"
               type="button"
@@ -5124,8 +5143,31 @@ await auth.signIn();</code></pre>
             >
               ${state.user ? userAvatar(state.user, "aidc-profile-avatar") : icon("user-01")}
             </button>
-          </div>
 
+            </div>          </div>
+
+          ${
+            this.cookiePolicyOpen
+              ? html`
+                  <div class="aidc-cookie-layer">
+                    <button class="aidc-cookie-backdrop" type="button" aria-label="Close cookie policy" @click=${this.closeCookiePolicy}></button>
+                    <section class="aidc-cookie-dialog" role="dialog" aria-modal="true" aria-labelledby="aidc-cookie-title">
+                      <header class="aidc-about-header">
+                        <div><span class="aidc-eyebrow">Privacy</span><h2 id="aidc-cookie-title">Cookie policy</h2></div>
+                        <button class="aidc-icon-button" type="button" aria-label="Close cookie policy" @click=${this.closeCookiePolicy}>${icon("x-close")}</button>
+                      </header>
+                      <div class="aidc-cookie-body">
+                        <p>AIDC uses cookies and browser storage only where needed to keep you signed in, protect requests, remember your theme, and keep this console working.</p>
+                        <div class="aidc-cookie-list">
+                          <div><strong>Essential</strong><span>Authentication, security and session state.</span></div>
+                          <div><strong>Preferences</strong><span>Theme and interface preferences stored on your device.</span></div>
+                        </div>
+                        <p class="aidc-cookie-muted">AIDC does not use advertising cookies in this console.</p>
+                      </div>
+                    </section>
+                  </div>
+                `
+              : ""}
           ${
             this.aboutOpen
               ? html`
