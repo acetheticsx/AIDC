@@ -7719,3 +7719,25 @@ body:has(
   .aidc-health-check:nth-last-child(-n+2){border-bottom:1px solid var(--aidc-border)}
   .aidc-health-check:last-child{border-bottom:0}
 }
+
+.aidc-dns-records-found{
+  display:grid;
+  gap:7px;
+  margin-top:10px;
+  padding:10px 12px;
+  border:1px solid var(--aidc-border);
+  border-radius:10px;
+  background:var(--aidc-surface);
+}
+.aidc-dns-records-found>span{
+  color:var(--aidc-muted);
+  font:700 9px/1 var(--aidc-font-mono);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.aidc-dns-records-found>div{display:grid;gap:5px}
+.aidc-dns-records-found code{
+  overflow-wrap:anywhere;
+  color:var(--aidc-text-secondary);
+  font:500 10px/1.5 var(--aidc-font-mono);
+}
