@@ -4831,14 +4831,7 @@ await auth.signIn();</code></pre>
           <main class="aidc-main">
 
             <header class="aidc-mobile-header">
-              <button
-                class="aidc-mobile-menu"
-                type="button"
-                aria-label="Open navigation"
-                @click=${() => (this.sidebarOpen = true)}
-              >
-                ${icon("menu-01")}
-              </button>
+
 
               <a class="aidc-mobile-brand" href="#/" aria-label="AIDC overview">
                 <span>AIDC</span>

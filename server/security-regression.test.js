@@ -168,11 +168,12 @@ test("redirect URI diagnostics reuse the same validation rules", () => {
   assert.match(ui, /aidc-redirect-diagnostics/);
 });
 
-test("mobile navigation exposes applications without changing desktop routes", () => {
+test("mobile navigation uses the dock and removes sidebar controls", () => {
   assert.match(ui, /class="aidc-mobile-nav-item.*href="#\/applications"/);
-  assert.match(ui, /class="aidc-mobile-menu"/);
-  assert.match(style, /\.aidc-mobile-menu/);
-  assert.match(style, /grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.doesNotMatch(ui, /class="aidc-mobile-menu"/);
+  assert.match(style, /\.aidc-sidebar,\s*\.aidc-sidebar-overlay,\s*\.aidc-mobile-menu/);
+  assert.match(style, /\.aidc-mobile-actions\s*\{[\s\S]*?inset-inline: 0/);
+  assert.match(style, /\.aidc-mobile-nav\s*\{[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)/);
 });
 
 test("analytics keeps existing ranges and adds insight presentation", () => {
