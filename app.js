@@ -1545,6 +1545,7 @@ async function reload() {
 
 const AIDC = {
   state,
+  api,
 
   auth,
 
