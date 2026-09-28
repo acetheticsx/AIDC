@@ -42,7 +42,7 @@ test("HTTP server has bounded request and header timeouts", () => {
 
 test("shutdown is idempotent and has a force-exit safety timer", () => {
   assert.match(server, /let shuttingDown = false/);
-  assert.match(server, /if \\(shuttingDown\\)/);
+  assert.match(server, /if \(shuttingDown\)/);
   assert.match(server, /Forced shutdown after timeout/);
 });
 
