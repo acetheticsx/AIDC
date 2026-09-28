@@ -18,6 +18,7 @@ import {
 export function registerAIDCComponents(AIDC) {
   const {
     state,
+    api,
     auth,
     applications,
     redirectUris,
@@ -1778,43 +1779,379 @@ export function registerAIDCComponents(AIDC) {
      ═══════════════════════════════════════ */
 
   class AIDCUrlConfigs extends AIDCElement {
-    static properties = { application: { attribute: false }, originUrl: { state: true }, savingOrigin: { state: true }, originError: { state: true } };
-    constructor() { super(); this.application=null; this.originUrl=""; this.savingOrigin=false; this.originError=""; }
-    updated(changed) { if (changed.has("application")) { this.originUrl=this.application?.origin_url||""; this.originError=""; } }
+    static properties = {
+      application: { attribute: false },
+      originUrl: { state: true },
+      savingOrigin: { state: true },
+      originError: { state: true },
+      verification: { state: true },
+      verifying: { state: true }
+    };
+
+    constructor() {
+      super();
+      this.application = null;
+      this.originUrl = "";
+      this.savingOrigin = false;
+      this.originError = "";
+      this.verification = null;
+      this.verifying = false;
+    }
+
+    updated(changed) {
+      if (changed.has("application")) {
+        this.originUrl = this.application?.origin_url || "";
+        this.originError = "";
+        this.verification = null;
+
+        if (this.application?.id) {
+          this.loadVerification(this.application.id);
+        }
+      }
+    }
+
     validateOrigin(value) {
-      if (!value) return { valid:true, value:null };
-      try { const parsed=new URL(value);
-        if (!["https:","http:"].includes(parsed.protocol)) return {valid:false,error:"Origin URL must use HTTP or HTTPS."};
-        const localhost=["localhost","127.0.0.1","::1"].includes(parsed.hostname);
-        if (parsed.protocol==="http:" && !localhost) return {valid:false,error:"HTTP Origin URLs are only allowed for localhost."};
-        return {valid:true,value:parsed.origin};
-      } catch { return {valid:false,error:"Enter a valid Origin URL."}; }
+      if (!value) {
+        return { valid: true, value: null };
+      }
+
+      try {
+        const parsed = new URL(value);
+        const localhost = [
+          "localhost",
+          "127.0.0.1",
+          "::1"
+        ].includes(parsed.hostname);
+
+        if (!["https:", "http:"].includes(parsed.protocol)) {
+          return {
+            valid: false,
+            error: "Origin URL must use HTTP or HTTPS."
+          };
+        }
+
+        if (
+          parsed.protocol === "http:" &&
+          !localhost
+        ) {
+          return {
+            valid: false,
+            error: "HTTP Origin URLs are only allowed for localhost."
+          };
+        }
+
+        if (
+          parsed.protocol === "https:" &&
+          /^[0-9a-f:.]+$/i.test(parsed.hostname) &&
+          parsed.hostname.includes(":")
+        ) {
+          return {
+            valid: false,
+            error: "HTTPS Origin URLs must use a domain name for TXT verification."
+          };
+        }
+
+        if (
+          parsed.pathname !== "/" ||
+          parsed.search ||
+          parsed.hash
+        ) {
+          return {
+            valid: false,
+            error: "Use the origin only, without a path or query string."
+          };
+        }
+
+        return {
+          valid: true,
+          value: parsed.origin
+        };
+      } catch {
+        return {
+          valid: false,
+          error: "Enter a valid Origin URL."
+        };
+      }
     }
+
+    async loadVerification(applicationId = this.application?.id) {
+      if (!applicationId) {
+        return;
+      }
+
+      try {
+        const data =
+          await AIDC.api.originVerification.get(
+            applicationId
+          );
+
+        if (this.application?.id === applicationId) {
+          this.verification = data?.verification || null;
+        }
+      } catch (error) {
+        if (this.application?.id === applicationId) {
+          this.verification = null;
+          console.error(
+            "Origin verification check failed:",
+            error
+          );
+        }
+      }
+    }
+
     async saveOrigin() {
-      if (!this.application?.id || this.savingOrigin) return;
-      const result=this.validateOrigin(this.originUrl.trim());
-      if (!result.valid) { this.originError=result.error; return; }
-      this.originError=""; this.savingOrigin=true;
-      try { const updated=await applications.update(this.application.id,{origin_url:result.value}); this.application=updated; this.originUrl=updated?.origin_url||""; notify("Origin URL saved"); haptic?.(8); }
-      catch(error) { this.originError=error?.message||"Unable to save Origin URL."; }
-      finally { this.savingOrigin=false; }
+      if (!this.application?.id || this.savingOrigin) {
+        return;
+      }
+
+      const result =
+        this.validateOrigin(this.originUrl.trim());
+
+      if (!result.valid) {
+        this.originError = result.error;
+        return;
+      }
+
+      this.originError = "";
+      this.savingOrigin = true;
+
+      try {
+        const updated =
+          await applications.update(
+            this.application.id,
+            { origin_url: result.value }
+          );
+
+        this.application = updated;
+        this.originUrl =
+          updated?.origin_url || "";
+
+        await this.loadVerification(
+          this.application.id
+        );
+
+        notify(
+          result.value && this.verification?.required
+            ? "Origin URL saved. Domain verification required."
+            : "Origin URL saved"
+        );
+
+        haptic?.(8);
+      } catch (error) {
+        this.originError =
+          error?.message ||
+          "Unable to save Origin URL.";
+      } finally {
+        this.savingOrigin = false;
+      }
     }
-    render() {
-      const app=this.application; if(!app) return "";
-      return html`<div class="aidc-url-config-stack">
-        <section class="aidc-card">
-          <header class="aidc-card-section-header"><h2>Origin URL</h2><p>The application origin used for Ace ID authentication.</p></header>
-          <div class="aidc-dialog-form">
-            <label class="aidc-field"><span>Origin URL</span>
-              <input type="url" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://example.com" .value=${this.originUrl} @input=${event=>{this.originUrl=event.target.value;this.originError="";}} ?disabled=${this.savingOrigin} />
-              <small>Use the origin only, for example https://example.com. Paths are removed automatically.</small>
-            </label>
-            ${this.originError ? html`<div class="aidc-dialog-note">${icon("alert-02")}<span>${this.originError}</span></div>` : ""}
-            <div class="aidc-dialog-actions"><button class="aidc-button aidc-button-primary ${this.savingOrigin?"is-loading":""}" type="button" ?disabled=${this.savingOrigin} @click=${this.saveOrigin}><span class="aidc-button-content">${icon("checkmark-circle-02")}Save Origin URL</span><span class="aidc-button-loading">Saving…</span></button></div>
+
+    async verifyDomain() {
+      if (
+        !this.application?.id ||
+        this.verifying
+      ) {
+        return;
+      }
+
+      this.verifying = true;
+
+      try {
+        const data =
+          await AIDC.api.originVerification.verify(
+            this.application.id
+          );
+
+        this.verification =
+          data?.verification || null;
+
+        if (this.verification?.verified) {
+          notify("Origin domain verified");
+          haptic?.(10);
+        }
+      } catch (error) {
+        this.verification =
+          error?.details?.verification ||
+          error?.data?.verification ||
+          this.verification;
+
+        notify(
+          error?.message ||
+            "TXT record was not found yet.",
+          "error"
+        );
+      } finally {
+        this.verifying = false;
+      }
+    }
+
+    copyVerification(value, label) {
+      copyToClipboard(value).then(copied => {
+        if (copied) {
+          notify(`${label} copied`);
+        }
+      });
+    }
+
+    renderVerification() {
+      const v = this.verification;
+
+      if (!v || !v.required) {
+        if (v?.reason) {
+          return html`
+            <div class="aidc-dialog-note">
+              ${icon("information-circle")}
+              <span>${v.reason}</span>
+            </div>
+          `;
+        }
+
+        return "";
+      }
+
+      return html`
+        <section class="aidc-origin-verification">
+          <div class="aidc-origin-verification-head">
+            <div>
+              <span class="aidc-eyebrow">Domain control</span>
+              <strong>Verify this Origin URL</strong>
+              <p>
+                Add this TXT record to prove you control
+                the domain before enabling the application.
+              </p>
+            </div>
+            <span class="aidc-origin-verification-badge ${v.verified ? "is-verified" : ""}">
+              ${v.verified ? "Verified" : "Pending"}
+            </span>
+          </div>
+
+          <div class="aidc-dns-record">
+            <div class="aidc-dns-row">
+              <span>Name</span>
+              <code>${v.record_name}</code>
+              <button
+                class="aidc-icon-button"
+                type="button"
+                aria-label="Copy TXT record name"
+                @click=${() => this.copyVerification(v.record_name, "TXT name")}
+              >${icon("copy-01")}</button>
+            </div>
+
+            <div class="aidc-dns-row">
+              <span>Type</span>
+              <code>${v.record_type}</code>
+            </div>
+
+            <div class="aidc-dns-row">
+              <span>Value</span>
+              <code>${v.record_value}</code>
+              <button
+                class="aidc-icon-button"
+                type="button"
+                aria-label="Copy TXT record value"
+                @click=${() => this.copyVerification(v.record_value, "TXT value")}
+              >${icon("copy-01")}</button>
+            </div>
+          </div>
+
+          <div class="aidc-dialog-note">
+            ${icon(v.verified ? "checkmark-circle-02" : "information-circle")}
+            <span>${v.verified
+              ? "The TXT record is visible in DNS."
+              : "DNS changes can take a few minutes to propagate. Keep the TXT record in place while this Origin URL is used."
+            }</span>
+          </div>
+
+          <div class="aidc-dialog-actions">
+            <button
+              class="aidc-button aidc-button-primary ${this.verifying ? "is-loading" : ""}"
+              type="button"
+              ?disabled=${this.verifying || v.verified}
+              @click=${this.verifyDomain}
+            >
+              <span class="aidc-button-content">
+                ${icon(v.verified ? "checkmark-circle-02" : "refresh")}
+                ${this.verifying ? "Checking DNS…" : v.verified ? "Domain verified" : "Verify TXT record"}
+              </span>
+              <span class="aidc-button-loading">Checking DNS…</span>
+            </button>
           </div>
         </section>
-        <aidc-redirect-uris .applicationId=${app.id}></aidc-redirect-uris>
-      </div>`;
+      `;
+    }
+
+    render() {
+      const app = this.application;
+
+      if (!app) {
+        return "";
+      }
+
+      return html`
+        <div class="aidc-url-config-stack">
+          <section class="aidc-card">
+            <header class="aidc-card-section-header">
+              <h2>Origin URL</h2>
+              <p>
+                The application origin used for Ace ID authentication.
+              </p>
+            </header>
+
+            <div class="aidc-dialog-form">
+              <label class="aidc-field">
+                <span>Origin URL</span>
+                <input
+                  type="url"
+                  inputmode="url"
+                  autocomplete="url"
+                  spellcheck="false"
+                  placeholder="https://example.com"
+                  .value=${this.originUrl}
+                  @input=${event => {
+                    this.originUrl = event.target.value;
+                    this.originError = "";
+                  }}
+                  ?disabled=${this.savingOrigin}
+                />
+                <small>
+                  Use the origin only, for example https://example.com.
+                  HTTPS domains require DNS TXT verification.
+                </small>
+              </label>
+
+              ${this.originError
+                ? html`
+                    <div class="aidc-dialog-note">
+                      ${icon("alert-02")}
+                      <span>${this.originError}</span>
+                    </div>
+                  `
+                : ""}
+
+              <div class="aidc-dialog-actions">
+                <button
+                  class="aidc-button aidc-button-primary ${this.savingOrigin ? "is-loading" : ""}"
+                  type="button"
+                  ?disabled=${this.savingOrigin}
+                  @click=${this.saveOrigin}
+                >
+                  <span class="aidc-button-content">
+                    ${icon("checkmark-circle-02")}
+                    Save Origin URL
+                  </span>
+                  <span class="aidc-button-loading">Saving…</span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          ${this.renderVerification()}
+
+          <aidc-redirect-uris
+            .applicationId=${app.id}
+          ></aidc-redirect-uris>
+        </div>
+      `;
     }
   }
   /* ═══════════════════════════════════════
@@ -2193,8 +2530,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       localScopes: {
         state: true
       },
-      crossAppScopes: { state: true },
-      crossAppInput: { state: true },
       scopeDirty: { state: true }
     };
 
@@ -2203,8 +2538,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
 
       this.applicationId = null;
       this.localScopes = [];
-      this.crossAppScopes = [];
-      this.crossAppInput = "";
       this.scopeDirty = false;
     }
 
@@ -2253,18 +2586,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
         }
       }
 
-      const application = getApplication(AIDC, this.applicationId);
-      const incomingCrossApp = Array.isArray(application?.cross_app_scopes)
-        ? application.cross_app_scopes.filter(scope => typeof scope === "string").map(scope => scope.trim().toLowerCase()).filter(Boolean)
-        : [];
-
-      if (
-        this.crossAppScopes.join("|") !== incomingCrossApp.join("|") &&
-        !state.scopes.saving
-      ) {
-        this.crossAppScopes = [...incomingCrossApp];
-        this.crossAppInput = incomingCrossApp.join(", ");
-      }
     }
 
     isEnabled(scope) {
@@ -2295,17 +2616,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       this.scopeDirty = true;
     }
 
-    crossAppTokens() {
-      return [
-        ...new Set(
-          this.crossAppInput
-            .split(",")
-            .map(scope => scope.trim().toLowerCase())
-            .filter(Boolean)
-        )
-      ];
-    }
-
     async save() {
       if (
         !this.applicationId ||
@@ -2320,22 +2630,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
           this.localScopes
         );
 
-        const crossAppScopes = [
-          ...new Set(
-            this.crossAppInput
-              .split(",")
-              .map(scope => scope.trim().toLowerCase())
-              .filter(Boolean)
-          )
-        ];
-
-        await applications.update(
-          this.applicationId,
-          { cross_app_scopes: crossAppScopes }
-        );
-
-        this.crossAppScopes = crossAppScopes;
-        this.crossAppInput = crossAppScopes.join(", ");
         this.scopeDirty = false;
 
         notify("Scopes updated");
@@ -2479,57 +2773,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                     <span>
                       OpenID is always required. Changes affect the permissions your client can request.
                     </span>
-                  </div>
-
-                  <div class="aidc-cross-app-card">
-                    <div class="aidc-cross-app-heading">
-                      <div>
-                        <span class="aidc-eyebrow">Ace Base</span>
-                        <strong>Cross-App scopes</strong>
-                        <p>Optional permissions exposed between trusted Ace apps.</p>
-                      </div>
-                      ${icon("arrow-right-01")}
-                    </div>
-
-                    <div class="aidc-scope-token-list">
-                      ${this.crossAppTokens().length
-                        ? this.crossAppTokens().map(scope => html`
-                            <span class="aidc-scope-token">
-                              <code>${scope}</code>
-                              <button
-                                type="button"
-                                aria-label=${`Remove ${scope}`}
-                                @click=${() => {
-                                  this.crossAppInput = this.crossAppTokens()
-                                    .filter(item => item !== scope)
-                                    .join(", ");
-                                  this.scopeDirty = true;
-                                }}
-                              >
-                                ${icon("cancel-01")}
-                              </button>
-                            </span>
-                          `)
-                        : html`<span class="aidc-scope-empty">No cross-app scopes configured.</span>`
-                      }
-                    </div>
-
-                    <label class="aidc-field">
-                      <span>Scope names</span>
-                      <input
-                        type="text"
-                        autocomplete="off"
-                        spellcheck="false"
-                        placeholder="source.read, source.profile"
-                        .value=${this.crossAppInput}
-                        @input=${event => {
-                          this.crossAppInput = event.target.value;
-                          this.scopeDirty = true;
-                        }}
-                        ?disabled=${saving || loading}
-                      />
-                      <small>Comma-separated. Use lowercase names such as source.read.</small>
-                    </label>
                   </div>
 
                   <div
