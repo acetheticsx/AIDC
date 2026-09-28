@@ -5007,8 +5007,15 @@ await auth.signIn();</code></pre>
               </a>
             </nav>
 
-            <button class="aidc-help-fab" type="button" aria-label="Help" aria-expanded=${this.helpOpen} @click=${this.helpOpen ? this.closeHelp : this.openHelp}>
-              ${icon("help-circle")}
+            <button
+              class="aidc-mobile-account"
+              type="button"
+              aria-label="Open account menu"
+              aria-haspopup="menu"
+              aria-expanded=${this.accountMenuOpen}
+              @click=${() => (this.accountMenuOpen = !this.accountMenuOpen)}
+            >
+              ${state.user ? userAvatar(state.user, "aidc-mobile-account-avatar") : icon("user-01")}
             </button>
           </div>
 
