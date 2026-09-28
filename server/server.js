@@ -714,7 +714,7 @@ function getOriginVerification(originUrl, applicationId) {
     hostname,
     record_name: recordName,
     record_type: "TXT",
-    record_value: `token=${token}`
+    record_value: `token=${token} expiry=never`
   };
 }
 
@@ -1580,12 +1580,19 @@ app.post(
         });
       }
 
+      const initialStatus =
+        application_type === "web" &&
+        originValidation.origin &&
+        new URL(originValidation.origin).protocol === "https:"
+          ? "disabled"
+          : "active";
+
       const result = await client.query(
         `
         INSERT INTO public.applications
-          (name, description, client_id, application_type, origin_url, owner_id)
+          (name, description, client_id, application_type, origin_url, status, owner_id)
         VALUES
-          ($1, $2, $3, $4, $5, $6)
+          ($1, $2, $3, $4, $5, $6, $7)
         RETURNING
           id,
           name,
@@ -1603,6 +1610,7 @@ app.post(
           generateClientId(),
           application_type,
           originValidation.origin,
+          initialStatus,
           req.developer.id
         ]
       );
@@ -1753,6 +1761,20 @@ app.patch(
     if (status !== undefined && !["active", "disabled"].includes(status)) {
       return res.status(400).json({ error: "Invalid application status" });
     }
+    let forcedStatus = status;
+
+    if (origin_url !== undefined && origin !== null) {
+      const originProtocol = new URL(origin).protocol;
+
+      if (
+        application_type === "web" &&
+        originProtocol === "https:" &&
+        status === undefined
+      ) {
+        forcedStatus = "disabled";
+      }
+    }
+
     if (status === "active") {
       const originResult = await pool.query(
         `
@@ -1884,8 +1906,8 @@ app.patch(
           application_type ?? null,
           origin_url !== undefined,
           origin,
-          status !== undefined,
-          status ?? null,
+          forcedStatus !== undefined,
+          forcedStatus ?? null,
           id,
           req.developer.id
         ]
