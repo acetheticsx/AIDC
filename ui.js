@@ -2204,7 +2204,7 @@ export function registerAIDCComponents(AIDC) {
               @click=${this.addCloudflareRecord}
             >
               <span class="aidc-button-content">
-                ${icon("cloud")}
+                ${icon("globe-02")}
                 ${this.addingCloudflare ? "Adding via Cloudflare…" : "Add automatically with Cloudflare"}
               </span>
               <span class="aidc-button-loading">Adding via Cloudflare…</span>
