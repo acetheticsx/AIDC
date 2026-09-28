@@ -297,6 +297,19 @@ setInterval(
 app.disable("x-powered-by");
 app.set("trust proxy", TRUST_PROXY_HOPS);
 
+/*
+ * Request correlation.
+ *
+ * Generate the ID server-side instead of trusting a client-supplied
+ * value. It is returned in responses and used in operational logs.
+ */
+app.use((req, res, next) => {
+  const requestId = crypto.randomUUID();
+  req.requestId = requestId;
+  res.set("X-Request-ID", requestId);
+  next();
+});
+
 app.use((req, res, next) => {
   if (
     req.path.startsWith("/api/") ||
@@ -340,11 +353,13 @@ const rateLimitBuckets = new Map();
 
 function rateLimit({
   windowMs = 60_000,
-  max = 120
+  max = 120,
+  name = "default"
 } = {}) {
   return (req, res, next) => {
     const now = Date.now();
-    const key = req.ip || req.socket.remoteAddress || "unknown";
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    const key = `${name}:${ip}`;
     const current = rateLimitBuckets.get(key);
 
     if (!current || current.resetAt <= now) {
@@ -383,21 +398,32 @@ setInterval(() => {
   }
 
   if (rateLimitBuckets.size > 10_000) {
-    rateLimitBuckets.clear();
+    const removeCount = Math.ceil(rateLimitBuckets.size * 0.1);
+    const iterator = rateLimitBuckets.keys();
+
+    for (let index = 0; index < removeCount; index += 1) {
+      const next = iterator.next();
+
+      if (next.done) {
+        break;
+      }
+
+      rateLimitBuckets.delete(next.value);
+    }
   }
 }, 5 * 60_000).unref();
 
 app.use(
   ["/auth/login", "/auth/callback"],
-  rateLimit({ windowMs: 10 * 60_000, max: 20 })
+  rateLimit({ windowMs: 10 * 60_000, max: 20, name: "auth" })
 );
 
 app.use(
   "/api",
-  rateLimit({ windowMs: 60_000, max: 120 })
+  rateLimit({ windowMs: 60_000, max: 120, name: "api" })
 );
 
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "1mb", strict: true }));
 
 /*
  * Helpers
@@ -3381,8 +3407,10 @@ app.use(
  * API 404
  */
 app.use("/api", (req, res) => {
+  res.set("Cache-Control", "no-store");
   res.status(404).json({
-    error: "API endpoint not found"
+    error: "API endpoint not found",
+    request_id: req.requestId
   });
 });
 
@@ -3395,15 +3423,22 @@ app.use((error, req, res, next) => {
   }
 
   if (error?.type === "entity.parse.failed") {
+    res.set("Cache-Control", "no-store");
     return res.status(400).json({
-      error: "Invalid JSON body"
+      error: "Invalid JSON body",
+      request_id: req.requestId
     });
   }
 
-  console.error("Unhandled server error:", error);
+  console.error("Unhandled server error:", {
+    requestId: req.requestId,
+    message: error?.message || "unknown error"
+  });
 
+  res.set("Cache-Control", "no-store");
   res.status(500).json({
-    error: "Internal server error"
+    error: "Internal server error",
+    request_id: req.requestId
   });
 });
 
@@ -3441,16 +3476,36 @@ const server = app.listen(
   }
 );
 
+server.requestTimeout = 30_000;
+server.headersTimeout = 35_000;
+server.keepAliveTimeout = 65_000;
+
+let shuttingDown = false;
+
 async function shutdown(signal) {
+  if (shuttingDown) {
+    return;
+  }
+
+  shuttingDown = true;
+
   console.log(
     `${signal} received. Shutting down...`
   );
+
+  const forceExitTimer = setTimeout(() => {
+    console.error("Forced shutdown after timeout.");
+    process.exit(1);
+  }, 10_000);
+
+  forceExitTimer.unref();
 
   server.close(async () => {
     try {
       await pool.end();
 
       console.log("Database connection closed.");
+      clearTimeout(forceExitTimer);
 
       process.exit(0);
     } catch (error) {
