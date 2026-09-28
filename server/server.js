@@ -806,6 +806,184 @@ async function verifyOriginDns(originUrl, applicationId) {
   };
 }
 
+async function cloudflareApiRequest(token, path, options = {}) {
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4${path}`,
+    {
+      ...options,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        ...(options.headers || {})
+      }
+    }
+  );
+
+  let data = null;
+
+  try {
+    data = await response.json();
+  } catch {
+    /* Cloudflare should return JSON, but do not trust that assumption. */
+  }
+
+  if (!response.ok || data?.success === false) {
+    const message =
+      data?.errors?.[0]?.message ||
+      `Cloudflare API returned ${response.status}`;
+
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+
+  return data;
+}
+
+function cloudflareZoneCandidates(hostname) {
+  const labels = hostname
+    .toLowerCase()
+    .replace(/\.$/, "")
+    .split(".")
+    .filter(Boolean);
+
+  const candidates = [];
+
+  for (let index = 0; index <= labels.length - 2; index += 1) {
+    const candidate = labels.slice(index).join(".");
+
+    if (candidate.split(".").length >= 2) {
+      candidates.push(candidate);
+    }
+  }
+
+  return candidates;
+}
+
+async function addCloudflareOriginRecord(
+  originUrl,
+  applicationId,
+  apiToken
+) {
+  if (
+    typeof apiToken !== "string" ||
+    !apiToken.trim() ||
+    apiToken.trim().length > 512
+  ) {
+    const error = new Error("A valid Cloudflare API token is required");
+    error.status = 400;
+    throw error;
+  }
+
+  const challenge = getOriginVerification(
+    originUrl,
+    applicationId
+  );
+
+  if (!challenge.required) {
+    return {
+      added: false,
+      existing: false,
+      verification: challenge
+    };
+  }
+
+  const token = apiToken.trim();
+  let zone = null;
+
+  for (const candidate of cloudflareZoneCandidates(challenge.hostname)) {
+    const params = new URLSearchParams({
+      name: candidate,
+      status: "active",
+      per_page: "50"
+    });
+
+    const data = await cloudflareApiRequest(
+      token,
+      `/zones?${params.toString()}`
+    );
+
+    const exact = (data.result || []).find(
+      item =>
+        typeof item?.name === "string" &&
+        item.name.toLowerCase() === candidate
+    );
+
+    if (exact) {
+      zone = exact;
+      break;
+    }
+  }
+
+  if (!zone?.id) {
+    const error = new Error(
+      "No active Cloudflare zone was found for this Origin URL"
+    );
+    error.status = 404;
+    throw error;
+  }
+
+  const recordParams = new URLSearchParams({
+    type: "TXT",
+    name: challenge.record_name,
+    content: challenge.record_value,
+    per_page: "100"
+  });
+
+  const existing = await cloudflareApiRequest(
+    token,
+    `/zones/${encodeURIComponent(zone.id)}/dns_records?${recordParams.toString()}`
+  );
+
+  const matchingRecord = (existing.result || []).find(
+    record =>
+      record?.type === "TXT" &&
+      record?.name?.toLowerCase() ===
+        challenge.record_name.toLowerCase() &&
+      record?.content === challenge.record_value
+  );
+
+  if (matchingRecord) {
+    return {
+      added: false,
+      existing: true,
+      zone_name: zone.name,
+      record_id: matchingRecord.id,
+      verification: await verifyOriginDns(
+        originUrl,
+        applicationId
+      )
+    };
+  }
+
+  const created = await cloudflareApiRequest(
+    token,
+    `/zones/${encodeURIComponent(zone.id)}/dns_records`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        type: "TXT",
+        name: challenge.record_name,
+        content: challenge.record_value,
+        ttl: 60,
+        comment: "AIDC Origin URL verification"
+      })
+    }
+  );
+
+  return {
+    added: true,
+    existing: false,
+    zone_name: zone.name,
+    record_id: created?.result?.id || null,
+    verification: await verifyOriginDns(
+      originUrl,
+      applicationId
+    )
+  };
+}
+
 
 function validateBranding(payload) {
   const {
@@ -2061,6 +2239,86 @@ app.post(
       console.error("POST origin verification:", error);
       res.status(500).json({
         error: "Failed to verify Origin URL"
+      });
+    }
+  }
+);
+
+
+app.post(
+  "/api/applications/:id/origin-verification/cloudflare",
+  requireAuth,
+  async (req, res) => {
+    const { id } = req.params;
+    const apiToken = req.body?.api_token;
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({
+        error: "Invalid application ID"
+      });
+    }
+
+    if (
+      typeof apiToken !== "string" ||
+      !apiToken.trim()
+    ) {
+      return res.status(400).json({
+        error: "Cloudflare API token is required"
+      });
+    }
+
+    try {
+      const result = await pool.query(
+        `
+        SELECT origin_url
+        FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        `,
+        [id, req.developer.id]
+      );
+
+      if (!result.rows.length) {
+        return res.status(404).json({
+          error: "Application not found"
+        });
+      }
+
+      if (!result.rows[0].origin_url) {
+        return res.status(400).json({
+          error: "Set an Origin URL before adding DNS records"
+        });
+      }
+
+      const resultData =
+        await addCloudflareOriginRecord(
+          result.rows[0].origin_url,
+          id,
+          apiToken
+        );
+
+      res.json({
+        provider: "cloudflare",
+        ...resultData
+      });
+    } catch (error) {
+      console.error(
+        "POST Cloudflare Origin verification:",
+        error?.message || "unknown error"
+      );
+
+      const status =
+        Number.isInteger(error?.status) &&
+        error.status >= 400 &&
+        error.status < 500
+          ? error.status
+          : 502;
+
+      res.status(status).json({
+        error:
+          status === 502
+            ? "Cloudflare DNS request failed"
+            : error.message
       });
     }
   }
