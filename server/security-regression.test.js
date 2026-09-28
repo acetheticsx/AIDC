@@ -17,6 +17,28 @@ const sitemap = await fs.readFile(path.join(here, "..", "sitemap.xml"), "utf8");
 const llms = await fs.readFile(path.join(here, "..", "llms.txt"), "utf8");
 
 
+test("authentication failures do not log upstream token response bodies", () => {
+  assert.match(server, /Token exchange failed:/);
+  assert.doesNotMatch(
+    server,
+    /Token exchange failed:[\s\S]{0,120}tokenResponse\.status,[\s\S]{0,80}text/
+  );
+});
+
+test("session activity writes are throttled", () => {
+  assert.match(server, /last_seen_at < now\(\) - INTERVAL '5 minutes'/);
+});
+
+test("public health responses do not expose discovery internals", () => {
+  const start = server.indexOf('app.get("/api/health"');
+  const end = server.indexOf('app.get(\n  "/api/playground/config"', start);
+  const route = start >= 0 && end > start ? server.slice(start, end) : "";
+  assert.ok(route.length > 0, "health route should exist");
+  assert.match(route, /dependencies/);
+  assert.doesNotMatch(route, /last_error/);
+  assert.doesNotMatch(route, /issuer:/);
+});
+
 test("API and auth responses are not cacheable", () => {
   assert.match(server, /"Cache-Control": "no-store"/);
 });

@@ -1009,6 +1009,10 @@ async function requireAuth(req, res, next) {
         UPDATE public.sessions
         SET last_seen_at = now()
         WHERE token_hash = $1
+          AND (
+            last_seen_at IS NULL
+            OR last_seen_at < now() - INTERVAL '5 minutes'
+          )
         `,
         [session.token_hash]
       )
@@ -1203,8 +1207,7 @@ app.get(
 
         console.error(
           "Token exchange failed:",
-          tokenResponse.status,
-          text
+          tokenResponse.status
         );
 
         res.set("Set-Cookie", clearOauthCookies);
@@ -1426,13 +1429,11 @@ app.get("/api/health", async (req, res) => {
   res.status(ok ? 200 : 503).json({
     ok,
     service: "AIDC API",
-    database,
-    discovery: {
-      status: discoveryState.status,
-      issuer: discoveryState.doc?.issuer || null,
-      last_error: discoveryState.lastError,
-      last_attempt_at:
-        discoveryState.lastAttemptAt || null
+    dependencies: {
+      database,
+      identity: discoveryState.status === "ready"
+        ? "connected"
+        : "unavailable"
     }
   });
 });
