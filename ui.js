@@ -229,7 +229,6 @@ export function registerAIDCComponents(AIDC) {
             <button class="aidc-sidebar-link" type="button" @click=${() => this.dispatchEvent(new CustomEvent("aidc-open-about", { bubbles: true, composed: true }))}>
               ${icon("information-circle")}<span>About</span>
             </button>
-            <button class="aidc-sidebar-link" type="button" @click=() => this.dispatchEvent(new CustomEvent("aidc-open-about", { bubbles: true, composed: true }))><span>About</span></button>
             <a class="aidc-sidebar-link" href="https://docs.ace-base.cc" target="_blank" rel="noreferrer">
               ${icon("book-01")}<span>Docs</span>${icon("arrow-up-right-01")}
             </a>
