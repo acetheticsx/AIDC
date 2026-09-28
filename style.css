@@ -7529,3 +7529,41 @@ body:has(
     z-index: 120 !important;
   }
 }
+
+
+/* Final mobile help action. */
+@media (max-width:760px) {
+  .aidc-mobile-help-fab {
+    display: grid !important;
+    place-items: center;
+    flex: 0 0 50px;
+    width: 50px;
+    height: 50px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--aidc-text) 12%, transparent);
+    border-radius: 50%;
+    background: var(--aidc-surface);
+    color: var(--aidc-text);
+    box-shadow: 0 18px 45px rgb(0 0 0 / .12), 0 3px 10px rgb(0 0 0 / .06);
+    font-family: var(--aidc-font-sans);
+    font-size: 22px;
+    font-weight: 650;
+    line-height: 1;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+
+  .aidc-mobile-help-fab:active {
+    transform: scale(.94);
+  }
+}
+
+@media (max-width:520px) {
+  .aidc-mobile-help-fab {
+    flex-basis: 46px;
+    width: 46px;
+    height: 46px;
+    font-size: 20px;
+  }
+}
