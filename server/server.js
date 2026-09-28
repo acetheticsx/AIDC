@@ -2,6 +2,8 @@ import express from "express";
 import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Resolver } from "node:dns/promises";
+import { isIP } from "node:net";
 import pg from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
@@ -651,49 +653,108 @@ function validateOriginUrl(value, { required = false } = {}) {
     return { valid: false, error: "HTTP origins are only allowed for localhost" };
   }
 
-  return { valid: true, origin: parsed.origin };
-}
-
-function normalizeCrossAppScopes(value) {
-  if (value === undefined || value === null || value === "") {
-    return { valid: true, scopes: [] };
-  }
-
-  const values = Array.isArray(value)
-    ? value
-    : typeof value === "string"
-      ? value.split(",")
-      : null;
-
-  if (!values || values.some(item => typeof item !== "string")) {
+  if (parsed.protocol === "https:" && isIP(hostname)) {
     return {
       valid: false,
-      error: "Cross-app scopes must be strings"
+      error: "HTTPS Origin URLs must use a domain name for TXT verification"
     };
   }
 
-  const scopes = [
-    ...new Set(
-      values
-        .map(item => item.trim().toLowerCase())
-        .filter(Boolean)
-    )
-  ];
-
-  if (scopes.length > 20) {
-    return { valid: false, error: "A maximum of 20 cross-app scopes is allowed" };
-  }
-
-  const invalid = scopes.find(
-    scope => scope.length > 100 || !/^[a-z0-9][a-z0-9._:-]*$/.test(scope)
-  );
-
-  if (invalid) {
-    return { valid: false, error: "Invalid cross-app scope: " + invalid };
-  }
-
-  return { valid: true, scopes };
+  return { valid: true, origin: parsed.origin };
 }
+
+const dnsResolver = new Resolver({
+  timeout: 3000,
+  tries: 2
+});
+
+function getOriginVerification(originUrl, applicationId) {
+  if (!originUrl) {
+    return {
+      required: false,
+      verified: false,
+      reason: "Origin URL is not configured",
+      hostname: null,
+      record_name: null,
+      record_type: null,
+      record_value: null
+    };
+  }
+
+  const parsed = new URL(originUrl);
+  const hostname = parsed.hostname.toLowerCase();
+
+  if (parsed.protocol === "http:" && (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname === "[::1]"
+  )) {
+    return {
+      required: false,
+      verified: true,
+      reason: "Localhost origins do not require DNS verification",
+      hostname,
+      record_name: null,
+      record_type: null,
+      record_value: null
+    };
+  }
+
+  const recordName = `_aceid-challenge.${hostname}`;
+  const token = crypto
+    .createHmac("sha256", CLIENT_SECRET)
+    .update(`${applicationId}\n${parsed.origin}`)
+    .digest("base64url");
+
+  return {
+    required: true,
+    verified: false,
+    reason: "Add the TXT record, then verify it",
+    hostname,
+    record_name: recordName,
+    record_type: "TXT",
+    record_value: `token=${token}`
+  };
+}
+
+async function verifyOriginDns(originUrl, applicationId) {
+  const challenge = getOriginVerification(originUrl, applicationId);
+
+  if (!challenge.required) {
+    return challenge;
+  }
+
+  try {
+    const records = await dnsResolver.resolveTxt(challenge.record_name);
+    const verified = records.some(
+      chunks => chunks.join("") === challenge.record_value
+    );
+
+    return {
+      ...challenge,
+      verified,
+      reason: verified
+        ? "TXT record verified"
+        : "TXT record not found or does not match"
+    };
+  } catch (error) {
+    if (
+      !["ENOTFOUND", "ENODATA", "SERVFAIL", "TIMEOUT", "REFUSED"].includes(
+        error?.code
+      )
+    ) {
+      console.error("Origin TXT lookup failed:", error?.code || "unknown");
+    }
+
+    return {
+      ...challenge,
+      verified: false,
+      reason: "TXT record could not be resolved yet"
+    };
+  }
+}
+
 
 function validateBranding(payload) {
   const {
@@ -1396,7 +1457,6 @@ app.get(
             public.applications.client_id,
             COALESCE(aceid.application_type, public.applications.application_type, 'web') AS application_type,
             public.applications.origin_url,
-            public.applications.cross_app_scopes,
             public.applications.status,
             public.applications.created_at,
             public.applications.updated_at,
@@ -1523,9 +1583,9 @@ app.post(
       const result = await client.query(
         `
         INSERT INTO public.applications
-          (name, description, client_id, application_type, origin_url, cross_app_scopes, owner_id)
+          (name, description, client_id, application_type, origin_url, owner_id)
         VALUES
-          ($1, $2, $3, $4, $5, $6, $7)
+          ($1, $2, $3, $4, $5, $6)
         RETURNING
           id,
           name,
@@ -1533,7 +1593,6 @@ app.post(
           client_id,
           application_type,
           origin_url,
-          cross_app_scopes,
           status,
           created_at,
           updated_at
@@ -1544,7 +1603,6 @@ app.post(
           generateClientId(),
           application_type,
           originValidation.origin,
-          [],
           req.developer.id
         ]
       );
@@ -1640,7 +1698,6 @@ app.patch(
       description,
       application_type,
       origin_url,
-      cross_app_scopes,
       status
     } = req.body ?? {};
 
@@ -1694,25 +1751,53 @@ app.patch(
       origin = originValidation.origin;
     }
 
-    let scopes = null;
-    if (cross_app_scopes !== undefined) {
-      const scopeValidation = normalizeCrossAppScopes(cross_app_scopes);
-      if (!scopeValidation.valid) {
-        return res.status(400).json({ error: scopeValidation.error });
-      }
-      scopes = scopeValidation.scopes;
-    }
-
     if (status !== undefined && !["active", "disabled"].includes(status)) {
       return res.status(400).json({ error: "Invalid application status" });
     }
+    if (status === "active") {
+      const originResult = await pool.query(
+        `
+        SELECT origin_url, application_type
+        FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        `,
+        [id, req.developer.id]
+      );
+
+      if (!originResult.rows.length) {
+        return res.status(404).json({ error: "Application not found" });
+      }
+
+      const targetOrigin =
+        origin_url !== undefined
+          ? origin
+          : originResult.rows[0].origin_url;
+
+      const targetType =
+        application_type !== undefined
+          ? application_type
+          : originResult.rows[0].application_type;
+
+      if (targetType === "web" && targetOrigin) {
+        const verification = await verifyOriginDns(targetOrigin, id);
+
+        if (verification.required && !verification.verified) {
+          return res.status(409).json({
+            error: "Verify the Origin URL domain before enabling this application.",
+            code: "ORIGIN_DOMAIN_UNVERIFIED",
+            verification
+          });
+        }
+      }
+    }
+
 
     if (
       name === undefined &&
       description === undefined &&
       application_type === undefined &&
       origin_url === undefined &&
-      cross_app_scopes === undefined &&
       status === undefined
     ) {
       return res.status(400).json({ error: "No fields to update" });
@@ -1771,8 +1856,7 @@ app.patch(
           description = CASE WHEN $3::boolean THEN $4 ELSE description END,
           application_type = CASE WHEN $5::boolean THEN $6 ELSE application_type END,
           origin_url = CASE WHEN $7::boolean THEN $8 ELSE origin_url END,
-          cross_app_scopes = CASE WHEN $9::boolean THEN $10 ELSE cross_app_scopes END,
-          status = CASE WHEN $11::boolean THEN $12 ELSE status END,
+          status = CASE WHEN $9::boolean THEN $10 ELSE status END,
           updated_at = now()
         WHERE id = $13
           AND owner_id = $14
@@ -1783,7 +1867,6 @@ app.patch(
           client_id,
           application_type,
           origin_url,
-          cross_app_scopes,
           status,
           created_at,
           updated_at,
@@ -1802,8 +1885,6 @@ app.patch(
           application_type ?? null,
           origin_url !== undefined,
           origin,
-          cross_app_scopes !== undefined,
-          scopes,
           status !== undefined,
           status ?? null,
           id,
@@ -1826,6 +1907,88 @@ app.patch(
       }
 
       res.status(500).json({ error: "Failed to update application" });
+    }
+  }
+);
+
+app.get(
+  "/api/applications/:id/origin-verification",
+  requireAuth,
+  async (req, res) => {
+    const { id } = req.params;
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({ error: "Invalid application ID" });
+    }
+
+    try {
+      const result = await pool.query(
+        `
+        SELECT origin_url
+        FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        `,
+        [id, req.developer.id]
+      );
+
+      if (!result.rows.length) {
+        return res.status(404).json({ error: "Application not found" });
+      }
+
+      const verification = await verifyOriginDns(
+        result.rows[0].origin_url,
+        id
+      );
+
+      res.json({ verification });
+    } catch (error) {
+      console.error("GET origin verification:", error);
+      res.status(500).json({
+        error: "Failed to check Origin URL verification"
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/applications/:id/origin-verification/verify",
+  requireAuth,
+  async (req, res) => {
+    const { id } = req.params;
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({ error: "Invalid application ID" });
+    }
+
+    try {
+      const result = await pool.query(
+        `
+        SELECT origin_url
+        FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        `,
+        [id, req.developer.id]
+      );
+
+      if (!result.rows.length) {
+        return res.status(404).json({ error: "Application not found" });
+      }
+
+      const verification = await verifyOriginDns(
+        result.rows[0].origin_url,
+        id
+      );
+
+      res.status(verification.verified ? 200 : 409).json({
+        verification
+      });
+    } catch (error) {
+      console.error("POST origin verification:", error);
+      res.status(500).json({
+        error: "Failed to verify Origin URL"
+      });
     }
   }
 );
@@ -1855,7 +2018,6 @@ app.delete(
           client_id,
           application_type,
           origin_url,
-          cross_app_scopes,
           status,
           created_at,
           updated_at
