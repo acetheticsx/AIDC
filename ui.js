@@ -225,6 +225,17 @@ export function registerAIDCComponents(AIDC) {
 
           <div class="aidc-sidebar-spacer"></div>
 
+          <button
+            class="aidc-theme-toggle aidc-theme-toggle-sidebar"
+            type="button"
+            aria-label="${this.theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}"
+            title="${this.theme === "dark" ? "Light theme" : "Dark theme"}"
+            @click=${this.toggleTheme}
+          >
+            ${icon(this.theme === "dark" ? "sun-01" : "moon-01")}
+            <span>${this.theme === "dark" ? "Light mode" : "Dark mode"}</span>
+          </button>
+
           <div class="aidc-sidebar-links">
             <a class="aidc-sidebar-link" href="https://docs.ace-base.cc" target="_blank" rel="noreferrer">
               ${icon("book-01")}<span>Docs</span>${icon("arrow-up-right-01")}
@@ -1459,7 +1470,17 @@ export function registerAIDCComponents(AIDC) {
                           <strong>${check.label}</strong>
                           <small>${check.detail}</small>
                         </span>
-                        <span class="aidc-health-check-state">${check.ok ? "Ready" : "Fix"}</span>
+                        ${check.ok
+                          ? html`<span class="aidc-health-check-state">Ready</span>`
+                          : html`
+                              <button
+                                class="aidc-health-check-fix"
+                                type="button"
+                                @click=${() => this.fixHealthCheck(check.key)}
+                              >
+                                Fix ${icon("arrow-right-01")}
+                              </button>
+                            `}
                       </div>
                     `)}
                   </div>
@@ -1471,6 +1492,22 @@ export function registerAIDCComponents(AIDC) {
                 })}
         </section>
       `;
+    }
+
+    fixHealthCheck(key) {
+      const sectionByKey = {
+        origin: "url-configs",
+        redirects: "redirect-uris",
+        credentials: "credentials",
+        scopes: "scopes",
+        status: "overview"
+      };
+
+      const section = sectionByKey[key];
+      if (!this.application?.id || !section) return;
+
+      router.navigate(`/applications/${this.application.id}/${section}`);
+      haptic?.(6);
     }
 
     async saveClientType(event) {
@@ -2053,6 +2090,19 @@ export function registerAIDCComponents(AIDC) {
               >${icon("copy-01")}</button>
             </div>
           </div>
+
+          ${v.records?.length
+            ? html`
+                <div class="aidc-dns-records-found">
+                  <span>Records found</span>
+                  <div>
+                    ${v.records.map(record => html`
+                      <code>${record}</code>
+                    `)}
+                  </div>
+                </div>
+              `
+            : ""}
 
           <div class="aidc-dialog-note">
             ${icon(v.verified ? "checkmark-circle-02" : "information-circle")}
@@ -4348,6 +4398,9 @@ await auth.signIn();</code></pre>
       helpOpen: {
         state: true
       },
+      theme: {
+        state: true
+      },
       shortcutsOpen: {
         state: true
       },
@@ -4364,6 +4417,7 @@ await auth.signIn();</code></pre>
 
       this.sidebarOpen = false;
       this.helpOpen = false;
+      this.theme = "light";
       this.shortcutsOpen = false;
       this.accountMenuOpen = false;
       this.aboutOpen = false;
@@ -4378,6 +4432,11 @@ await auth.signIn();</code></pre>
 
     connectedCallback() {
       super.connectedCallback();
+
+      this.theme =
+        localStorage.getItem("aidc-theme") ||
+        (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      this.applyTheme();
 
       window.addEventListener(
         "aidc-close-sidebar",
@@ -4523,8 +4582,21 @@ await auth.signIn();</code></pre>
       this.sidebarOpen = false;
     }
 
+    applyTheme() {
+      document.documentElement.dataset.theme = this.theme === "dark" ? "dark" : "light";
+      document.documentElement.style.colorScheme = this.theme;
+    }
+
+    toggleTheme() {
+      this.theme = this.theme === "dark" ? "light" : "dark";
+      localStorage.setItem("aidc-theme", this.theme);
+      this.applyTheme();
+      haptic?.(6);
+    }
+
     openHelp() {
       this.helpOpen = true;
+      this.accountMenuOpen = false;
       haptic?.(10);
     }
 
@@ -4914,14 +4986,44 @@ await auth.signIn();</code></pre>
               `
             : ""}
 
+          <button
+            class="aidc-help-top aidc-help-top-desktop"
+            type="button"
+            aria-label="Help and resources"
+            title="Help"
+            @click=${this.openHelp}
+          >
+            ${icon("help-circle")}
+          </button>
+
           <main class="aidc-main">
 
             <header class="aidc-mobile-header">
+              <button
+                class="aidc-theme-toggle aidc-theme-toggle-mobile"
+                type="button"
+                aria-label="${this.theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}"
+                title="${this.theme === "dark" ? "Light theme" : "Dark theme"}"
+                @click=${this.toggleTheme}
+              >
+                ${icon(this.theme === "dark" ? "sun-01" : "moon-01")}
+              </button>
+
               <a class="aidc-mobile-brand" href="#/" aria-label="AIDC overview">
                 <span>AIDC</span>
               </a>
 
               <span class="aidc-mobile-header-spacer"></span>
+
+              <button
+                class="aidc-help-top"
+                type="button"
+                aria-label="Help and resources"
+                title="Help"
+                @click=${this.openHelp}
+              >
+                ${icon("help-circle")}
+              </button>
             </header>
 
             <div class="aidc-content">
@@ -5008,13 +5110,19 @@ await auth.signIn();</code></pre>
             </nav>
 
             <button
-              class="aidc-mobile-help-fab"
+              class="aidc-account-fab"
               type="button"
-              aria-label="Help and resources"
-              title="Help"
-              @click=${this.openHelp}
+              aria-label="Open account menu"
+              aria-haspopup="menu"
+              aria-expanded=${this.accountMenuOpen}
+              title="Account"
+              @click=${() => {
+                this.accountMenuOpen = !this.accountMenuOpen;
+                this.helpOpen = false;
+                haptic?.(6);
+              }}
             >
-              <span aria-hidden="true">?</span>
+              ${state.user ? userAvatar(state.user, "aidc-profile-avatar") : icon("user-01")}
             </button>
           </div>
 

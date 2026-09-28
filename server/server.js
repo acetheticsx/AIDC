@@ -689,10 +689,14 @@ function validateOriginUrl(value, { required = false } = {}) {
   return { valid: true, origin: parsed.origin };
 }
 
-const dnsResolver = new Resolver({
-  timeout: 3000,
-  tries: 2
-});
+const dnsResolvers = [
+  { name: "system", resolver: new Resolver({ timeout: 3000, tries: 2 }) },
+  { name: "cloudflare", resolver: new Resolver({ timeout: 3000, tries: 2 }) },
+  { name: "google", resolver: new Resolver({ timeout: 3000, tries: 2 }) }
+];
+
+dnsResolvers[1].resolver.setServers(["1.1.1.1", "1.0.0.1"]);
+dnsResolvers[2].resolver.setServers(["8.8.8.8", "8.8.4.4"]);
 
 function getOriginVerification(originUrl, applicationId) {
   if (!originUrl) {
@@ -748,37 +752,58 @@ async function verifyOriginDns(originUrl, applicationId) {
   const challenge = getOriginVerification(originUrl, applicationId);
 
   if (!challenge.required) {
-    return challenge;
-  }
-
-  try {
-    const records = await dnsResolver.resolveTxt(challenge.record_name);
-    const verified = records.some(
-      chunks => chunks.join("") === challenge.record_value
-    );
-
     return {
       ...challenge,
-      verified,
-      reason: verified
-        ? "TXT record verified"
-        : "TXT record not found or does not match"
-    };
-  } catch (error) {
-    if (
-      !["ENOTFOUND", "ENODATA", "SERVFAIL", "TIMEOUT", "REFUSED"].includes(
-        error?.code
-      )
-    ) {
-      console.error("Origin TXT lookup failed:", error?.code || "unknown");
-    }
-
-    return {
-      ...challenge,
-      verified: false,
-      reason: "TXT record could not be resolved yet"
+      records: [],
+      checked_at: new Date().toISOString()
     };
   }
+
+  const results = await Promise.all(
+    dnsResolvers.map(async ({ name, resolver }) => {
+      try {
+        const records = await resolver.resolveTxt(challenge.record_name);
+        return {
+          resolver: name,
+          records: records.map(chunks => chunks.join("")),
+          error: null
+        };
+      } catch (error) {
+        return {
+          resolver: name,
+          records: [],
+          error: error?.code || "DNS_LOOKUP_FAILED"
+        };
+      }
+    })
+  );
+
+  const records = [
+    ...new Set(results.flatMap(result => result.records))
+  ];
+
+  const verified = records.includes(challenge.record_value);
+  const hadDnsData = records.length > 0;
+  const allUnavailable = results.every(result => result.error && !result.records.length);
+
+  return {
+    ...challenge,
+    verified,
+    records,
+    checked_at: new Date().toISOString(),
+    resolver_results: results.map(result => ({
+      resolver: result.resolver,
+      record_count: result.records.length,
+      error: result.error
+    })),
+    reason: verified
+      ? "TXT record verified"
+      : hadDnsData
+        ? "TXT records were found, but none matched the challenge"
+        : allUnavailable
+          ? "DNS TXT lookup is unavailable from the verification service"
+          : "TXT record not found yet"
+  };
 }
 
 
