@@ -4901,11 +4901,11 @@ await auth.signIn();</code></pre>
 
             <header class="aidc-mobile-header">
               <button
-                class="aidc-mobile-about"
+                class="aidc-mobile-help"
                 type="button"
-                aria-label="About AIDC"
-                title="About AIDC"
-                @click=${this.openAbout}
+                aria-label="Help and resources"
+                title="Help"
+                @click=${this.openHelp}
               >
                 ${icon("information-circle")}
               </button>
