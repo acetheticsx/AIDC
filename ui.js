@@ -229,6 +229,7 @@ export function registerAIDCComponents(AIDC) {
             <button class="aidc-sidebar-link" type="button" @click=${() => this.dispatchEvent(new CustomEvent("aidc-open-about", { bubbles: true, composed: true }))}>
               ${icon("information-circle")}<span>About</span>
             </button>
+            <button class="aidc-sidebar-link" type="button" @click=() => this.dispatchEvent(new CustomEvent("aidc-open-about", { bubbles: true, composed: true }))><span>About</span></button>
             <a class="aidc-sidebar-link" href="https://docs.ace-base.cc" target="_blank" rel="noreferrer">
               ${icon("book-01")}<span>Docs</span>${icon("arrow-up-right-01")}
             </a>
@@ -4380,6 +4381,16 @@ await auth.signIn();</code></pre>
         this._openAbout
       );
 
+      this._openAbout = () => {
+        this.aboutOpen = true;
+        this.sidebarOpen = false;
+      };
+
+      window.addEventListener(
+        "aidc-open-about",
+        this._openAbout
+      );
+
       this._desktopShortcutKeydown = event => {
         if (
           !window.matchMedia("(min-width: 1000px) and (pointer: fine)").matches ||
@@ -4457,6 +4468,11 @@ await auth.signIn();</code></pre>
       );
 
       window.removeEventListener(
+        "aidc-open-about",
+        this._openAbout
+      );
+
+      window.removeEventListener(
         "keydown",
         this._desktopShortcutKeydown
       );
@@ -4501,6 +4517,16 @@ await auth.signIn();</code></pre>
 
     closeHelp() {
       this.helpOpen = false;
+      haptic?.(4);
+    }
+
+    openAbout() {
+      this.aboutOpen = true;
+      haptic?.(8);
+    }
+
+    closeAbout() {
+      this.aboutOpen = false;
       haptic?.(4);
     }
 
