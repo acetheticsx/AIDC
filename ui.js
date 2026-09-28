@@ -226,9 +226,6 @@ export function registerAIDCComponents(AIDC) {
           <div class="aidc-sidebar-spacer"></div>
 
           <div class="aidc-sidebar-links">
-            <button class="aidc-sidebar-link" type="button" @click=${() => this.dispatchEvent(new CustomEvent("aidc-open-about", { bubbles: true, composed: true }))}>
-              ${icon("information-circle")}<span>About</span>
-            </button>
             <a class="aidc-sidebar-link" href="https://docs.ace-base.cc" target="_blank" rel="noreferrer">
               ${icon("book-01")}<span>Docs</span>${icon("arrow-up-right-01")}
             </a>
@@ -4903,25 +4900,21 @@ await auth.signIn();</code></pre>
           <main class="aidc-main">
 
             <header class="aidc-mobile-header">
-
+              <button
+                class="aidc-mobile-about"
+                type="button"
+                aria-label="About AIDC"
+                title="About AIDC"
+                @click=${this.openAbout}
+              >
+                ${icon("information-circle")}
+              </button>
 
               <a class="aidc-mobile-brand" href="#/" aria-label="AIDC overview">
                 <span>AIDC</span>
               </a>
 
               <span class="aidc-mobile-header-spacer"></span>
-
-              <button
-                class="aidc-profile-button"
-                type="button"
-                aria-label="Open account menu"
-                aria-haspopup="menu"
-                aria-expanded=${this.accountMenuOpen}
-                title="Account"
-                @click=${() => (this.accountMenuOpen = !this.accountMenuOpen)}
-              >
-                ${state.user ? userAvatar(state.user, "aidc-profile-avatar") : icon("user-01")}
-              </button>
             </header>
 
             <div class="aidc-content">
