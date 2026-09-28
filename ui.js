@@ -4996,7 +4996,7 @@ await auth.signIn();</code></pre>
           <div>
             <aidc-sidebar
               .mobileOpen=${this.sidebarOpen}
-             .theme=\${this.theme} @aidc-toggle-theme=\${this.toggleTheme}></aidc-sidebar>
+             .theme=${this.theme} @aidc-toggle-theme=${this.toggleTheme}></aidc-sidebar>
           </div>
 
           ${this.shortcutsOpen
