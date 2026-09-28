@@ -22,9 +22,9 @@ test("API and auth responses are not cacheable", () => {
 });
 
 test("responses have server-generated request correlation IDs", () => {
-  assert.match(server, /crypto\\.randomUUID\\(\\)/);
+  assert.match(server, /crypto\.randomUUID\(\)/);
   assert.match(server, /X-Request-ID/);
-  assert.match(server, /request_id: req\\.requestId/);
+  assert.match(server, /request_id: req\.requestId/);
 });
 
 test("rate-limit buckets are isolated by traffic class", () => {
@@ -35,9 +35,9 @@ test("rate-limit buckets are isolated by traffic class", () => {
 });
 
 test("HTTP server has bounded request and header timeouts", () => {
-  assert.match(server, /server\\.requestTimeout = 30_000/);
-  assert.match(server, /server\\.headersTimeout = 35_000/);
-  assert.match(server, /server\\.keepAliveTimeout = 65_000/);
+  assert.match(server, /server\.requestTimeout = 30_000/);
+  assert.match(server, /server\.headersTimeout = 35_000/);
+  assert.match(server, /server\.keepAliveTimeout = 65_000/);
 });
 
 test("shutdown is idempotent and has a force-exit safety timer", () => {
