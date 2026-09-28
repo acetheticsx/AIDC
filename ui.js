@@ -2072,7 +2072,7 @@ export function registerAIDCComponents(AIDC) {
       }
 
       return html`
-        <section class="aidc-origin-verification">
+        <div class="aidc-origin-verification">
           <div class="aidc-origin-verification-head">
             <div>
               <span class="aidc-eyebrow">Domain control</span>
@@ -2151,7 +2151,7 @@ export function registerAIDCComponents(AIDC) {
               <span class="aidc-button-loading">Checking DNS…</span>
             </button>
           </div>
-        </section>
+        </div>
       `;
     }
 
@@ -2220,7 +2220,7 @@ export function registerAIDCComponents(AIDC) {
             </div>
           </section>
 
-          ${this.renderVerification()}
+
 
           <aidc-redirect-uris
             .applicationId=${app.id}
@@ -2811,6 +2811,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
 
             <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading scopes"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-row"></div><div class="aidc-skeleton aidc-skeleton-row short"></div><div class="aidc-skeleton aidc-skeleton-row"></div></div>
 
+          ${this.renderVerification()}
           </section>
         `;
       }
