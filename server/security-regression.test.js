@@ -54,13 +54,6 @@ test("branding logos require HTTPS", () => {
   );
 });
 
-test("cross-app scopes reject non-string entries", () => {
-  assert.match(
-    server,
-    /values\.some\(item => typeof item !== ["']string["']\)/
-  );
-});
-
 test("application fields have explicit size limits", () => {
   assert.match(server, /name\.length > 120/);
   assert.match(server, /description\.length > 2000/);
@@ -183,4 +176,18 @@ test("public machine-readable product summary is present", () => {
   assert.match(llms, /AIDC is the Ace Base Identity Developer Console/);
   assert.match(llms, /OAuth 2\.0 configuration/);
   assert.match(llms, /OpenID Connect configuration/);
+});
+
+
+test("cross-app scope plumbing is removed", () => {
+  assert.doesNotMatch(server, /cross_app_scopes/);
+  assert.doesNotMatch(app, /cross_app_scopes/);
+  assert.doesNotMatch(ui, /crossAppScopes|crossAppInput|aidc-cross-app-card/);
+});
+
+test("origin verification uses a scoped TXT challenge", () => {
+  assert.match(server, /_aceid-challenge/);
+  assert.match(server, /resolveTxt/);
+  assert.match(server, /token=/);
+  assert.match(server, /ORIGIN_DOMAIN_UNVERIFIED/);
 });
