@@ -315,10 +315,10 @@ app.use((req, res, next) => {
     req.path.startsWith("/api/") ||
     req.path.startsWith("/auth/")
   ) {
-    res.set(
-      "X-Robots-Tag",
-      "noindex, nofollow, noarchive"
-    );
+    res.set({
+      "X-Robots-Tag": "noindex, nofollow, noarchive",
+      "Cache-Control": "no-store"
+    });
   }
 
   res.set({
