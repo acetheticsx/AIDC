@@ -1847,7 +1847,8 @@ export function registerAIDCComponents(AIDC) {
       savingOrigin: { state: true },
       originError: { state: true },
       verification: { state: true },
-      verifying: { state: true }
+      verifying: { state: true },
+      addingCloudflare: { state: true }
     };
 
     constructor() {
@@ -1858,6 +1859,7 @@ export function registerAIDCComponents(AIDC) {
       this.originError = "";
       this.verification = null;
       this.verifying = false;
+      this.addingCloudflare = false;
     }
 
     updated(changed) {
@@ -2047,6 +2049,63 @@ export function registerAIDCComponents(AIDC) {
       }
     }
 
+    async addCloudflareRecord() {
+      if (
+        !this.application?.id ||
+        this.verifying ||
+        this.addingCloudflare
+      ) {
+        return;
+      }
+
+      const apiToken = window.prompt(
+        "Cloudflare API token\n\nCreate a token with Zone:Read and DNS:Edit for this domain. AIDC uses it only for this request and does not store it."
+      );
+
+      if (apiToken === null) {
+        return;
+      }
+
+      if (!apiToken.trim()) {
+        notify("Cloudflare API token is required", "error");
+        return;
+      }
+
+      this.addingCloudflare = true;
+
+      try {
+        const data =
+          await AIDC.api.originVerification.addCloudflareRecord(
+            this.application.id,
+            apiToken.trim()
+          );
+
+        this.verification =
+          data?.verification || this.verification;
+
+        if (data?.existing) {
+          notify("Cloudflare already has the AIDC TXT record");
+        } else if (data?.added) {
+          notify("Cloudflare TXT record added");
+        }
+
+        if (this.verification?.verified) {
+          notify("Origin domain verified");
+          haptic?.(10);
+        } else {
+          haptic?.(8);
+        }
+      } catch (error) {
+        notify(
+          error?.message ||
+            "Unable to add the Cloudflare TXT record.",
+          "error"
+        );
+      } finally {
+        this.addingCloudflare = false;
+      }
+    }
+
     copyVerification(value, label) {
       copyToClipboard(value).then(copied => {
         if (copied) {
@@ -2139,9 +2198,22 @@ export function registerAIDCComponents(AIDC) {
 
           <div class="aidc-dialog-actions">
             <button
+              class="aidc-button aidc-button-secondary ${this.addingCloudflare ? "is-loading" : ""}"
+              type="button"
+              ?disabled=${this.verifying || this.addingCloudflare || v.verified}
+              @click=${this.addCloudflareRecord}
+            >
+              <span class="aidc-button-content">
+                ${icon("cloud")}
+                ${this.addingCloudflare ? "Adding via Cloudflare…" : "Add automatically with Cloudflare"}
+              </span>
+              <span class="aidc-button-loading">Adding via Cloudflare…</span>
+            </button>
+
+            <button
               class="aidc-button aidc-button-primary ${this.verifying ? "is-loading" : ""}"
               type="button"
-              ?disabled=${this.verifying || v.verified}
+              ?disabled=${this.verifying || this.addingCloudflare || v.verified}
               @click=${this.verifyDomain}
             >
               <span class="aidc-button-content">
