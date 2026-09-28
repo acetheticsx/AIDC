@@ -147,6 +147,23 @@ export const api = {
     }
   },
 
+  originVerification: {
+    get(applicationId) {
+      return request(
+        `/applications/${id(applicationId)}/origin-verification`
+      );
+    },
+
+    verify(applicationId) {
+      return request(
+        `/applications/${id(applicationId)}/origin-verification/verify`,
+        {
+          method: "POST"
+        }
+      );
+    }
+  },
+
   redirectUris: {
     list(applicationId) {
       return request(
