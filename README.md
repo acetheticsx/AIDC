@@ -93,3 +93,20 @@ The server supports explicit reverse-proxy and PostgreSQL TLS configuration.
 ## The Ace Base
 
 Is Where Better Begins...
+
+
+## Origin URL domain verification
+
+HTTPS Origin URLs require DNS control verification before a web application can be enabled.
+
+AIDC generates a TXT challenge scoped to the application and exact Origin URL:
+
+1. Save the HTTPS Origin URL.
+2. Open the Origin URL settings and copy the displayed TXT record.
+3. Create the TXT record at the displayed `_aceid-challenge.<host>` name.
+4. Wait for DNS propagation, then choose **Verify TXT record**.
+5. Keep the TXT record in DNS while the Origin URL is in use. AIDC treats the record as a persistent authorization signal and labels `expiry=never`.
+
+Localhost HTTP origins do not require DNS verification. HTTPS IP-address origins are rejected because they cannot provide the requested domain-control proof.
+
+The verification uses DNS TXT resolution and a keyed application-specific token; the raw token is never stored in the application database.
