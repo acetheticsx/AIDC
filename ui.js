@@ -79,6 +79,16 @@ export function registerAIDCComponents(AIDC) {
       };
     }
 
+    toggleTheme() {
+      this.darkMode = !this.darkMode;
+      if (this.darkMode) {
+        document.documentElement.classList.add("aidc-dark");
+      } else {
+        document.documentElement.classList.remove("aidc-dark");
+      }
+      haptic?.(6);
+    }
+
     connectedCallback() {
       super.connectedCallback();
 
@@ -2860,10 +2870,11 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
 
     updated(changed) {
       /*
-       * Clear the one-time secret on app switch.
-       * Doing this here - and not in load() - means
-       * rotate() -> load() does not wipe the secret
-       * that was just displayed.
+       * Clear the one-time secret on app
+       * switch. Doing this here — and not in
+       * load() — means rotate() → load() does
+       * not wipe the secret that was just
+       * displayed.
        */
       if (changed.has("applicationId")) {
         this.secret = "";
@@ -2875,15 +2886,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       ) {
         this.load();
       }
-    }
-
-    disconnectedCallback() {
-      /*
-       * Clear the secret when the component is removed
-       * from the DOM to prevent memory retention.
-       */
-      this.secret = "";
-      super.disconnectedCallback?.();
     }
 
     async load() {
@@ -2926,7 +2928,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       }
 
       this.rotating = true;
-      this.secret = "";
 
       try {
         const credential =
@@ -2935,7 +2936,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
           );
 
         this.secret = credential.secret;
-        this.requestUpdate();
 
         await this.load();
       } finally {
@@ -2974,13 +2974,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
 
       if (copied) {
         notify("Client secret copied");
-
-        /*
-         * Clear the secret after successful copy as a
-         * convenience to encourage one-time use.
-         */
-        this.secret = "";
-        this.requestUpdate();
       }
     }
 
@@ -4356,6 +4349,9 @@ await auth.signIn();</code></pre>
       },
       aboutOpen: {
         state: true
+      },
+      darkMode: {
+        state: true
       }
     };
 
@@ -4367,6 +4363,7 @@ await auth.signIn();</code></pre>
       this.shortcutsOpen = false;
       this.accountMenuOpen = false;
       this.aboutOpen = false;
+      this.darkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
       this._shortcutPrefix = false;
       this._shortcutTimer = null;
 
@@ -4374,6 +4371,16 @@ await auth.signIn();</code></pre>
         this.sidebarOpen = false;
         this.helpOpen = false;
       };
+    }
+
+    toggleTheme() {
+      this.darkMode = !this.darkMode;
+      if (this.darkMode) {
+        document.documentElement.classList.add("aidc-dark");
+      } else {
+        document.documentElement.classList.remove("aidc-dark");
+      }
+      haptic?.(6);
     }
 
     connectedCallback() {
@@ -4917,11 +4924,29 @@ await auth.signIn();</code></pre>
           <main class="aidc-main">
 
             <header class="aidc-mobile-header">
+              <button
+                class="aidc-mobile-theme-toggle"
+                type="button"
+                aria-label="Toggle theme"
+                title="Toggle dark/light mode"
+                @click=${() => this.toggleTheme()}
+              >
+                ${icon("contrast-01")}
+              </button>
+
               <a class="aidc-mobile-brand" href="#/" aria-label="AIDC overview">
                 <span>AIDC</span>
               </a>
 
-              <span class="aidc-mobile-header-spacer"></span>
+              <button
+                class="aidc-mobile-help-button"
+                type="button"
+                aria-label="Help and resources"
+                title="Help"
+                @click=${this.openHelp}
+              >
+                ${icon("information-circle")}
+              </button>
             </header>
 
             <div class="aidc-content">
@@ -5008,13 +5033,14 @@ await auth.signIn();</code></pre>
             </nav>
 
             <button
-              class="aidc-mobile-help-fab"
+              class="aidc-mobile-account-fab"
               type="button"
-              aria-label="Help and resources"
-              title="Help"
-              @click=${this.openHelp}
+              aria-label="Open account menu"
+              aria-haspopup="menu"
+              aria-expanded=${this.accountMenuOpen}
+              @click=${() => (this.accountMenuOpen = !this.accountMenuOpen)}
             >
-              <span aria-hidden="true">?</span>
+              ${state.user ? userAvatar(state.user, "aidc-mobile-account-avatar") : icon("user-01")}
             </button>
           </div>
 

@@ -47,6 +47,18 @@
   --aidc-black: #0b0b0a;
   --aidc-white: #fff;
 
+  /* Dark mode tokens */
+  --aidc-bg-dark: #111110;
+  --aidc-surface-dark: #1c1c1a;
+  --aidc-surface-soft-dark: #242422;
+  --aidc-border-dark: #333330;
+  --aidc-border-soft-dark: #2a2a28;
+  --aidc-text-dark: #f7f7f5;
+  --aidc-text-secondary-dark: #d1d1cd;
+  --aidc-muted-dark: #8f8f8c;
+  --aidc-disabled-dark: #5a5a58;
+  --aidc-hover-dark: #2a2a28;
+
   --aidc-hover: #eeeeeb;
   --aidc-active: #e5e5e1;
 
