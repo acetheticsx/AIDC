@@ -2,7 +2,7 @@
 
 html {
   filter: grayscale(1) !important;
-  color-scheme: light !important;
+  color-scheme: inherit !important;
 }
 
 input,
