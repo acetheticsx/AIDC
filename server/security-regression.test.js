@@ -172,7 +172,7 @@ test("analytics ignores malformed login timestamps", () => {
 });
 
 test("frontend uses the first-party boot fallback", () => {
-  assert.match(index, /<script src=["']\/boot-fallback\.js["'] defer><\/script>/);
+  assert.match(index, /<script src=["']\/boot-fallback\.js(?:\?[^"']*)?["'] defer><\/script>/);
   assert.doesNotMatch(index, /setTimeout\(function \(\) \{[\s\S]*Failed to load AIDC/);
 });
 
