@@ -105,7 +105,6 @@ const SESSION_COOKIE = "aidc_session";
 const CSRF_COOKIE = "aidc_csrf";
 const OAUTH_STATE_COOKIE = "aidc_oauth_state";
 const OAUTH_VERIFIER_COOKIE = "aidc_oauth_verifier";
-const RETURN_TO_COOKIE = "aidc_return_to";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const OAUTH_TTL_MS = 10 * 60 * 1000;             // 10 minutes
@@ -1331,24 +1330,6 @@ function requireDiscovery(req, res, next) {
  * ═══════════════════════════════════════════
  */
 
-function getSafeReturnTo(value) {
-  if (typeof value !== "string" || !value) {
-    return "/";
-  }
-
-  try {
-    const parsed = new URL(value, PUBLIC_ORIGIN_VALUE);
-
-    if (parsed.origin !== PUBLIC_ORIGIN_VALUE) {
-      return "/";
-    }
-
-    return parsed.pathname + parsed.search + parsed.hash;
-  } catch {
-    return "/";
-  }
-}
-
 /*
  * GET /auth/login
  */
@@ -1358,7 +1339,6 @@ app.get(
   (req, res) => {
     const state = randomToken(32);
     const codeVerifier = randomToken(32);
-    const returnTo = getSafeReturnTo(req.query.return_to);
 
     const codeChallenge = crypto
       .createHash("sha256")
@@ -1386,15 +1366,6 @@ app.get(
         {
           maxAge: OAUTH_TTL_MS,
           path: "/auth"
-        }
-      ),
-      serializeCookie(
-        RETURN_TO_COOKIE,
-        returnTo,
-        {
-          maxAge: OAUTH_TTL_MS,
-          path: "/auth",
-          httpOnly: true
         }
       )
     ];
@@ -1426,14 +1397,9 @@ app.get(
       OAUTH_VERIFIER_COOKIE
     );
 
-    const returnTo = getSafeReturnTo(
-      getCookie(req, RETURN_TO_COOKIE)
-    );
-
     const clearOauthCookies = [
       clearCookie(OAUTH_STATE_COOKIE, "/auth"),
-      clearCookie(OAUTH_VERIFIER_COOKIE, "/auth"),
-      clearCookie(RETURN_TO_COOKIE, "/auth")
+      clearCookie(OAUTH_VERIFIER_COOKIE, "/auth")
     ];
 
     /*
@@ -1443,19 +1409,23 @@ app.get(
     if (oauthError) {
       res.set("Set-Cookie", clearOauthCookies);
 
-      const errorCode = OAUTH_ERROR_MESSAGES[oauthError]
-        ? oauthError
-        : "authorization_failed";
+      const message =
+        OAUTH_ERROR_MESSAGES[oauthError] ||
+        "Authorization failed";
 
-      return res.redirect(
-        `/?auth_error=${encodeURIComponent(errorCode)}`
-      );
+      return res
+        .status(400)
+        .type("text")
+        .send(message);
     }
 
     if (!code || typeof code !== "string") {
       res.set("Set-Cookie", clearOauthCookies);
 
-      return res.redirect("/?auth_error=missing_code");
+      return res
+        .status(400)
+        .type("text")
+        .send("Missing authorization code");
     }
 
     if (
@@ -1465,13 +1435,19 @@ app.get(
     ) {
       res.set("Set-Cookie", clearOauthCookies);
 
-      return res.redirect("/?auth_error=invalid_state");
+      return res
+        .status(400)
+        .type("text")
+        .send("Invalid state parameter");
     }
 
     if (!codeVerifier) {
       res.set("Set-Cookie", clearOauthCookies);
 
-      return res.redirect("/?auth_error=missing_pkce");
+      return res
+        .status(400)
+        .type("text")
+        .send("Missing PKCE verifier");
     }
 
     try {
@@ -1509,7 +1485,10 @@ app.get(
 
         res.set("Set-Cookie", clearOauthCookies);
 
-        return res.redirect("/?auth_error=token_exchange");
+        return res
+          .status(502)
+          .type("text")
+          .send("Token exchange failed");
       }
 
       const tokens = await tokenResponse.json();
@@ -1517,7 +1496,10 @@ app.get(
       if (!tokens.id_token) {
         res.set("Set-Cookie", clearOauthCookies);
 
-        return res.redirect("/?auth_error=no_id_token");
+        return res
+          .status(502)
+          .type("text")
+          .send("No ID token returned");
       }
 
       const { payload } = await jwtVerify(
@@ -1547,7 +1529,10 @@ app.get(
           payload.sub
         );
 
-        return res.redirect("/?auth_error=invalid_identity");
+        return res
+          .status(502)
+          .type("text")
+          .send("Invalid identity subject");
       }
 
       const identity = await pool.query(
@@ -1566,7 +1551,10 @@ app.get(
       if (!identity.rows.length) {
         res.set("Set-Cookie", clearOauthCookies);
 
-        return res.redirect("/?auth_error=account_not_found");
+        return res
+          .status(403)
+          .type("text")
+          .send("Ace ID account not found");
       }
 
       const identityUser = identity.rows[0];
@@ -1605,13 +1593,16 @@ app.get(
 
       res.set("Set-Cookie", cookies);
 
-      res.redirect(returnTo);
+      res.redirect("/");
     } catch (error) {
       console.error("Callback failed:", error);
 
       res.set("Set-Cookie", clearOauthCookies);
 
-      return res.redirect("/?auth_error=authentication_failed");
+      res
+        .status(500)
+        .type("text")
+        .send("Authentication failed");
     }
   }
 );
