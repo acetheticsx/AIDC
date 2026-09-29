@@ -187,7 +187,7 @@ export const api = {
         `/applications/${id(applicationId)}/origin-verification/verify`,
         { method: "POST" }
       );
-    }
+    },
 
     addCloudflareRecord(applicationId, apiToken) {
       return request(
