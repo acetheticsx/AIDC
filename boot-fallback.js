@@ -5,13 +5,20 @@ window.setTimeout(function () {
 
   var app = document.getElementById("app");
 
-  if (!app || app.textContent.trim()) {
+  if (!app || app.querySelector(".aidc-boot-fallback")) {
     return;
   }
 
   app.innerHTML =
-    '<section class="aidc-boot-fallback">' +
-    '<h1>Failed to load AIDC</h1>' +
-    '<p>The interface could not be initialised. Open the browser console for details. Most commonly, this means a module failed to load.</p>' +
+    '<section class="aidc-boot-fallback" role="alert">' +
+    '<div>' +
+    '<span class="aidc-eyebrow">AIDC</span>' +
+    '<h1>Interface failed to initialise</h1>' +
+    '<p>The application shell did not finish loading. Your data was not changed.</p>' +
+    '<div class="aidc-boot-fallback-actions">' +
+    '<button type="button" onclick="window.location.reload()">Reload AIDC</button>' +
+    '<a href="/auth/login">Sign in with Ace ID</a>' +
+    '</div>' +
+    '</div>' +
     '</section>';
 }, 2500);
