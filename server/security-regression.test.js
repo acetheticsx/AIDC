@@ -243,9 +243,9 @@ test("cross-app scope plumbing is removed", () => {
   assert.doesNotMatch(ui, /crossAppScopes|crossAppInput|aidc-cross-app-card/);
 });
 
-test("requested loader is still reverted and domain records remain in AIDC", () => {
-  assert.doesNotMatch(index, /aidc-app-loader/);
-  assert.doesNotMatch(style, /aidc-app-loader/);
+test("AIDC loading UI keeps skeleton animation and domain records", () => {
+  assert.match(ui, /aidc-loading-card|aidc-skeleton/);
+  assert.match(style, /aidc-skeleton-shimmer/);
   assert.match(ui, /Domain Records/);
 });
 
