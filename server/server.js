@@ -3742,6 +3742,7 @@ app.get("/llms.txt", sendFrontendFile("llms.txt"));
 app.get("/app.js", sendFrontendFile("app.js"));
 app.get("/api.js", sendFrontendFile("api.js"));
 app.get("/boot-fallback.js", sendFrontendFile("boot-fallback.js"));
+app.get("/profile-ui.js", sendFrontendFile("profile-ui.js"));
 app.get(
   "/ui.js",
   sendFrontendFile("ui.js")
@@ -3753,6 +3754,14 @@ app.get(
 app.get(
   "/style.css",
   sendFrontendFile("style.css")
+);
+app.get(
+  "/monochrome.css",
+  sendFrontendFile("monochrome.css")
+);
+app.get(
+  "/boot-fallback.css",
+  sendFrontendFile("boot-fallback.css")
 );
 
 app.use(
