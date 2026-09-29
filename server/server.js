@@ -748,6 +748,24 @@ function getOriginVerification(originUrl, applicationId) {
   };
 }
 
+async function resolveTxtWithRetry(resolver, hostname) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await resolver.resolveTxt(hostname);
+    } catch (error) {
+      lastError = error;
+
+      if (attempt === 0) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 async function verifyOriginDns(originUrl, applicationId) {
   const challenge = getOriginVerification(originUrl, applicationId);
 
@@ -762,7 +780,11 @@ async function verifyOriginDns(originUrl, applicationId) {
   const results = await Promise.all(
     dnsResolvers.map(async ({ name, resolver }) => {
       try {
-        const records = await resolver.resolveTxt(challenge.record_name);
+        const records = await resolveTxtWithRetry(
+          resolver,
+          challenge.record_name
+        );
+
         return {
           resolver: name,
           records: records.map(chunks => chunks.join("")),
@@ -784,7 +806,9 @@ async function verifyOriginDns(originUrl, applicationId) {
 
   const verified = records.includes(challenge.record_value);
   const hadDnsData = records.length > 0;
-  const allUnavailable = results.every(result => result.error && !result.records.length);
+  const allUnavailable = results.every(
+    result => result.error && !result.records.length
+  );
 
   return {
     ...challenge,
@@ -2187,16 +2211,36 @@ app.get(
         return res.status(404).json({ error: "Application not found" });
       }
 
-      const verification = await verifyOriginDns(
-        result.rows[0].origin_url,
-        id
-      );
+      let verification;
+
+      try {
+        verification = await verifyOriginDns(
+          result.rows[0].origin_url,
+          id
+        );
+      } catch (error) {
+        console.error(
+          "GET origin verification DNS lookup:",
+          error?.message || "unknown error"
+        );
+
+        verification = {
+          ...getOriginVerification(
+            result.rows[0].origin_url,
+            id
+          ),
+          records: [],
+          checked_at: new Date().toISOString(),
+          resolver_results: [],
+          reason: "DNS lookup is temporarily unavailable. The TXT record below is still valid."
+        };
+      }
 
       res.json({ verification });
     } catch (error) {
       console.error("GET origin verification:", error);
       res.status(500).json({
-        error: "Failed to check Origin URL verification"
+        error: "Failed to load Origin URL verification"
       });
     }
   }
