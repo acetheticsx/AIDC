@@ -120,6 +120,27 @@
   <link rel="stylesheet" href="/boot-fallback.css">
   <meta name="robots" content="index, follow, max-image-preview:large">
   <meta property="og:site_name" content="Ace Base">
+<script>
+  window.__AIDC_BOOT_ERROR = null;
+  window.addEventListener("error", function (event) {
+    if (window.__AIDC_BOOT_ERROR) return;
+    window.__AIDC_BOOT_ERROR = {
+      type: "error",
+      message: event.message || "Unknown script error",
+      source: event.filename || "unknown",
+      line: event.lineno || 0,
+      column: event.colno || 0
+    };
+  }, true);
+  window.addEventListener("unhandledrejection", function (event) {
+    if (window.__AIDC_BOOT_ERROR) return;
+    var reason = event.reason;
+    window.__AIDC_BOOT_ERROR = {
+      type: "unhandledrejection",
+      message: reason && reason.message ? reason.message : String(reason || "Unknown promise rejection")
+    };
+  }, true);
+</script>
 </head>
 
 <body>
