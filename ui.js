@@ -2134,11 +2134,10 @@ export function registerAIDCComponents(AIDC) {
         <section class="aidc-origin-verification">
           <div class="aidc-origin-verification-head">
             <div>
-              <span class="aidc-eyebrow">Domain control</span>
-              <strong>Verify this Origin URL</strong>
+              <span class="aidc-eyebrow">Domain Records</span>
+              <strong>Domain Records</strong>
               <p>
-                Add this TXT record to prove you control
-                the domain before enabling the application.
+                Add this TXT record to prove you control the domain before enabling the application.
               </p>
             </div>
             <span class="aidc-origin-verification-badge ${v.verified ? "is-verified" : ""}">
