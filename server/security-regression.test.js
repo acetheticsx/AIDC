@@ -172,7 +172,7 @@ test("analytics ignores malformed login timestamps", () => {
 });
 
 test("frontend uses the first-party boot fallback", () => {
-  assert.match(index, /<script src=["']\/boot-fallback\.js["'] defer><\/script>/);
+  assert.match(index, /<script src=["']\/boot-fallback\.js(?:\?[^"']*)?["'] defer><\/script>/);
   assert.doesNotMatch(index, /setTimeout\(function \(\) \{[\s\S]*Failed to load AIDC/);
 });
 
@@ -241,6 +241,12 @@ test("cross-app scope plumbing is removed", () => {
   assert.doesNotMatch(server, /cross_app_scopes/);
   assert.doesNotMatch(app, /cross_app_scopes/);
   assert.doesNotMatch(ui, /crossAppScopes|crossAppInput|aidc-cross-app-card/);
+});
+
+test("AIDC loading UI keeps skeleton animation and domain records", () => {
+  assert.match(ui, /aidc-loading-card[^>]*aria-label="Loading applications"/);
+  assert.match(style, /aidc-skeleton-shimmer/);
+  assert.match(ui, /Domain Records/);
 });
 
 test("origin verification uses a scoped TXT challenge", () => {
