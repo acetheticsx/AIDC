@@ -1229,6 +1229,11 @@ async function requireAuth(req, res, next) {
 
     /*
      * CSRF on state-changing requests.
+     *
+     * The token is the primary defense. Fetch Metadata and
+     * Origin checks add a second boundary for browsers that
+     * provide those headers. Missing headers remain allowed
+     * for compatibility with non-browser API clients.
      */
     if (
       !["GET", "HEAD", "OPTIONS"].includes(req.method)
@@ -1242,6 +1247,28 @@ async function requireAuth(req, res, next) {
       ) {
         return res.status(403).json({
           error: "Invalid CSRF token"
+        });
+      }
+
+      const fetchSite = req.get("Sec-Fetch-Site");
+
+      if (
+        fetchSite &&
+        !["same-origin", "same-site", "none"].includes(fetchSite)
+      ) {
+        return res.status(403).json({
+          error: "Cross-site request blocked"
+        });
+      }
+
+      const origin = req.get("Origin");
+
+      if (
+        origin &&
+        origin !== PUBLIC_ORIGIN_VALUE
+      ) {
+        return res.status(403).json({
+          error: "Invalid request origin"
         });
       }
     }
