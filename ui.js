@@ -13,7 +13,7 @@ import {
   emptyState,
   validateRedirectUri,
   diagnoseRedirectUri
-} from "./helpers.js";
+} from "./helpers.js?v=20260929-2";
 
 export function registerAIDCComponents(AIDC) {
   const {
@@ -2049,7 +2049,7 @@ export function registerAIDCComponents(AIDC) {
       }
     }
 
-    async addCloudflareRecord() {
+    async addCloudflareDnsRecord() {
       if (
         !this.application?.id ||
         this.verifying ||
@@ -2201,7 +2201,7 @@ export function registerAIDCComponents(AIDC) {
               class="aidc-button aidc-button-secondary ${this.addingCloudflare ? "is-loading" : ""}"
               type="button"
               ?disabled=${this.verifying || this.addingCloudflare || v.verified}
-              @click=${this.addCloudflareRecord}
+              @click=${this.addCloudflareDnsRecord}
             >
               <span class="aidc-button-content">
                 ${icon("globe-02")}
