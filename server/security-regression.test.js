@@ -243,6 +243,12 @@ test("cross-app scope plumbing is removed", () => {
   assert.doesNotMatch(ui, /crossAppScopes|crossAppInput|aidc-cross-app-card/);
 });
 
+test("requested loader is still reverted and domain records remain in AIDC", () => {
+  assert.doesNotMatch(index, /aidc-app-loader/);
+  assert.doesNotMatch(style, /aidc-app-loader/);
+  assert.match(ui, /Domain Records/);
+});
+
 test("origin verification uses a scoped TXT challenge", () => {
   assert.match(server, /_aceid-challenge/);
   assert.match(server, /resolveTxt/);
