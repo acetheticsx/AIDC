@@ -7887,3 +7887,33 @@ html::before{
 @media(min-width:761px){
   .aidc-profile-desktop{display:none!important}
 }
+
+
+/* Strong current-state treatment: the active tab is a filled surface, not an outline. */
+.aidc-nav-item.active,
+.aidc-mobile-nav-item.active {
+  background: var(--aidc-black) !important;
+  color: var(--aidc-white) !important;
+  border-color: var(--aidc-black) !important;
+  box-shadow: 0 6px 18px rgb(0 0 0 / .14) !important;
+}
+
+.aidc-nav-item.active:hover,
+.aidc-mobile-nav-item.active:hover {
+  background: var(--aidc-black) !important;
+  color: var(--aidc-white) !important;
+}
+
+:root[data-theme="dark"] .aidc-nav-item.active,
+:root[data-theme="dark"] .aidc-mobile-nav-item.active {
+  background: #f1f1ed !important;
+  color: #10100f !important;
+  border-color: #f1f1ed !important;
+  box-shadow: 0 7px 20px rgb(0 0 0 / .32) !important;
+}
+
+:root[data-theme="dark"] .aidc-nav-item.active:hover,
+:root[data-theme="dark"] .aidc-mobile-nav-item.active:hover {
+  background: #f1f1ed !important;
+  color: #10100f !important;
+}
