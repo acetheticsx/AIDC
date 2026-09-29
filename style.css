@@ -1741,10 +1741,10 @@ aidc-app {
 
 .aidc-tab.active {
   background:
-    var(--aidc-black);
+    var(--aidc-text);
 
   color:
-    var(--aidc-white);
+    var(--aidc-surface);
 
   font-weight: 650;
 
@@ -7212,9 +7212,9 @@ body:has(
     max-width: 104px !important;
     justify-content: center;
     gap: 8px;
-    background: var(--aidc-surface-soft);
-    color: var(--aidc-text);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aidc-text) 8%, transparent);
+    background: var(--aidc-text);
+    color: var(--aidc-surface);
+    box-shadow: 0 8px 20px rgb(0 0 0 / .16);
   }
 
   .aidc-mobile-nav-item.active .aidc-icon {
