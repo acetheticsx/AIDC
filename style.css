@@ -7917,3 +7917,28 @@ html::before{
   background: #f1f1ed !important;
   color: #10100f !important;
 }
+
+
+/* Initial application loader: deliberately simple, because humanity has suffered enough from skeletons. */
+.aidc-app-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background: var(--aidc-bg, #fff);
+}
+.aidc-app-loader span {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--aidc-border, #ddd);
+  border-top-color: var(--aidc-text, #111);
+  border-radius: 50%;
+  animation: aidc-app-loader-spin .7s linear infinite;
+}
+@keyframes aidc-app-loader-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aidc-app-loader span { animation: none; }
+}
