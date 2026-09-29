@@ -996,15 +996,34 @@ async function addCloudflareOriginRecord(
     }
   );
 
+  let verification;
+
+  try {
+    verification = await verifyOriginDns(
+      originUrl,
+      applicationId
+    );
+  } catch (error) {
+    console.error(
+      "Cloudflare Origin verification DNS lookup:",
+      error?.message || "unknown error"
+    );
+
+    verification = {
+      ...challenge,
+      records: [],
+      checked_at: new Date().toISOString(),
+      resolver_results: [],
+      reason: "TXT record added. DNS propagation is still in progress."
+    };
+  }
+
   return {
     added: true,
     existing: false,
     zone_name: zone.name,
     record_id: created?.result?.id || null,
-    verification: await verifyOriginDns(
-      originUrl,
-      applicationId
-    )
+    verification
   };
 }
 
