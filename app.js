@@ -1695,10 +1695,6 @@ uiStyle.textContent = `
 `;
 document.head.appendChild(uiStyle);
 
-function removeAppLoader() {
-  document.querySelector(".aidc-app-loader")?.remove();
-}
-
 /* ─────────────────────────────────────────────
    Initialisation
 ───────────────────────────────────────────── */
@@ -1708,35 +1704,6 @@ function removeAppLoader() {
  * Only after /api/me succeeds do we load data and
  * run the initial route.
  */
-removeAppLoader();
-
-function consumeAuthError() {
-  const url = new URL(window.location.href);
-  const code = url.searchParams.get("auth_error");
-
-  if (!code) {
-    return;
-  }
-
-  const messages = {
-    access_denied: "Sign-in was cancelled.",
-    temporarily_unavailable: "Ace ID is temporarily unavailable. Try again.",
-    server_error: "Ace ID could not complete sign-in. Try again.",
-    invalid_request: "The sign-in request was invalid. Try again.",
-    invalid_grant: "The sign-in session expired. Start sign-in again."
-  };
-
-  notify(
-    messages[code] || "Ace ID sign-in could not be completed.",
-    "error"
-  );
-
-  url.searchParams.delete("auth_error");
-  window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
-}
-
-consumeAuthError();
-
 auth.bootstrap().then(user => {
   if (!user) {
     return;
