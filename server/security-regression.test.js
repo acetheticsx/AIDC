@@ -255,3 +255,11 @@ test("origin verification uses a scoped TXT challenge", () => {
   assert.match(server, /token=/);
   assert.match(server, /ORIGIN_DOMAIN_UNVERIFIED/);
 });
+
+test("Origin URL save binds the application update parameters correctly", () => {
+  assert.match(server, /WHERE id = \$11\s+AND owner_id = \$12/);
+  assert.match(ui, /View DNS records/);
+  assert.match(ui, /role="dialog"/);
+  assert.match(ui, /aria-labelledby="aidc-record-sheet-title"/);
+  assert.match(style, /aidc-record-sheet-layer/);
+});
