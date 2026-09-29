@@ -105,6 +105,7 @@ const SESSION_COOKIE = "aidc_session";
 const CSRF_COOKIE = "aidc_csrf";
 const OAUTH_STATE_COOKIE = "aidc_oauth_state";
 const OAUTH_VERIFIER_COOKIE = "aidc_oauth_verifier";
+const RETURN_TO_COOKIE = "aidc_return_to";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const OAUTH_TTL_MS = 10 * 60 * 1000;             // 10 minutes
@@ -1330,6 +1331,24 @@ function requireDiscovery(req, res, next) {
  * ═══════════════════════════════════════════
  */
 
+function getSafeReturnTo(value) {
+  if (typeof value !== "string" || !value) {
+    return "/";
+  }
+
+  try {
+    const parsed = new URL(value, PUBLIC_ORIGIN_VALUE);
+
+    if (parsed.origin !== PUBLIC_ORIGIN_VALUE) {
+      return "/";
+    }
+
+    return parsed.pathname + parsed.search + parsed.hash;
+  } catch {
+    return "/";
+  }
+}
+
 /*
  * GET /auth/login
  */
@@ -1339,6 +1358,7 @@ app.get(
   (req, res) => {
     const state = randomToken(32);
     const codeVerifier = randomToken(32);
+    const returnTo = getSafeReturnTo(req.query.return_to);
 
     const codeChallenge = crypto
       .createHash("sha256")
@@ -1366,6 +1386,15 @@ app.get(
         {
           maxAge: OAUTH_TTL_MS,
           path: "/auth"
+        }
+      ),
+      serializeCookie(
+        RETURN_TO_COOKIE,
+        returnTo,
+        {
+          maxAge: OAUTH_TTL_MS,
+          path: "/auth",
+          httpOnly: true
         }
       )
     ];
@@ -1397,9 +1426,14 @@ app.get(
       OAUTH_VERIFIER_COOKIE
     );
 
+    const returnTo = getSafeReturnTo(
+      getCookie(req, RETURN_TO_COOKIE)
+    );
+
     const clearOauthCookies = [
       clearCookie(OAUTH_STATE_COOKIE, "/auth"),
-      clearCookie(OAUTH_VERIFIER_COOKIE, "/auth")
+      clearCookie(OAUTH_VERIFIER_COOKIE, "/auth"),
+      clearCookie(RETURN_TO_COOKIE, "/auth")
     ];
 
     /*
@@ -1593,7 +1627,7 @@ app.get(
 
       res.set("Set-Cookie", cookies);
 
-      res.redirect("/");
+      res.redirect(returnTo);
     } catch (error) {
       console.error("Callback failed:", error);
 
