@@ -244,7 +244,7 @@ test("cross-app scope plumbing is removed", () => {
 });
 
 test("AIDC loading UI keeps skeleton animation and domain records", () => {
-  assert.match(ui, /aidc-loading-card|aidc-skeleton/);
+  assert.match(ui, /aidc-loading-card[^>]*aria-label="Loading applications"/);
   assert.match(style, /aidc-skeleton-shimmer/);
   assert.match(ui, /Domain Records/);
 });
