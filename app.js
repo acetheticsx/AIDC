@@ -218,42 +218,61 @@ const auth = {
    * On 401, redirects to /auth/login and never resolves.
    */
   async bootstrap() {
-    try {
-      const data = await api.auth.me();
+    let lastError = null;
 
-      state.user = data?.user || null;
-      state.authReady = true;
+    /*
+     * Give the API one short recovery attempt for a
+     * cold start or transient network failure. A 401
+     * is never retried because it is an explicit
+     * authentication result, not a transport failure.
+     */
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const data = await api.auth.me();
 
-      emitState();
-
-      return state.user;
-    } catch (error) {
-      if (error?.status === 401) {
-        state.user = null;
+        state.user = data?.user || null;
         state.authReady = true;
+
         emitState();
-        return null;
+
+        return state.user;
+      } catch (error) {
+        lastError = error;
+
+        if (error?.status === 401) {
+          state.user = null;
+          state.authReady = true;
+          emitState();
+          return null;
+        }
+
+        const retryable =
+          error?.status === 408 ||
+          error?.status >= 500 ||
+          !error?.status;
+
+        if (!retryable || attempt === 1) {
+          break;
+        }
+
+        await new Promise(resolve => {
+          window.setTimeout(resolve, 350);
+        });
       }
-
-      /*
-       * A transient session-check failure should not
-       * strand the visitor on a blank page. Keep the
-       * public landing page available and let the CTA
-       * start a fresh Ace ID login.
-       */
-      state.user = null;
-      state.authReady = true;
-
-      notify(
-        error?.message ||
-          "Unable to verify session. You can still sign in.",
-        "error"
-      );
-
-      emitState();
-
-      return null;
     }
+
+    state.user = null;
+    state.authReady = true;
+
+    notify(
+      lastError?.message ||
+        "Unable to verify session. You can still sign in.",
+      "error"
+    );
+
+    emitState();
+
+    return null;
   },
 
   async enterConsole() {
