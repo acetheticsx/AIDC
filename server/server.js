@@ -2179,8 +2179,8 @@ app.patch(
           origin_url = CASE WHEN $7::boolean THEN $8 ELSE origin_url END,
           status = CASE WHEN $9::boolean THEN $10 ELSE status END,
           updated_at = now()
-        WHERE id = $13
-          AND owner_id = $14
+        WHERE id = $11
+          AND owner_id = $12
         RETURNING
           id,
           name,
