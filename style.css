@@ -427,12 +427,16 @@ aidc-app {
 
 .aidc-nav-item.active {
   background:
-    var(--aidc-hover);
+    var(--aidc-black);
 
   color:
-    var(--aidc-text);
+    var(--aidc-white);
 
   font-weight: 650;
+
+  box-shadow:
+    0 1px 0 rgb(0 0 0 / .04),
+    0 5px 14px rgb(0 0 0 / .08);
 }
 
 .aidc-nav-item.active::before {
@@ -1688,7 +1692,9 @@ aidc-app {
   gap: 6px;
 
   padding:
-    0 1px 11px;
+    0 11px 11px;
+
+  border-radius: 8px 8px 0 0;
 
   color:
     var(--aidc-muted);
@@ -1701,6 +1707,7 @@ aidc-app {
   white-space: nowrap;
 
   transition:
+    background var(--aidc-fast),
     color var(--aidc-fast);
 }
 
@@ -1733,10 +1740,16 @@ aidc-app {
 }
 
 .aidc-tab.active {
+  background:
+    var(--aidc-black);
+
   color:
-    var(--aidc-text);
+    var(--aidc-white);
 
   font-weight: 650;
+
+  box-shadow:
+    0 4px 12px rgb(0 0 0 / .08);
 }
 
 .aidc-tab.active::after {
