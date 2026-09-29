@@ -1443,23 +1443,19 @@ app.get(
     if (oauthError) {
       res.set("Set-Cookie", clearOauthCookies);
 
-      const message =
-        OAUTH_ERROR_MESSAGES[oauthError] ||
-        "Authorization failed";
+      const errorCode = OAUTH_ERROR_MESSAGES[oauthError]
+        ? oauthError
+        : "authorization_failed";
 
-      return res
-        .status(400)
-        .type("text")
-        .send(message);
+      return res.redirect(
+        `/?auth_error=${encodeURIComponent(errorCode)}`
+      );
     }
 
     if (!code || typeof code !== "string") {
       res.set("Set-Cookie", clearOauthCookies);
 
-      return res
-        .status(400)
-        .type("text")
-        .send("Missing authorization code");
+      return res.redirect("/?auth_error=missing_code");
     }
 
     if (
@@ -1469,19 +1465,13 @@ app.get(
     ) {
       res.set("Set-Cookie", clearOauthCookies);
 
-      return res
-        .status(400)
-        .type("text")
-        .send("Invalid state parameter");
+      return res.redirect("/?auth_error=invalid_state");
     }
 
     if (!codeVerifier) {
       res.set("Set-Cookie", clearOauthCookies);
 
-      return res
-        .status(400)
-        .type("text")
-        .send("Missing PKCE verifier");
+      return res.redirect("/?auth_error=missing_pkce");
     }
 
     try {
@@ -1519,10 +1509,7 @@ app.get(
 
         res.set("Set-Cookie", clearOauthCookies);
 
-        return res
-          .status(502)
-          .type("text")
-          .send("Token exchange failed");
+        return res.redirect("/?auth_error=token_exchange");
       }
 
       const tokens = await tokenResponse.json();
@@ -1530,10 +1517,7 @@ app.get(
       if (!tokens.id_token) {
         res.set("Set-Cookie", clearOauthCookies);
 
-        return res
-          .status(502)
-          .type("text")
-          .send("No ID token returned");
+        return res.redirect("/?auth_error=no_id_token");
       }
 
       const { payload } = await jwtVerify(
@@ -1563,10 +1547,7 @@ app.get(
           payload.sub
         );
 
-        return res
-          .status(502)
-          .type("text")
-          .send("Invalid identity subject");
+        return res.redirect("/?auth_error=invalid_identity");
       }
 
       const identity = await pool.query(
@@ -1585,10 +1566,7 @@ app.get(
       if (!identity.rows.length) {
         res.set("Set-Cookie", clearOauthCookies);
 
-        return res
-          .status(403)
-          .type("text")
-          .send("Ace ID account not found");
+        return res.redirect("/?auth_error=account_not_found");
       }
 
       const identityUser = identity.rows[0];
@@ -1633,10 +1611,7 @@ app.get(
 
       res.set("Set-Cookie", clearOauthCookies);
 
-      res
-        .status(500)
-        .type("text")
-        .send("Authentication failed");
+      return res.redirect("/?auth_error=authentication_failed");
     }
   }
 );
