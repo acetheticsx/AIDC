@@ -139,15 +139,6 @@ function sync(event) {
 
 window.addEventListener("aidc-state-change", sync);
 
-const observer = new MutationObserver(() => {
-  renderProfile(window.__AIDC_LAST_USER || null);
-});
-
-observer.observe(document.documentElement, {
-  subtree: true,
-  childList: true
-});
-
-queueMicrotask(() => {
+window.addEventListener("DOMContentLoaded", () => {
   renderProfile(window.__AIDC_LAST_USER || null);
 });
