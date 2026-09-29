@@ -2271,10 +2271,30 @@ app.post(
         return res.status(404).json({ error: "Application not found" });
       }
 
-      const verification = await verifyOriginDns(
-        result.rows[0].origin_url,
-        id
-      );
+      let verification;
+
+      try {
+        verification = await verifyOriginDns(
+          result.rows[0].origin_url,
+          id
+        );
+      } catch (error) {
+        console.error(
+          "POST origin verification DNS lookup:",
+          error?.message || "unknown error"
+        );
+
+        verification = {
+          ...getOriginVerification(
+            result.rows[0].origin_url,
+            id
+          ),
+          records: [],
+          checked_at: new Date().toISOString(),
+          resolver_results: [],
+          reason: "DNS lookup is temporarily unavailable. The TXT record below is still valid."
+        };
+      }
 
       res.status(verification.verified ? 200 : 409).json({
         verification
