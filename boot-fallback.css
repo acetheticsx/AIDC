@@ -26,3 +26,44 @@
   font-size: 14px;
   line-height: 1.6;
 }
+
+
+.aidc-boot-fallback > div {
+  width: min(560px, 100%);
+}
+
+.aidc-boot-fallback .aidc-eyebrow {
+  display: block;
+  margin-bottom: 10px;
+  font: 700 10px/1 monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #666;
+}
+
+.aidc-boot-fallback-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.aidc-boot-fallback-actions button,
+.aidc-boot-fallback-actions a {
+  min-height: 40px;
+  padding: 0 15px;
+  border: 1px solid #111;
+  border-radius: 10px;
+  background: #111;
+  color: #fff;
+  font: 650 12px/40px system-ui, sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.aidc-boot-fallback-actions a {
+  background: #fff;
+  color: #111;
+  line-height: 38px;
+}
