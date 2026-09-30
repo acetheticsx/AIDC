@@ -2064,7 +2064,48 @@ app.patch(
     let forcedStatus = status;
 
     if (origin_url !== undefined && origin !== null) {
+      const currentResult = await pool.query(
+        `
+        SELECT origin_url, application_type, status
+        FROM public.applications
+        WHERE id = $1
+          AND owner_id = $2
+        `,
+        [id, req.developer.id]
+      );
+
+      if (!currentResult.rows.length) {
+        return res.status(404).json({ error: "Application not found" });
+      }
+
+      const currentApplication = currentResult.rows[0];
+      const effectiveType =
+        application_type !== undefined
+          ? application_type
+          : currentApplication.application_type;
       const originProtocol = new URL(origin).protocol;
+
+      if (
+        effectiveType === "web" &&
+        originProtocol === "https:" &&
+        origin !== currentApplication.origin_url
+      ) {
+        const verification = await verifyOriginDns(origin, id);
+
+        if (!verification.verified) {
+          if (status === "active") {
+            return res.status(409).json({
+              error: "Verify the Origin URL domain before enabling this application.",
+              code: "ORIGIN_DOMAIN_UNVERIFIED",
+              verification
+            });
+          }
+
+          if (status === undefined && currentApplication.status === "active") {
+            forcedStatus = "disabled";
+          }
+        }
+      }
 
       if (
         application_type === "web" &&
@@ -2179,8 +2220,8 @@ app.patch(
           origin_url = CASE WHEN $7::boolean THEN $8 ELSE origin_url END,
           status = CASE WHEN $9::boolean THEN $10 ELSE status END,
           updated_at = now()
-        WHERE id = $13
-          AND owner_id = $14
+        WHERE id = $11
+          AND owner_id = $12
         RETURNING
           id,
           name,

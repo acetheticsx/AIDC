@@ -255,3 +255,21 @@ test("origin verification uses a scoped TXT challenge", () => {
   assert.match(server, /token=/);
   assert.match(server, /ORIGIN_DOMAIN_UNVERIFIED/);
 });
+
+test("Origin URL save binds the application update parameters correctly", () => {
+  assert.match(server, /WHERE id = \$11\s+AND owner_id = \$12/);
+  assert.match(ui, /View DNS records/);
+  assert.match(ui, /role="dialog"/);
+  assert.match(ui, /aria-labelledby="aidc-record-sheet-title"/);
+  assert.match(style, /aidc-record-sheet-layer/);
+});
+
+test("DNS records sheet manages keyboard focus and changed active origins are verified", () => {
+  assert.match(ui, /this\._recordsTrigger/);
+  assert.match(ui, /handleRecordsKeydown/);
+  assert.match(ui, /event\.key === "Escape"/);
+  assert.match(ui, /event\.key !== "Tab"/);
+  assert.match(server, /effectiveType/);
+  assert.match(server, /currentApplication\.status === "active"/);
+  assert.match(server, /forcedStatus = "disabled"/);
+});

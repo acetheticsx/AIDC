@@ -1405,6 +1405,21 @@ export function registerAIDCComponents(AIDC) {
     }
 
     updated(changed) {
+      if (changed.has("recordsOpen")) {
+        if (this.recordsOpen) {
+          requestAnimationFrame(() => {
+            const dialog = this.querySelector(".aidc-record-sheet");
+            const close = dialog?.querySelector(".aidc-record-sheet-head .aidc-icon-button");
+            (close || dialog)?.focus();
+          });
+        } else {
+          requestAnimationFrame(() => {
+            this._recordsTrigger?.focus?.();
+            this._recordsTrigger = null;
+          });
+        }
+      }
+
       if (changed.has("application")) {
         this.clientType = this.application?.application_type || "web";
 
@@ -1848,7 +1863,8 @@ export function registerAIDCComponents(AIDC) {
       originError: { state: true },
       verification: { state: true },
       verifying: { state: true },
-      addingCloudflare: { state: true }
+      addingCloudflare: { state: true },
+      recordsOpen: { state: true }
     };
 
     constructor() {
@@ -1860,6 +1876,8 @@ export function registerAIDCComponents(AIDC) {
       this.verification = null;
       this.verifying = false;
       this.addingCloudflare = false;
+      this.recordsOpen = false;
+      this._recordsTrigger = null;
     }
 
     updated(changed) {
@@ -1867,6 +1885,8 @@ export function registerAIDCComponents(AIDC) {
         this.originUrl = this.application?.origin_url || "";
         this.originError = "";
         this.verification = null;
+        this.recordsOpen = false;
+        this._recordsTrigger = null;
 
         if (this.application?.id) {
           this.loadVerification(this.application.id);
@@ -2114,6 +2134,67 @@ export function registerAIDCComponents(AIDC) {
       });
     }
 
+    openRecords(event) {
+      if (!this.verification?.required) {
+        return;
+      }
+
+      this._recordsTrigger = event?.currentTarget || null;
+      this.recordsOpen = true;
+    }
+
+    closeRecords() {
+      if (!this.recordsOpen) {
+        return;
+      }
+
+      this.recordsOpen = false;
+    }
+
+    handleEscape() {
+      if (this.recordsOpen) {
+        this.closeRecords();
+      }
+    }
+
+    handleRecordsKeydown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeRecords();
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const dialog = this.querySelector(".aidc-record-sheet");
+      if (!dialog) {
+        return;
+      }
+
+      const focusable = [...dialog.querySelectorAll(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )];
+
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
     renderVerification() {
       const v = this.verification;
 
@@ -2145,47 +2226,50 @@ export function registerAIDCComponents(AIDC) {
             </span>
           </div>
 
-          <div class="aidc-dns-record">
-            <div class="aidc-dns-row">
-              <span>Name</span>
-              <code>${v.record_name}</code>
-              <button
-                class="aidc-icon-button"
-                type="button"
-                aria-label="Copy TXT record name"
-                @click=${() => this.copyVerification(v.record_name, "TXT name")}
-              >${icon("copy-01")}</button>
-            </div>
-
-            <div class="aidc-dns-row">
-              <span>Type</span>
-              <code>${v.record_type}</code>
-            </div>
-
-            <div class="aidc-dns-row">
-              <span>Value</span>
-              <code>${v.record_value}</code>
-              <button
-                class="aidc-icon-button"
-                type="button"
-                aria-label="Copy TXT record value"
-                @click=${() => this.copyVerification(v.record_value, "TXT value")}
-              >${icon("copy-01")}</button>
-            </div>
+          <div class="aidc-domain-record-trigger">
+            <button class="aidc-button aidc-button-secondary" type="button" @click=${this.openRecords}>
+              ${icon("dns-01")}
+              View DNS records
+            </button>
+            <span class="aidc-origin-verification-hint">
+              Add the TXT record before enabling this application.
+            </span>
           </div>
 
-          ${v.records?.length
-            ? html`
-                <div class="aidc-dns-records-found">
-                  <span>Records found</span>
+          ${this.recordsOpen ? html`
+            <div class="aidc-record-sheet-layer">
+              <button class="aidc-record-sheet-backdrop" type="button" aria-label="Close DNS records" @click=${this.closeRecords}></button>
+              <section class="aidc-record-sheet" role="dialog" aria-modal="true" aria-labelledby="aidc-record-sheet-title" tabindex="-1" @keydown=${this.handleRecordsKeydown}>
+                <header class="aidc-record-sheet-head">
                   <div>
-                    ${v.records.map(record => html`
-                      <code>${record}</code>
-                    `)}
+                    <span class="aidc-eyebrow">DNS configuration</span>
+                    <h3 id="aidc-record-sheet-title">Domain Records</h3>
+                    <p>Copy these values into your DNS provider.</p>
+                  </div>
+                  <button class="aidc-icon-button" type="button" aria-label="Close DNS records" @click=${this.closeRecords}>${icon("cancel-01")}</button>
+                </header>
+                <div class="aidc-dns-record">
+                  <div class="aidc-dns-row">
+                    <span>Name</span><code>${v.record_name}</code>
+                    <button class="aidc-icon-button" type="button" aria-label="Copy TXT record name" @click=${() => this.copyVerification(v.record_name, "TXT name")}>${icon("copy-01")}</button>
+                  </div>
+                  <div class="aidc-dns-row"><span>Type</span><code>${v.record_type}</code></div>
+                  <div class="aidc-dns-row">
+                    <span>Value</span><code>${v.record_value}</code>
+                    <button class="aidc-icon-button" type="button" aria-label="Copy TXT record value" @click=${() => this.copyVerification(v.record_value, "TXT value")}>${icon("copy-01")}</button>
                   </div>
                 </div>
-              `
-            : ""}
+                ${v.records?.length ? html`
+                  <div class="aidc-dns-records-found">
+                    <span>Records found</span>
+                    <div>${v.records.map(record => html`<code>${record}</code>`)}</div>
+                  </div>
+                ` : html`
+                  <div class="aidc-dialog-note">${icon("information-circle")}<span>No matching TXT record has been detected yet.</span></div>
+                `}
+              </section>
+            </div>
+          ` : ""}
 
           <div class="aidc-dialog-note">
             ${icon(v.verified ? "checkmark-circle-02" : "information-circle")}
