@@ -7953,8 +7953,9 @@ html::before{
   max-height:min(82vh,720px);
   overflow:auto;
   border:1px solid #111;
-  background:#fff;
-  box-shadow:0 24px 80px rgba(17,17,17,.2);
+  background:var(--aidc-surface);
+  color:var(--aidc-text);
+  box-shadow:var(--aidc-shadow-dialog);
   animation:aidc-record-sheet-in .18s ease both;
 }
 .aidc-record-sheet-head{
@@ -7963,7 +7964,7 @@ html::before{
   justify-content:space-between;
   gap:16px;
   padding:20px;
-  border-bottom:1px solid var(--aidc-line,#d1d1cc);
+  border-bottom:1px solid var(--aidc-border);
 }
 .aidc-record-sheet-head h3{
   margin:7px 0 4px;
