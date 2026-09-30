@@ -263,3 +263,13 @@ test("Origin URL save binds the application update parameters correctly", () => 
   assert.match(ui, /aria-labelledby="aidc-record-sheet-title"/);
   assert.match(style, /aidc-record-sheet-layer/);
 });
+
+test("DNS records sheet manages keyboard focus and changed active origins are verified", () => {
+  assert.match(ui, /this\._recordsTrigger/);
+  assert.match(ui, /handleRecordsKeydown/);
+  assert.match(ui, /event\.key === "Escape"/);
+  assert.match(ui, /event\.key !== "Tab"/);
+  assert.match(server, /effectiveType/);
+  assert.match(server, /currentApplication\.status === "active"/);
+  assert.match(server, /forcedStatus = "disabled"/);
+});
