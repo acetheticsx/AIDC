@@ -273,3 +273,11 @@ test("DNS records sheet manages keyboard focus and changed active origins are ve
   assert.match(server, /currentApplication\.status === "active"/);
   assert.match(server, /forcedStatus = "disabled"/);
 });
+
+test("mobile overlays stay above navigation and branding color selection stays in-app", () => {
+  assert.match(style, /\.aidc-record-sheet-layer\{\s*z-index:9999/);
+  assert.match(ui, /colorPickerOpen/);
+  assert.match(ui, /aidc-color-picker/);
+  assert.doesNotMatch(ui, /type="color"/);
+  assert.match(style, /\.aidc-color-option/);
+});
