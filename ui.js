@@ -3586,7 +3586,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                       aria-label="Choose accent color"
                       aria-haspopup="dialog"
                       aria-expanded=${this.colorPickerOpen}
-                      style=${`--aidc-picked-color: ${previewColor}`}
+                      style=${`background-color: ${previewColor}`}
                       @click=${() => (this.colorPickerOpen = !this.colorPickerOpen)}
                     ></button>
                     <input
@@ -3612,7 +3612,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                               type="button"
                               aria-label=${`Set accent color ${color}`}
                               aria-pressed=${this.accentColor.toLowerCase() === color}
-                              style=${`--aidc-picked-color: ${color}`}
+                              style=${`background-color: ${color}`}
                               @click=${() => {
                                 this.accentColor = color;
                                 this.colorPickerOpen = false;
