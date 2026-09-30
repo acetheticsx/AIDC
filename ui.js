@@ -3413,6 +3413,10 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
 
       saving: {
         state: true
+      },
+
+      colorPickerOpen: {
+        state: true
       }
     };
 
@@ -3425,6 +3429,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       this.accentColor = "";
       this.loading = true;
       this.saving = false;
+      this.colorPickerOpen = false;
     }
 
     updated(changed) {
@@ -3575,12 +3580,15 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                 <label class="aidc-field">
                   <span>Accent color</span>
                   <div class="aidc-color-input">
-                    <input
-                      type="color"
-                      .value=${previewColor}
+                    <button
+                      class="aidc-color-swatch"
+                      type="button"
                       aria-label="Choose accent color"
-                      @input=${event => (this.accentColor = event.target.value)}
-                    />
+                      aria-haspopup="dialog"
+                      aria-expanded=${this.colorPickerOpen}
+                      style=${`--aidc-picked-color: ${previewColor}`}
+                      @click=${() => (this.colorPickerOpen = !this.colorPickerOpen)}
+                    ></button>
                     <input
                       type="text"
                       maxlength="7"
@@ -3590,6 +3598,39 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                       @input=${event => (this.accentColor = event.target.value)}
                       placeholder="#111111"
                     />
+
+                    ${this.colorPickerOpen ? html`
+                      <div class="aidc-color-picker" role="dialog" aria-label="Select accent color">
+                        <div class="aidc-color-picker-grid">
+                          ${[
+                            "#111111", "#ffffff", "#dc2626", "#ea580c",
+                            "#ca8a04", "#16a34a", "#0891b2", "#2563eb",
+                            "#7c3aed", "#db2777", "#475569", "#64748b"
+                          ].map(color => html`
+                            <button
+                              class="aidc-color-option"
+                              type="button"
+                              aria-label=${`Set accent color ${color}`}
+                              aria-pressed=${this.accentColor.toLowerCase() === color}
+                              style=${`--aidc-picked-color: ${color}`}
+                              @click=${() => {
+                                this.accentColor = color;
+                                this.colorPickerOpen = false;
+                              }}
+                            >
+                              <span></span>
+                            </button>
+                          `)}
+                        </div>
+                        <button
+                          class="aidc-color-picker-close"
+                          type="button"
+                          @click=${() => (this.colorPickerOpen = false)}
+                        >
+                          Close
+                        </button>
+                      </div>
+                    ` : ""}
                   </div>
                   <small>Use a six-digit hex color.</small>
                 </label>
