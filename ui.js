@@ -1405,6 +1405,21 @@ export function registerAIDCComponents(AIDC) {
     }
 
     updated(changed) {
+      if (changed.has("recordsOpen")) {
+        if (this.recordsOpen) {
+          requestAnimationFrame(() => {
+            const dialog = this.querySelector(".aidc-record-sheet");
+            const close = dialog?.querySelector(".aidc-record-sheet-head .aidc-icon-button");
+            (close || dialog)?.focus();
+          });
+        } else {
+          requestAnimationFrame(() => {
+            this._recordsTrigger?.focus?.();
+            this._recordsTrigger = null;
+          });
+        }
+      }
+
       if (changed.has("application")) {
         this.clientType = this.application?.application_type || "web";
 
@@ -1862,6 +1877,7 @@ export function registerAIDCComponents(AIDC) {
       this.verifying = false;
       this.addingCloudflare = false;
       this.recordsOpen = false;
+      this._recordsTrigger = null;
     }
 
     updated(changed) {
@@ -1870,6 +1886,7 @@ export function registerAIDCComponents(AIDC) {
         this.originError = "";
         this.verification = null;
         this.recordsOpen = false;
+        this._recordsTrigger = null;
 
         if (this.application?.id) {
           this.loadVerification(this.application.id);
@@ -2117,14 +2134,65 @@ export function registerAIDCComponents(AIDC) {
       });
     }
 
-    openRecords() {
-      if (this.verification?.required) {
-        this.recordsOpen = true;
+    openRecords(event) {
+      if (!this.verification?.required) {
+        return;
       }
+
+      this._recordsTrigger = event?.currentTarget || null;
+      this.recordsOpen = true;
     }
 
     closeRecords() {
+      if (!this.recordsOpen) {
+        return;
+      }
+
       this.recordsOpen = false;
+    }
+
+    handleEscape() {
+      if (this.recordsOpen) {
+        this.closeRecords();
+      }
+    }
+
+    handleRecordsKeydown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeRecords();
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const dialog = this.querySelector(".aidc-record-sheet");
+      if (!dialog) {
+        return;
+      }
+
+      const focusable = [...dialog.querySelectorAll(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )];
+
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
 
     renderVerification() {
@@ -2171,7 +2239,7 @@ export function registerAIDCComponents(AIDC) {
           ${this.recordsOpen ? html`
             <div class="aidc-record-sheet-layer">
               <button class="aidc-record-sheet-backdrop" type="button" aria-label="Close DNS records" @click=${this.closeRecords}></button>
-              <section class="aidc-record-sheet" role="dialog" aria-modal="true" aria-labelledby="aidc-record-sheet-title">
+              <section class="aidc-record-sheet" role="dialog" aria-modal="true" aria-labelledby="aidc-record-sheet-title" tabindex="-1" @keydown=${this.handleRecordsKeydown}>
                 <header class="aidc-record-sheet-head">
                   <div>
                     <span class="aidc-eyebrow">DNS configuration</span>
