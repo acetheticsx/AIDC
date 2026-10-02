@@ -689,9 +689,67 @@ export function registerAIDCComponents(AIDC) {
 
     formatHour(hour) {
       const h = Number(hour);
+
+      if (!Number.isFinite(h)) {
+        return "—";
+      }
+
       const suffix = h >= 12 ? "PM" : "AM";
       const display = h % 12 || 12;
+
       return `${display} ${suffix}`;
+    }
+
+    formatDate(value) {
+      if (!value) {
+        return "—";
+      }
+
+      const raw = String(value);
+
+      const dateOnly = raw.match(
+        /^(\\d{4})-(\\d{2})-(\\d{2})$/
+      );
+
+      if (dateOnly) {
+        const [, year, month, day] = dateOnly;
+
+        const date = new Date(
+          Date.UTC(
+            Number(year),
+            Number(month) - 1,
+            Number(day)
+          )
+        );
+
+        if (!Number.isNaN(date.getTime())) {
+          return new Intl.DateTimeFormat("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            timeZone: "UTC"
+          }).format(date);
+        }
+      }
+
+      const date = new Date(raw);
+
+      if (Number.isNaN(date.getTime())) {
+        return raw.replace(/T.*$/, "");
+      }
+
+      return new Intl.DateTimeFormat("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC"
+      }).format(date);
+    }
+
+    formatNumber(value) {
+      return new Intl.NumberFormat("en-IN").format(
+        Number(value) || 0
+      );
     }
 
     renderChart(items) {
@@ -714,7 +772,11 @@ export function registerAIDCComponents(AIDC) {
             <polyline class="aidc-analytics-line" points="${line}"></polyline>
             ${points.map(point => html`
               <circle class="aidc-analytics-point" cx="${point.x}" cy="${point.y}" r="1.35">
-                <title>${point.date}: ${point.count} login${point.count === 1 ? "" : "s"}</title>
+                <title>
+  ${this.formatDate(point.date)}:
+  ${this.formatNumber(point.count)}
+  login${point.count === 1 ? "" : "s"}
+</title>
               </circle>
             `)}
           </svg>
@@ -803,7 +865,16 @@ export function registerAIDCComponents(AIDC) {
             ${this.renderMetric("Logins", s.total, "successful sessions", "login-01")}
             ${this.renderMetric("Users", s.activeUsers || s.uniqueUsers, "distinct accounts", "user-group")}
             ${this.renderMetric("Success", successRate, `${s.failedAttempts} failed attempts`, "checkmark-circle-02")}
-            ${this.renderMetric("Peak", s.peakDay?.count || 0, s.peakDay?.date || "No activity", "chart-maximum")}
+            ${this.renderMetric(
+              "Peak",
+              this.formatNumber(
+                s.peakDay?.count || 0
+              ),
+              s.peakDay
+                ? this.formatDate(s.peakDay.date)
+                : "No activity",
+              "chart-maximum"
+            )}
           </section>
 
           <section class="aidc-analytics-primary">
@@ -913,23 +984,80 @@ export function registerAIDCComponents(AIDC) {
               </div>
 
               ${items.length
-                ? html`
-                    <div class="aidc-analytics-daily-list">
-                      ${items.map(item => html`
-                        <div class="aidc-analytics-day">
-                          <div>
-                            <strong>${item.date}</strong>
-                            <small>${item.uniqueUsers} users</small>
-                          </div>
-                          <div>
-                            <strong>${item.count}</strong>
-                            <small>${item.failedAttempts} failed</small>
-                          </div>
-                        </div>
-                      `)}
-                    </div>
-                  `
-                : emptyState({ iconName: "calendar-01", title: "No daily data", description: "Daily activity will appear here." })}
+                ? (() => {
+                    const max = Math.max(
+                      1,
+                      ...items.map(
+                        item => Number(item.count) || 0
+                      )
+                    );
+
+                    return html`
+                      <div class="aidc-analytics-daily-list">
+                        ${items.map(item => {
+                          const count =
+                            Number(item.count) || 0;
+
+                          const users =
+                            Number(item.uniqueUsers) || 0;
+
+                          const failed =
+                            Number(item.failedAttempts) || 0;
+
+                          const width = count
+                            ? Math.max(
+                                6,
+                                (count / max) * 100
+                              )
+                            : 0;
+
+                          return html`
+                            <div class="aidc-analytics-day">
+
+                              <div class="aidc-analytics-day-label">
+                                <strong>
+                                  ${this.formatDate(item.date)}
+                                </strong>
+
+                                <small>
+                                  ${this.formatNumber(users)}
+                                  user${users === 1 ? "" : "s"}
+                                  ·
+                                  ${this.formatNumber(failed)}
+                                  failed
+                                </small>
+                              </div>
+
+                              <div
+                                class="aidc-analytics-day-bar"
+                                aria-hidden="true"
+                              >
+                                <span
+                                  style="width:${width}%"
+                                ></span>
+                              </div>
+
+                              <div class="aidc-analytics-day-value">
+                                <strong>
+                                  ${this.formatNumber(count)}
+                                </strong>
+
+                                <small>
+                                  login${count === 1 ? "" : "s"}
+                                </small>
+                              </div>
+
+                            </div>
+                          `;
+                        })}
+                      </div>
+                    `;
+                  })()
+                : emptyState({
+                    iconName: "calendar-01",
+                    title: "No daily data",
+                    description: "Daily activity will appear here."
+                  })}
             </section>
           </div>
 
