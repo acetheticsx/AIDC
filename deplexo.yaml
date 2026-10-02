@@ -1,5 +1,5 @@
 framework: node
-install: npm install
+install: cd server && npm ci
 build: echo "No build step required"
-start: npm start
+start: node server/server.js
 port: 3000
