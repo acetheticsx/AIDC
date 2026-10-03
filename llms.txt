@@ -29,6 +29,14 @@ AIDC is a web developer console for creating and managing Ace Base Identity appl
 
 The public landing page is the canonical source for product information. Authenticated console routes and API endpoints are not public documentation.
 
+## Relationship with Ace ID
+
+AIDC manages application registrations and developer-facing configuration for Ace ID. Ace ID is the production identity and OpenID Connect service used by configured applications. AIDC is not itself the end-user identity provider.
+
+## Public answer surface
+
+The landing page contains the canonical public product description. Authenticated console routes, API routes, and application-specific configuration are not public documentation.
+
 ## Terminology
 
 AIDC means Ace Identity Developer Console. Ace ID is the identity service used by AIDC.
