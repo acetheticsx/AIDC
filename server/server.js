@@ -2031,17 +2031,20 @@ app.get(
         )
       ]);
 
-      const verified = userResult.rows[0]?.email_verified === true;
-      const limit = verified ? 8 : 3;
+      const entitlements = await getAceIdEntitlements(req.developer.id);
+      const count = applicationsResult.rows.length;
+      const limit = entitlements.applications;
 
       res.json({
         applications: applicationsResult.rows,
         quota: {
-          verified,
-          count: applicationsResult.rows.length,
+          plan: entitlements.plan,
+          name: entitlements.name,
+          count,
           limit,
-          remaining: Math.max(limit - applicationsResult.rows.length, 0)
-        }
+          remaining: Math.max(limit - count, 0)
+        },
+        entitlements
       });
     } catch (error) {
       console.error("GET /api/applications:", error);
@@ -2114,8 +2117,8 @@ app.post(
         return res.status(403).json({ error: "Ace ID not found" });
       }
 
-      const verified = userResult.rows[0].email_verified === true;
-      const limit = verified ? 8 : 3;
+      const entitlements = await getAceIdEntitlements(req.developer.id);
+      const limit = entitlements.applications;
 
       const countResult = await client.query(
         'SELECT COUNT(*)::integer AS count FROM public.applications WHERE owner_id = $1',
@@ -2128,13 +2131,18 @@ app.post(
         await client.query("ROLLBACK");
         return res.status(403).json({
           error:
-            "Project limit reached. " +
-            (verified ? "Verified" : "Unverified") +
-            " accounts can create up to " +
+            entitlements.name +
+            " plan allows up to " +
             limit +
-            " projects.",
-          code: "PROJECT_LIMIT_REACHED",
-          quota: { verified, count, limit, remaining: 0 }
+            " applications.",
+          code: "APPLICATION_LIMIT_REACHED",
+          quota: {
+            plan: entitlements.plan,
+            name: entitlements.name,
+            count,
+            limit,
+            remaining: 0
+          }
         });
       }
 
@@ -2178,11 +2186,13 @@ app.post(
       res.status(201).json({
         application: result.rows[0],
         quota: {
-          verified,
+          plan: entitlements.plan,
+          name: entitlements.name,
           count: count + 1,
           limit,
           remaining: Math.max(limit - (count + 1), 0)
-        }
+        },
+        entitlements
       });
     } catch (error) {
       await client.query("ROLLBACK");
@@ -3630,6 +3640,69 @@ app.put(
  * ═══════════════════════════════════════════
  */
 
+const AIDC_PLAN_LIMITS = Object.freeze({
+  base: Object.freeze({ name: "Base", applications: 8, mau: 5000 }),
+  core: Object.freeze({ name: "Core", applications: 15, mau: 20000 }),
+  apex: Object.freeze({ name: "Apex", applications: 25, mau: 50000 })
+});
+
+async function getAceIdEntitlements(developerId) {
+  const base = {
+    plan: "base",
+    name: AIDC_PLAN_LIMITS.base.name,
+    applications: AIDC_PLAN_LIMITS.base.applications,
+    mau: AIDC_PLAN_LIMITS.base.mau,
+    status: "active"
+  };
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT plan_id, status
+      FROM public.aceid_subscriptions
+      WHERE user_id = $1
+        AND (
+          status = 'active'
+          OR (
+            status = 'cancelled'
+            AND COALESCE(grant_expires_at, billing_period_end) > now()
+          )
+        )
+      ORDER BY
+        CASE WHEN status = 'active' THEN 0 ELSE 1 END,
+        updated_at DESC
+      LIMIT 1
+      `,
+      [developerId]
+    );
+
+    const planId = String(result.rows[0]?.plan_id || "base").toLowerCase();
+    const plan = AIDC_PLAN_LIMITS[planId];
+
+    if (!plan) {
+      console.error(
+        "Invalid Ace ID subscription plan; using Base entitlements:",
+        planId
+      );
+      return base;
+    }
+
+    return {
+      plan: planId,
+      name: plan.name,
+      applications: plan.applications,
+      mau: plan.mau,
+      status: result.rows[0]?.status || "active"
+    };
+  } catch (error) {
+    console.error(
+      "Ace ID entitlement lookup failed; using Base limits:",
+      error
+    );
+    return base;
+  }
+}
+
 async function getOwnedApplication(client, applicationId, developerId) {
   return client.query(
     "SELECT id, client_id FROM public.applications WHERE id = $1 AND owner_id = $2",
@@ -4498,39 +4571,3 @@ async function shutdown(signal) {
   shuttingDown = true;
 
   console.log(
-    `${signal} received. Shutting down...`
-  );
-
-  const forceExitTimer = setTimeout(() => {
-    console.error("Forced shutdown after timeout.");
-    process.exit(1);
-  }, 10_000);
-
-  forceExitTimer.unref();
-
-  server.close(async () => {
-    try {
-      await pool.end();
-
-      console.log("Database connection closed.");
-      clearTimeout(forceExitTimer);
-
-      process.exit(0);
-    } catch (error) {
-      console.error(
-        "Failed to close database connection:",
-        error
-      );
-
-      process.exit(1);
-    }
-  });
-}
-
-process.on("SIGTERM", () => {
-  shutdown("SIGTERM");
-});
-
-process.on("SIGINT", () => {
-  shutdown("SIGINT");
-});
