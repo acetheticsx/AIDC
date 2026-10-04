@@ -3670,7 +3670,7 @@ app.get("/api/users/search", requireAuth, async (req, res) => {
       )
       ORDER BY u.updated_at DESC, u.created_at DESC
       LIMIT $3
-      """,
+      `,
       [req.developer.id, query, limit]
     );
 
@@ -3714,7 +3714,7 @@ app.get("/api/applications/:id/sessions", requireAuth, async (req, res) => {
       )
       ORDER BY COALESCE(s.last_seen_at, s.created_at) DESC
       LIMIT $3
-      """,
+      `,
       [application.rows[0].client_id, status, limit]
     );
 
@@ -3744,7 +3744,7 @@ async function recordApplicationUptime(applicationId) {
       FROM public.applications a
       LEFT JOIN public.aceid_clients c ON c.client_id = a.client_id
       WHERE a.id = $1
-      """,
+      `,
       [applicationId]
     );
 
@@ -3776,7 +3776,7 @@ async function recordApplicationUptime(applicationId) {
       INSERT INTO public.application_activity
         (application_id, event_type, success, metadata)
       VALUES ($1, 'uptime.check', $2, $3::jsonb)
-      """,
+      `,
       [
         applicationId,
         success,
@@ -3832,7 +3832,7 @@ app.get("/api/applications/:id/uptime", requireAuth, async (req, res) => {
         WHERE application_id = $1
           AND event_type = 'uptime.check'
           AND created_at >= now() - ($2::int * INTERVAL '1 day')
-        """,
+        `,
         [id, days]
       ),
       pool.query(
@@ -3847,7 +3847,7 @@ app.get("/api/applications/:id/uptime", requireAuth, async (req, res) => {
           AND created_at >= now() - ($2::int * INTERVAL '1 day')
         GROUP BY 1
         ORDER BY 1 ASC
-        """,
+        `,
         [id, days]
       ),
       pool.query(
@@ -3857,7 +3857,7 @@ app.get("/api/applications/:id/uptime", requireAuth, async (req, res) => {
         WHERE application_id = $1 AND event_type = 'uptime.check'
         ORDER BY created_at DESC
         LIMIT 1
-        """,
+        `,
         [id]
       )
     ]);
@@ -3906,7 +3906,7 @@ app.post("/api/applications/:id/uptime/check", requireAuth, async (req, res) => 
       WHERE application_id = $1 AND event_type = 'uptime.check'
       ORDER BY created_at DESC
       LIMIT 1
-      """,
+      `,
       [id]
     );
 
