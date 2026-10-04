@@ -3624,6 +3624,298 @@ app.put(
   }
 );
 
+Developer user/session visibility
+ * ═══════════════════════════════════════════
+ */
+
+async function getOwnedApplication(client, applicationId, developerId) {
+  return client.query(
+    "SELECT id, client_id FROM public.applications WHERE id = $1 AND owner_id = $2",
+    [applicationId, developerId]
+  );
+}
+
+app.get("/api/users/search", requireAuth, async (req, res) => {
+  const query = String(req.query.q || "").trim();
+  const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 20, 1), 50);
+
+  if (query.length > 120) {
+    return res.status(400).json({ error: "Search query is too long" });
+  }
+
+  try {
+    const result = await pool.query(
+      """
+      WITH owned_clients AS (
+        SELECT DISTINCT client_id FROM public.applications WHERE owner_id = $1
+      ),
+      authorized_users AS (
+        SELECT DISTINCT c.user_id
+        FROM public.aceid_consents c
+        JOIN owned_clients oc ON oc.client_id = c.client_id
+      )
+      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url,
+             u.email_verified, u.created_at, u.updated_at,
+             u.frozen_at, u.onboarding_completed_at
+      FROM public.aceid_users u
+      JOIN authorized_users au ON au.user_id = u.id
+      WHERE (
+        $2 = ''
+        OR lower(u.email) LIKE lower($2) || '%'
+        OR lower(u.username) LIKE lower($2) || '%'
+        OR lower(u.display_name) LIKE lower($2) || '%'
+        OR u.id::text LIKE $2 || '%'
+      )
+      ORDER BY u.updated_at DESC, u.created_at DESC
+      LIMIT $3
+      """,
+      [req.developer.id, query, limit]
+    );
+
+    res.json({ users: result.rows });
+  } catch (error) {
+    console.error("GET /api/users/search:", error);
+    res.status(500).json({ error: "Failed to search users" });
+  }
+});
+
+app.get("/api/applications/:id/sessions", requireAuth, async (req, res) => {
+  const { id } = req.params;
+
+  if (!isValidUuid(id)) {
+    return res.status(400).json({ error: "Invalid application ID" });
+  }
+
+  const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 50, 1), 100);
+  const requestedStatus = String(req.query.status || "active");
+  const status = ["active", "all", "revoked"].includes(requestedStatus) ? requestedStatus : "active";
+
+  try {
+    const application = await getOwnedApplication(pool, id, req.developer.id);
+    if (!application.rows.length) return res.status(404).json({ error: "Application not found" });
+
+    const result = await pool.query(
+      """
+      WITH authorized_users AS (
+        SELECT DISTINCT user_id FROM public.aceid_consents WHERE client_id = $1
+      )
+      SELECT s.id, s.user_id, u.email, u.username, u.display_name, u.avatar_url,
+             s.created_at, s.last_seen_at, s.expires_at, s.revoked_at,
+             s.user_agent, s.authenticated_at
+      FROM public.aceid_sessions s
+      JOIN public.aceid_users u ON u.id = s.user_id
+      JOIN authorized_users au ON au.user_id = s.user_id
+      WHERE (
+        ($2 = 'active' AND s.revoked_at IS NULL AND s.expires_at > now())
+        OR ($2 = 'revoked' AND s.revoked_at IS NOT NULL)
+        OR ($2 = 'all')
+      )
+      ORDER BY COALESCE(s.last_seen_at, s.created_at) DESC
+      LIMIT $3
+      """,
+      [application.rows[0].client_id, status, limit]
+    );
+
+    res.json({
+      sessions: result.rows.map(session => ({
+        ...session,
+        status: session.revoked_at
+          ? "revoked"
+          : new Date(session.expires_at) <= new Date()
+            ? "expired"
+            : "active"
+      }))
+    });
+  } catch (error) {
+    console.error("GET /api/applications/:id/sessions:", error);
+    res.status(500).json({ error: "Failed to load sessions" });
+  }
+});
+
+async function recordApplicationUptime(applicationId) {
+  const startedAt = Date.now();
+
+  try {
+    const application = await pool.query(
+      """
+      SELECT a.id, a.client_id, a.status, c.client_id AS registered_client_id
+      FROM public.applications a
+      LEFT JOIN public.aceid_clients c ON c.client_id = a.client_id
+      WHERE a.id = $1
+      """,
+      [applicationId]
+    );
+
+    if (!application.rows.length) return;
+
+    const row = application.rows[0];
+    let discoveryOk = false;
+
+    try {
+      const response = await fetch(
+        ISSUER.replace(/\/+$/, "") + "/.well-known/openid-configuration",
+        {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(8000)
+        }
+      );
+      discoveryOk = response.ok;
+    } catch {
+      discoveryOk = false;
+    }
+
+    const success =
+      row.status === "active" &&
+      row.registered_client_id === row.client_id &&
+      discoveryOk;
+
+    await pool.query(
+      """
+      INSERT INTO public.application_activity
+        (application_id, event_type, success, metadata)
+      VALUES ($1, 'uptime.check', $2, $3::jsonb)
+      """,
+      [
+        applicationId,
+        success,
+        JSON.stringify({
+          latency_ms: Date.now() - startedAt,
+          application_active: row.status === "active",
+          client_registered: row.registered_client_id === row.client_id,
+          identity_discovery: discoveryOk
+        })
+      ]
+    );
+  } catch (error) {
+    console.error("Uptime check failed:", error);
+  }
+}
+
+async function recordAllApplicationUptime() {
+  try {
+    const result = await pool.query(
+      "SELECT id FROM public.applications WHERE status = 'active' ORDER BY created_at ASC"
+    );
+    for (const row of result.rows) {
+      await recordApplicationUptime(row.id);
+    }
+  } catch (error) {
+    console.error("Application uptime sweep failed:", error);
+  }
+}
+
+app.get("/api/applications/:id/uptime", requireAuth, async (req, res) => {
+  const { id } = req.params;
+
+  if (!isValidUuid(id)) {
+    return res.status(400).json({ error: "Invalid application ID" });
+  }
+
+  const requestedDays = Number.parseInt(req.query.days, 10);
+  const days = [7, 14, 30].includes(requestedDays) ? requestedDays : 30;
+
+  try {
+    const application = await getOwnedApplication(pool, id, req.developer.id);
+    if (!application.rows.length) return res.status(404).json({ error: "Application not found" });
+
+    const [summary, daily, latest] = await Promise.all([
+      pool.query(
+        """
+        SELECT COUNT(*)::int AS total_checks,
+               COUNT(*) FILTER (WHERE success)::int AS successful_checks,
+               ROUND(100.0 * COUNT(*) FILTER (WHERE success) / NULLIF(COUNT(*), 0), 2) AS uptime_percent,
+               MAX(created_at) AS last_checked_at,
+               BOOL_OR(success) FILTER (WHERE created_at >= now() - INTERVAL '15 minutes') AS recent_success
+        FROM public.application_activity
+        WHERE application_id = $1
+          AND event_type = 'uptime.check'
+          AND created_at >= now() - ($2::int * INTERVAL '1 day')
+        """,
+        [id, days]
+      ),
+      pool.query(
+        """
+        SELECT date_trunc('day', created_at) AS day,
+               COUNT(*)::int AS checks,
+               COUNT(*) FILTER (WHERE success)::int AS successes,
+               ROUND(100.0 * COUNT(*) FILTER (WHERE success) / NULLIF(COUNT(*), 0), 2) AS uptime_percent
+        FROM public.application_activity
+        WHERE application_id = $1
+          AND event_type = 'uptime.check'
+          AND created_at >= now() - ($2::int * INTERVAL '1 day')
+        GROUP BY 1
+        ORDER BY 1 ASC
+        """,
+        [id, days]
+      ),
+      pool.query(
+        """
+        SELECT success, created_at, metadata
+        FROM public.application_activity
+        WHERE application_id = $1 AND event_type = 'uptime.check'
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        [id]
+      )
+    ]);
+
+    const row = summary.rows[0] || {};
+    res.json({
+      days,
+      summary: {
+        total_checks: row.total_checks || 0,
+        successful_checks: row.successful_checks || 0,
+        uptime_percent: row.uptime_percent === null ? null : Number(row.uptime_percent),
+        last_checked_at: row.last_checked_at || null,
+        status: row.recent_success === true ? "operational" : row.recent_success === false ? "degraded" : "no_data"
+      },
+      daily: daily.rows.map(item => ({
+        day: item.day,
+        checks: item.checks,
+        successes: item.successes,
+        uptime_percent: item.uptime_percent === null ? null : Number(item.uptime_percent)
+      })),
+      latest: latest.rows[0] || null
+    });
+  } catch (error) {
+    console.error("GET /api/applications/:id/uptime:", error);
+    res.status(500).json({ error: "Failed to load uptime history" });
+  }
+});
+
+app.post("/api/applications/:id/uptime/check", requireAuth, async (req, res) => {
+  const { id } = req.params;
+
+  if (!isValidUuid(id)) {
+    return res.status(400).json({ error: "Invalid application ID" });
+  }
+
+  try {
+    const application = await getOwnedApplication(pool, id, req.developer.id);
+    if (!application.rows.length) return res.status(404).json({ error: "Application not found" });
+
+    await recordApplicationUptime(id);
+
+    const latest = await pool.query(
+      """
+      SELECT success, created_at, metadata
+      FROM public.application_activity
+      WHERE application_id = $1 AND event_type = 'uptime.check'
+      ORDER BY created_at DESC
+      LIMIT 1
+      """,
+      [id]
+    );
+
+    res.json({ check: latest.rows[0] || null });
+  } catch (error) {
+    console.error("POST /api/applications/:id/uptime/check:", error);
+    res.status(500).json({ error: "Failed to run uptime check" });
+  }
+});
+
+/*
 /*
  * ═══════════════════════════════════════════
  * Activity
@@ -4162,6 +4454,19 @@ const SESSION_PURGE_INTERVAL_MS = 60 * 60 * 1000;
 setInterval(
   purgeExpiredSessions,
   SESSION_PURGE_INTERVAL_MS
+).unref();
+
+const UPTIME_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+
+setTimeout(() => {
+  recordAllApplicationUptime().catch(error => {
+    console.error("Initial uptime sweep failed:", error);
+  });
+}, 15_000).unref();
+
+setInterval(
+  recordAllApplicationUptime,
+  UPTIME_CHECK_INTERVAL_MS
 ).unref();
 
 const server = app.listen(

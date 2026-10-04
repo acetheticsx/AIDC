@@ -8285,3 +8285,27 @@ html::before{
     display:none;
   }
 }
+
+
+.aidc-feature-search{display:flex;align-items:center;gap:10px;max-width:none}
+.aidc-feature-search-input{flex:1;min-width:0}
+.aidc-data-list{display:grid;gap:8px}
+.aidc-data-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px;border:1px solid var(--aidc-border);border-radius:12px;background:var(--aidc-surface)}
+.aidc-data-main{display:flex;align-items:center;gap:10px;min-width:0}
+.aidc-data-main>div{display:grid;gap:2px;min-width:0}
+.aidc-data-main strong,.aidc-data-main span,.aidc-data-main small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aidc-data-main>div>span{color:var(--aidc-muted);font-size:11px}
+.aidc-data-main small{color:var(--aidc-muted);font-size:10px}
+.aidc-data-meta{display:grid;justify-items:end;gap:3px;flex:0 0 auto;color:var(--aidc-muted);font-size:10px;text-align:right}
+.aidc-feature-empty{padding:28px 12px;color:var(--aidc-muted);font-size:12px;text-align:center}
+.aidc-segmented{display:flex;gap:3px;padding:3px;border:1px solid var(--aidc-border);border-radius:10px;background:var(--aidc-surface-soft)}
+.aidc-segmented button{border:0;border-radius:7px;padding:6px 9px;background:transparent;color:var(--aidc-muted);font:600 10px/1 var(--aidc-font-mono);text-transform:capitalize;cursor:pointer}
+.aidc-segmented button.active{background:var(--aidc-surface);color:var(--aidc-text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.aidc-metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.aidc-metric{display:grid;gap:6px;min-width:0;padding:12px;border:1px solid var(--aidc-border);border-radius:12px;background:var(--aidc-surface-soft)}
+.aidc-metric span{color:var(--aidc-muted);font-size:10px}
+.aidc-metric strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:16px}
+.aidc-uptime-history{display:flex;align-items:end;gap:3px;min-height:110px;margin-top:14px;padding:12px 8px 8px;border:1px solid var(--aidc-border);border-radius:12px;background:var(--aidc-surface-soft)}
+.aidc-uptime-day{flex:1 1 0;min-width:3px;border-radius:3px 3px 2px 2px;background:var(--aidc-text);opacity:.82}
+@media (max-width:760px){.aidc-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.aidc-data-row{align-items:flex-start;flex-direction:column}.aidc-data-meta{width:100%;justify-items:start;text-align:left}.aidc-feature-search{flex-wrap:wrap}}
+@media (max-width:480px){.aidc-metric-grid{grid-template-columns:1fr}}

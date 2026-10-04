@@ -246,6 +246,8 @@ export function registerAIDCComponents(AIDC) {
               <span>Analytics</span>
             </a>
 
+            <a class="aidc-nav-item" href="#/users"><span>Users</span></a>
+
           </nav>
 
           <div class="aidc-sidebar-spacer"></div>
@@ -1416,6 +1418,10 @@ export function registerAIDCComponents(AIDC) {
               "paint-board"
             )}
 
+            ${{this.tab("sessions", "Sessions", "computer-user")}
+
+            ${{this.tab("uptime", "Uptime", "activity-01")}
+
           </nav>
 
           <div class="aidc-detail-content">
@@ -1489,6 +1495,12 @@ export function registerAIDCComponents(AIDC) {
               .applicationId=${app.id}
             ></aidc-integration-playground>
           `;
+
+        case "sessions":
+          return html`<aidc-sessions .applicationId=${{app.id}></aidc-sessions>`;
+
+        case "uptime":
+          return html`<aidc-uptime .applicationId=${{app.id}></aidc-uptime>`;
 
         case "overview":
         default:
@@ -4071,6 +4083,297 @@ await auth.signIn();</code></pre>
     }
   }
   /* ═══════════════════════════════════════
+     USER LOOKUP
+     ═══════════════════════════════════════ */
+
+  class AIDCUsers extends AIDCElement {
+    constructor() {
+      super();
+      this.query = "";
+      this.users = [];
+      this.loading = true;
+    }
+
+    connectedCallback() {
+      super.connectedCallback();
+      this.load();
+    }
+
+    async load() {
+      this.loading = true;
+      this.requestUpdate();
+      try {
+        const result = await api.users.search(this.query, 20);
+        this.users = Array.isArray(result?.users) ? result.users : [];
+      } catch (error) {
+        handleError(error, "Failed to load users");
+        this.users = [];
+      } finally {
+        this.loading = false;
+        this.requestUpdate();
+      }
+    }
+
+    make(tag, className, value) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (value !== undefined) node.textContent = value;
+      return node;
+    }
+
+    render() {
+      const root = document.createDocumentFragment();
+      const page = this.make("div", "aidc-page");
+      const header = this.make("header", "aidc-page-header");
+      const heading = this.make("div");
+      heading.append(this.make("span", "aidc-eyebrow", "Identity"), this.make("h1", "", "User lookup"), this.make("p", "", "Find users who have authorized one of your applications."));
+      header.append(heading);
+      page.append(header);
+
+      const searchCard = this.make("section", "aidc-card");
+      const form = this.make("form", "aidc-feature-search");
+      const input = this.make("input", "aidc-feature-search-input");
+      input.type = "search";
+      input.placeholder = "Email, username, name, or user ID";
+      input.setAttribute("aria-label", "Search users");
+      input.value = this.query;
+      const button = this.make("button", "aidc-button aidc-button-primary", "Search");
+      button.type = "submit";
+      form.append(input, button);
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        this.query = input.value.trim();
+        this.load();
+      });
+      searchCard.append(form);
+      page.append(searchCard);
+
+      const card = this.make("section", "aidc-card");
+      const head = this.make("header", "aidc-card-section-header");
+      const headText = this.make("div");
+      headText.append(this.make("h2", "", "Users"), this.make("p", "", this.loading ? "Loading…" : this.users.length + " matching accounts"));
+      head.append(headText);
+      card.append(head);
+
+      const results = this.make("div", "aidc-data-list");
+      if (this.loading) {
+        results.append(this.make("div", "aidc-feature-empty", "Loading users…"));
+      } else if (!this.users.length) {
+        results.append(this.make("div", "aidc-feature-empty", this.query ? "No users found. Try another search." : "No users have authorized your applications yet."));
+      } else {
+        for (const user of this.users) {
+          const row = this.make("article", "aidc-data-row");
+          const main = this.make("div", "aidc-data-main");
+          const body = this.make("div");
+          body.append(this.make("strong", "", user.display_name || user.username || user.email || "Ace ID user"), this.make("span", "", user.email || ""), this.make("small", "", (user.username || user.id) + " · " + (user.email_verified ? "Verified" : "Unverified")));
+          main.append(body);
+          const meta = this.make("div", "aidc-data-meta");
+          meta.append(this.make("span", "", "Created " + formatDate(user.created_at)), this.make("span", "", user.frozen_at ? "Frozen" : "Active"));
+          row.append(main, meta);
+          results.append(row);
+        }
+      }
+      card.append(results);
+      page.append(card);
+      root.append(page);
+      return root;
+    }
+  }
+
+  /* ═══════════════════════════════════════
+     SESSION VIEWER
+     ═══════════════════════════════════════ */
+
+  class AIDCSessions extends AIDCElement {
+    static properties = { applicationId: { type: String } };
+
+    constructor() {
+      super();
+      this.applicationId = null;
+      this.status = "active";
+      this.sessions = [];
+      this.loading = true;
+    }
+
+    updated(changed) {
+      if (changed.has("applicationId")) this.load();
+    }
+
+    async load() {
+      if (!this.applicationId) return;
+      this.loading = true;
+      this.requestUpdate();
+      try {
+        const result = await api.sessions.list(this.applicationId, { status: this.status, limit: 100 });
+        this.sessions = Array.isArray(result?.sessions) ? result.sessions : [];
+      } catch (error) {
+        handleError(error, "Failed to load sessions");
+        this.sessions = [];
+      } finally {
+        this.loading = false;
+        this.requestUpdate();
+      }
+    }
+
+    make(tag, className, value) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (value !== undefined) node.textContent = value;
+      return node;
+    }
+
+    render() {
+      const root = document.createDocumentFragment();
+      const card = this.make("section", "aidc-card");
+      const head = this.make("header", "aidc-card-section-header");
+      const textBlock = this.make("div");
+      textBlock.append(this.make("span", "aidc-eyebrow", "Access"), this.make("h2", "", "Session viewer"), this.make("p", "", "Sessions for users who authorized this application. Tokens and secrets are never exposed."));
+      const filters = this.make("div", "aidc-segmented");
+
+      for (const value of ["active", "all", "revoked"]) {
+        const button = this.make("button", "", value);
+        button.type = "button";
+        if (this.status === value) button.classList.add("active");
+        button.addEventListener("click", () => { this.status = value; this.load(); });
+        filters.append(button);
+      }
+
+      head.append(textBlock, filters);
+      card.append(head);
+      const results = this.make("div", "aidc-data-list");
+
+      if (this.loading) {
+        results.append(this.make("div", "aidc-feature-empty", "Loading sessions…"));
+      } else if (!this.sessions.length) {
+        results.append(this.make("div", "aidc-feature-empty", this.status === "active" ? "No active sessions are associated with users of this application." : "No sessions match this filter."));
+      } else {
+        for (const session of this.sessions) {
+          const row = this.make("article", "aidc-data-row");
+          const main = this.make("div", "aidc-data-main");
+          const body = this.make("div");
+          body.append(this.make("strong", "", session.display_name || session.username || session.email || "Ace ID user"), this.make("span", "", session.email || ""), this.make("small", "", session.user_agent || "Unknown device"));
+          main.append(body);
+          const meta = this.make("div", "aidc-data-meta");
+          meta.append(this.make("span", "", session.status), this.make("span", "", "Last active " + formatDate(session.last_seen_at || session.created_at)), this.make("span", "", "Expires " + formatDate(session.expires_at)));
+          row.append(main, meta);
+          results.append(row);
+        }
+      }
+
+      card.append(results);
+      root.append(card);
+      return root;
+    }
+  }
+
+  /* ═══════════════════════════════════════
+     UPTIME HISTORY
+     ═══════════════════════════════════════ */
+
+  class AIDCUptime extends AIDCElement {
+    static properties = { applicationId: { type: String } };
+
+    constructor() {
+      super();
+      this.applicationId = null;
+      this.data = null;
+      this.loading = true;
+      this.checking = false;
+    }
+
+    updated(changed) {
+      if (changed.has("applicationId")) this.load();
+    }
+
+    async load() {
+      if (!this.applicationId) return;
+      this.loading = true;
+      this.requestUpdate();
+      try {
+        this.data = await api.uptime.get(this.applicationId, 30);
+      } catch (error) {
+        handleError(error, "Failed to load uptime history");
+        this.data = null;
+      } finally {
+        this.loading = false;
+        this.requestUpdate();
+      }
+    }
+
+    async checkNow() {
+      if (!this.applicationId || this.checking) return;
+      this.checking = true;
+      try {
+        await api.uptime.check(this.applicationId);
+        await this.load();
+        notify("OAuth health check completed");
+      } catch (error) {
+        handleError(error, "OAuth health check failed");
+      } finally {
+        this.checking = false;
+        this.requestUpdate();
+      }
+    }
+
+    make(tag, className, value) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (value !== undefined) node.textContent = value;
+      return node;
+    }
+
+    render() {
+      const root = document.createDocumentFragment();
+      const card = this.make("section", "aidc-card");
+      const head = this.make("header", "aidc-card-section-header");
+      const textBlock = this.make("div");
+      textBlock.append(this.make("span", "aidc-eyebrow", "Reliability"), this.make("h2", "", "OAuth uptime history"), this.make("p", "", "Historical availability of the Ace ID integration for this application."));
+      const check = this.make("button", "aidc-button aidc-button-secondary", this.checking ? "Checking…" : "Check now");
+      check.type = "button";
+      check.disabled = this.checking;
+      check.addEventListener("click", () => this.checkNow());
+      head.append(textBlock, check);
+      card.append(head);
+
+      if (this.loading) {
+        card.append(this.make("div", "aidc-feature-empty", "Loading uptime history…"));
+      } else {
+        const summary = this.data?.summary || {};
+        const grid = this.make("div", "aidc-metric-grid");
+        const metrics = [
+          ["30-day uptime", summary.uptime_percent == null ? "No data" : summary.uptime_percent + "%"],
+          ["Checks", String(summary.total_checks || 0)],
+          ["Current status", summary.status === "operational" ? "Operational" : summary.status === "degraded" ? "Degraded" : "No data"],
+          ["Last checked", summary.last_checked_at ? formatDate(summary.last_checked_at) : "Never"]
+        ];
+        for (const pair of metrics) {
+          const item = this.make("div", "aidc-metric");
+          item.append(this.make("span", "", pair[0]), this.make("strong", "", pair[1]));
+          grid.append(item);
+        }
+        card.append(grid);
+
+        const history = this.make("div", "aidc-uptime-history");
+        const daily = this.data?.daily || [];
+        if (!daily.length) {
+          history.textContent = "History is being collected. The first checks will appear here automatically.";
+        } else {
+          for (const day of daily) {
+            const bar = this.make("span", "aidc-uptime-day");
+            bar.title = formatDate(day.day) + " · " + (day.uptime_percent == null ? "No data" : day.uptime_percent + "%");
+            bar.style.height = Math.max(8, Math.min(100, Number(day.uptime_percent || 0))) + "%";
+            history.append(bar);
+          }
+        }
+        card.append(history);
+      }
+
+      root.append(card);
+      return root;
+    }
+  }
+
+  /* ═══════════════════════════════════════
      ACTIVITY
      ═══════════════════════════════════════ */
 
@@ -5336,6 +5639,10 @@ await auth.signIn();</code></pre>
       const route =
         router.parse();
 
+      if (route.path === "/users") {
+        return html`<aidc-users></aidc-users>`;
+      }
+
       if (route.path === "/") {
         return html`
           <aidc-overview></aidc-overview>
@@ -5699,6 +6006,10 @@ await auth.signIn();</code></pre>
     "aidc-integration-playground",
     AIDCIntegrationPlayground
   );
+
+  customElements.define("aidc-users", AIDCUsers);
+  customElements.define("aidc-sessions", AIDCSessions);
+  customElements.define("aidc-uptime", AIDCUptime);
 
   customElements.define(
     "aidc-activity",

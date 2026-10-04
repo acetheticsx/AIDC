@@ -305,3 +305,41 @@ test("undo remains hidden from the application UI", () => {
   assert.doesNotMatch(ui, /Undo last change/);
   assert.doesNotMatch(ui, /applications\.undoLast\(app\.id\)/);
 });
+
+
+test("developer user lookup is application-scoped and paginated", () => {
+  assert.match(server, /app\.get\("\/api\/users\/search", requireAuth/);
+  assert.match(server, /FROM public\.aceid_consents/);
+  assert.match(server, /WHERE owner_id = \$1/);
+  assert.match(server, /LIMIT \$3/);
+  assert.doesNotMatch(server, /password_hash/);
+});
+
+test("session viewer is scoped to the owned application and never returns session tokens", () => {
+  assert.match(server, /app\.get\("\/api\/applications\/:id\/sessions", requireAuth/);
+  assert.match(server, /getOwnedApplication\(pool, id, req\.developer\.id\)/);
+  assert.match(server, /FROM public\.aceid_sessions/);
+  assert.doesNotMatch(server, /SELECT[^;]*token_hash[^;]*FROM public\.aceid_sessions/s);
+});
+
+test("OAuth uptime history reuses durable application activity data", () => {
+  assert.match(server, /event_type = 'uptime\.check'/);
+  assert.match(server, /INSERT INTO public\.application_activity/);
+  assert.match(server, /UPTIME_CHECK_INTERVAL_MS = 5 \* 60 \* 1000/);
+  assert.match(server, /app\.get\("\/api\/applications\/:id\/uptime", requireAuth/);
+  assert.match(server, /app\.post\("\/api\/applications\/:id\/uptime\/check", requireAuth/);
+});
+
+test("AIDC exposes the new feature services and routes", () => {
+  assert.match(api, /users:\s*\{/);
+  assert.match(api, /sessions:\s*\{/);
+  assert.match(api, /uptime:\s*\{/);
+  assert.match(ui, /class AIDCUsers/);
+  assert.match(ui, /class AIDCSessions/);
+  assert.match(ui, /class AIDCUptime/);
+  assert.match(ui, /href="#\/users"/);
+  assert.match(ui, /"sessions", "Sessions"/);
+  assert.match(ui, /"uptime", "Uptime"/);
+  assert.match(style, /\.aidc-data-row/);
+  assert.match(style, /\.aidc-uptime-history/);
+});

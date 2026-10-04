@@ -288,6 +288,40 @@ export const api = {
         )}`
       );
     }
+  },
+  users: {
+    search(query = "", limit = 20) {
+      const params = new URLSearchParams();
+      if (String(query || "").trim()) params.set("q", String(query).trim());
+      params.set("limit", String(limit));
+      return request("/users/search?" + params.toString());
+    }
+  },
+
+  sessions: {
+    list(applicationId, options = {}) {
+      const params = new URLSearchParams();
+      params.set("limit", String(options.limit || 50));
+      if (options.status) params.set("status", options.status);
+      return request(
+        "/applications/" + id(applicationId) + "/sessions?" + params.toString()
+      );
+    }
+  },
+
+  uptime: {
+    get(applicationId, days = 30) {
+      const safeDays = [7, 14, 30].includes(Number(days)) ? Number(days) : 30;
+      return request(
+        "/applications/" + id(applicationId) + "/uptime?days=" + safeDays
+      );
+    },
+    check(applicationId) {
+      return request(
+        "/applications/" + id(applicationId) + "/uptime/check",
+        { method: "POST" }
+      );
+    }
   }
 };
 

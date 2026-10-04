@@ -1,5 +1,5 @@
-import { registerAIDCComponents } from "./ui.js?v=20261004-5";
-import { api } from "./api.js?v=20260929-2";
+import { registerAIDCComponents } from "./ui.js?v=20261004-6";
+import { api } from "./api.js?v=20261004-3";
 
 /* ─────────────────────────────────────────────
    Constants
@@ -1375,6 +1375,11 @@ function updateDocumentTitle() {
 
   if (route.path === "/applications") {
     document.title = `Applications · ${APP_NAME}`;
+    return;
+  }
+
+  if (route.path === "/users") {
+    document.title = `Users · ${APP_NAME}`;
     return;
   }
 
