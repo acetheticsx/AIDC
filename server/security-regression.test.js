@@ -211,13 +211,13 @@ test("analytics keeps existing ranges and adds insight presentation", () => {
 
 
 test("public search metadata uses a coherent entity graph", () => {
-  assert.match(index, /"@type": "Organization"/);
-  assert.match(index, /"@type": "WebSite"/);
-  assert.match(index, /"@type": "WebPage"/);
-  assert.match(index, /"@type": "WebApplication"/);
+  assert.match(index, /"@type"\s*:\s*"Organization"/);
+  assert.match(index, /"@type"\s*:\s*"WebSite"/);
+  assert.match(index, /"@type"\s*:\s*"WebPage"/);
+  assert.match(index, /"@type"\s*:\s*"WebApplication"/);
   assert.match(index, /https:\/\/console\.ace-base\.cc\/#application/);
-  assert.match(index, /"featureList": \[/);
-  assert.match(index, /"applicationCategory": "DeveloperApplication"/);
+  assert.match(index, /"featureList"\s*:\s*\[/);
+  assert.match(index, /"applicationCategory"\s*:\s*"DeveloperApplication"/);
   assert.match(index, /<link rel="canonical" href="https:\/\/console\.ace-base\.cc\/">/);
 });
 
