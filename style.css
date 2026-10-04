@@ -8302,3 +8302,69 @@ html::before{
     display: none !important;
   }
 }
+
+/* Sharp / stepped geometry */
+:root { --aidc-step: 7px; }
+.aidc-card,.aidc-dialog,.aidc-delete-modal,.aidc-cookie-dialog,.aidc-record-sheet,.aidc-sticky-save,.aidc-application-list,.aidc-analytics-panel,.aidc-toast,.aidc-mobile-nav,.aidc-landing-preview,.aidc-landing-account,.aidc-cookie-list > div {
+  border-radius:0 !important;
+  clip-path:polygon(0 0,calc(100% - var(--aidc-step)) 0,100% var(--aidc-step),100% 100%,var(--aidc-step) 100%,0 calc(100% - var(--aidc-step)));
+}
+.aidc-field input,.aidc-field select,.aidc-field textarea,.aidc-copy-field,.aidc-search-input,.aidc-color-input input,.aidc-color-swatch,.aidc-color-option,.aidc-dialog input,.aidc-dialog select,.aidc-dialog textarea,.aidc-tab,.aidc-nav-item,.aidc-mobile-nav-item,.aidc-button,.aidc-danger-button,.aidc-icon-button,.aidc-theme-toggle,.aidc-help-top,.aidc-help-fab,.aidc-account-fab,.aidc-health-check-fix,.aidc-config-button,.aidc-text-button { border-radius:0 !important; }
+
+.aidc-toast-stack {
+  position:fixed;
+  right:max(16px,env(safe-area-inset-right));
+  bottom:max(16px,env(safe-area-inset-bottom));
+  z-index:1100;
+  display:grid;
+  gap:8px;
+  width:min(420px,calc(100vw - 32px));
+  pointer-events:none;
+}
+.aidc-toast-stack .aidc-toast {
+  position:relative;
+  inset:auto;
+  width:100%;
+  margin:0;
+  pointer-events:auto;
+  animation:aidc-toast-in 220ms cubic-bezier(.22,1,.36,1) both;
+}
+.aidc-toast-message { min-width:0; overflow-wrap:anywhere; }
+@media(max-width:520px){
+  .aidc-toast-stack{right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));width:calc(100vw - 20px)}
+}
+
+.aidc-landing-legal{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.aidc-landing-legal a{color:var(--aidc-muted);font:700 9px/1 var(--aidc-font-mono);text-transform:uppercase;letter-spacing:.06em;text-decoration:none}
+.aidc-landing-legal a:hover{color:var(--aidc-text)}
+
+.aidc-legal-page{min-height:100dvh;padding:max(22px,env(safe-area-inset-top)) max(18px,env(safe-area-inset-right)) max(42px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left));color:var(--aidc-text);background:var(--aidc-bg)}
+.aidc-legal-shell{width:min(920px,100%);margin:0 auto}
+.aidc-legal-header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px 0 28px;border-bottom:1px solid var(--aidc-border)}
+.aidc-legal-brand{display:inline-flex;align-items:center;gap:10px;color:var(--aidc-text);font-size:13px;font-weight:750;text-decoration:none}
+.aidc-legal-brand img{width:30px;height:30px;object-fit:cover;border:1px solid var(--aidc-border);border-radius:0}
+.aidc-legal-nav{display:flex;gap:18px;flex-wrap:wrap}
+.aidc-legal-nav a{color:var(--aidc-muted);font:700 10px/1 var(--aidc-font-mono);letter-spacing:.07em;text-transform:uppercase;text-decoration:none}
+.aidc-legal-nav a:hover,.aidc-legal-nav a[aria-current="page"]{color:var(--aidc-text)}
+.aidc-legal-main{padding:64px 0 56px}
+.aidc-legal-kicker{color:var(--aidc-muted);font:700 10px/1 var(--aidc-font-mono);letter-spacing:.12em;text-transform:uppercase}
+.aidc-legal-main h1{max-width:760px;margin:10px 0 14px;font-family:var(--aidc-font-display);font-size:clamp(48px,8vw,78px);font-weight:400;line-height:.9;letter-spacing:-.045em}
+.aidc-legal-intro{max-width:680px;margin:0;color:var(--aidc-text-secondary);font-size:15px;line-height:1.7}
+.aidc-legal-updated{margin-top:14px;color:var(--aidc-muted);font:600 10px/1.4 var(--aidc-font-mono);text-transform:uppercase;letter-spacing:.06em}
+.aidc-legal-body{display:grid;gap:28px;margin-top:52px}
+.aidc-legal-section{padding:24px;border:1px solid var(--aidc-border);background:var(--aidc-surface);clip-path:polygon(0 0,calc(100% - var(--aidc-step)) 0,100% var(--aidc-step),100% 100%,var(--aidc-step) 100%,0 calc(100% - var(--aidc-step)))}
+.aidc-legal-section h2{margin:0 0 10px;font-family:var(--aidc-font-display);font-size:28px;font-weight:400;line-height:1}
+.aidc-legal-section p,.aidc-legal-section li{color:var(--aidc-text-secondary);font-size:13px;line-height:1.75}
+.aidc-legal-section p{margin:0}
+.aidc-legal-section p + p{margin-top:12px}
+.aidc-legal-section ul{margin:10px 0 0;padding-left:20px}
+.aidc-legal-footer{display:flex;justify-content:space-between;gap:16px;padding-top:18px;border-top:1px solid var(--aidc-border);color:var(--aidc-muted);font:700 9px/1.4 var(--aidc-font-mono);letter-spacing:.06em;text-transform:uppercase}
+.aidc-legal-footer a{color:inherit;text-decoration:none}
+@media(max-width:620px){
+  .aidc-legal-header{align-items:flex-start;flex-direction:column}
+  .aidc-legal-nav{gap:14px}
+  .aidc-legal-main{padding-top:46px}
+  .aidc-legal-main h1{font-size:clamp(44px,15vw,64px)}
+  .aidc-legal-section{padding:18px}
+  .aidc-legal-footer{align-items:flex-start;flex-direction:column}
+}

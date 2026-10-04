@@ -67,7 +67,7 @@ const state = {
   },
 
   ui: {
-    notice: null,
+    notices: [],
     deleteApplication: null,
     createModal: false,
     consoleOpen: false
@@ -142,23 +142,26 @@ document.addEventListener(
    Notifications
 ───────────────────────────────────────────── */
 
-let noticeTimer = null;
+let noticeSequence = 0;
+const noticeTimers = new Map();
 
 function notify(message, type = "success") {
-  state.ui.notice = {
-    id: Date.now(),
-    message,
-    type
+  const notice = {
+    id: String(Date.now()) + "-" + String(++noticeSequence),
+    message: String(message || "Something went wrong."),
+    type: type === "error" ? "error" : "success"
   };
 
+  state.ui.notices = [notice, ...state.ui.notices].slice(0, 4);
   emitState();
 
-  window.clearTimeout(noticeTimer);
-
-  noticeTimer = window.setTimeout(() => {
-    state.ui.notice = null;
+  const timer = window.setTimeout(() => {
+    noticeTimers.delete(notice.id);
+    state.ui.notices = state.ui.notices.filter(item => item.id !== notice.id);
     emitState();
   }, 3200);
+
+  noticeTimers.set(notice.id, timer);
 }
 
 /* ─────────────────────────────────────────────

@@ -4680,57 +4680,29 @@ await auth.signIn();</code></pre>
      ═══════════════════════════════════════ */
 
   class AIDCToast extends AIDCElement {
-    close() {
-      state.ui.notice = null;
+    close(id) {
+      const timer = noticeTimers.get(id);
+      if (timer) {
+        window.clearTimeout(timer);
+        noticeTimers.delete(id);
+      }
+      state.ui.notices = state.ui.notices.filter(notice => notice.id !== id);
       AIDC.emitState();
     }
 
     render() {
-      const notice =
-        state.ui.notice;
-
-      if (!notice) {
-        return "";
-      }
-
-      const isError =
-        notice.type === "error";
-
-      return html`
-        <div
-          class="aidc-toast ${
-            isError
-              ? "aidc-toast-error"
-              : ""
-          }"
-          role="status"
-          aria-live="polite"
-        >
-
-          <span
-            class="aidc-toast-icon"
-          >
-            ${icon(
-              isError
-                ? "alert-02"
-                : "checkmark-circle-02"
-            )}
-          </span>
-
-          <span>
-            ${notice.message}
-          </span>
-
-          <button
-            class="aidc-toast-close"
-            aria-label="Dismiss notification"
-            @click=${this.close}
-          >
-            ${icon("cancel-01")}
-          </button>
-
-        </div>
-      `;
+      const notices = Array.isArray(state.ui.notices) ? state.ui.notices : [];
+      if (!notices.length) return "";
+      return `<div class="aidc-toast-stack" aria-label="Notifications">
+        ${notices.map(notice => {
+          const isError = notice.type === "error";
+          return `<div class="aidc-toast ${isError ? "aidc-toast-error" : ""}" role="${isError ? "alert" : "status"}" aria-live="${isError ? "assertive" : "polite"}">
+            <span class="aidc-toast-icon" aria-hidden="true">${icon(isError ? "alert-02" : "checkmark-circle-02")}</span>
+            <span class="aidc-toast-message">${notice.message}</span>
+            <button class="aidc-toast-close" aria-label="Dismiss notification" $click=${() => this.close(notice.id)}>${icon("cancel-01")}</button>
+          </div>`;
+        })}
+      </div>`;
     }
   }
 
@@ -5079,29 +5051,6 @@ await auth.signIn();</code></pre>
                 from one focused console.
               </p>
 
-              ${
-                state.ui.notice
-                  ? html`
-                      <div
-                        class="aidc-landing-notice aidc-landing-notice-${text(
-                          state.ui.notice.type || "error"
-                        )}"
-                        role="status"
-                        aria-live="polite"
-                      >
-                        <span class="aidc-landing-notice-icon" aria-hidden="true">
-                          ${icon(
-                            state.ui.notice.type === "error"
-                              ? "alert-02"
-                              : "checkmark-circle-02"
-                          )}
-                        </span>
-                        <span>${text(state.ui.notice.message)}</span>
-                      </div>
-                    `
-                  : ""
-              }
-
               <div class="aidc-landing-actions">
                 <button
                   class="aidc-landing-cta"
@@ -5244,6 +5193,11 @@ await auth.signIn();</code></pre>
           <footer class="aidc-landing-footer">
             <span>Built for the Ace Base developer ecosystem.</span>
             <button class="aidc-cookie-link" type="button" @click=${this.openCookiePolicy}>Cookie policy</button>
+            <nav class="aidc-landing-legal" aria-label="Legal">
+              <a href="/privacy">Privacy</a>
+              <a href="/terms">Terms</a>
+              <a href="/cookies">Cookies</a>
+            </nav>
             <span>© AIDC</span>
           </footer>
         </div>
