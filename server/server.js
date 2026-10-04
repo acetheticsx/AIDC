@@ -698,6 +698,207 @@ const dnsResolvers = [
 dnsResolvers[1].resolver.setServers(["1.1.1.1", "1.0.0.1"]);
 dnsResolvers[2].resolver.setServers(["8.8.8.8", "8.8.4.4"]);
 
+function normalizeTxtRecord(value) {
+  return String(value ?? "")
+    .replace(/^["']|["']$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function txtRecordMatchesChallenge(record, expected) {
+  const normalizedRecord = normalizeTxtRecord(record);
+  const normalizedExpected = normalizeTxtRecord(expected);
+
+  if (normalizedRecord === normalizedExpected) {
+    return true;
+  }
+
+  const tokenMatch = normalizedRecord.match(/(?:^|\s)token=([^\s]+)/i);
+  const expectedTokenMatch = normalizedExpected.match(/(?:^|\s)token=([^\s]+)/i);
+
+  return Boolean(
+    tokenMatch &&
+    expectedTokenMatch &&
+    safeEqual(tokenMatch[1], expectedTokenMatch[1])
+  );
+}
+
+function dnsErrorCode(error) {
+  return error?.code || error?.cause?.code || "DNS_LOOKUP_FAILED";
+}
+
+async function resolveTxtWithRetry(resolver, hostname) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await resolver.resolveTxt(hostname);
+    } catch (error) {
+      lastError = error;
+
+      if (attempt < 2) {
+        await new Promise(resolve =>
+          setTimeout(resolve, attempt === 0 ? 250 : 750)
+        );
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+async function getAuthoritativeNameServers(hostname) {
+  const labels = hostname
+    .toLowerCase()
+    .replace(/\.$/, "")
+    .split(".")
+    .filter(Boolean);
+
+  for (let index = 0; index < labels.length - 1; index += 1) {
+    const candidate = labels.slice(index).join(".");
+
+    for (const { resolver } of dnsResolvers.slice(1)) {
+      try {
+        const nameservers = await resolver.resolveNs(candidate);
+
+        if (nameservers?.length) {
+          return {
+            zone: candidate,
+            nameservers: [
+              ...new Set(
+                nameservers.map(name =>
+                  String(name).replace(/\.$/, "").toLowerCase()
+                )
+              )
+            ]
+          };
+        }
+      } catch {
+        /* Try the next public resolver or parent zone. */
+      }
+    }
+  }
+
+  throw new Error("AUTHORITATIVE_NS_LOOKUP_FAILED");
+}
+
+async function resolveNameserverAddresses(nameserver) {
+  const addresses = new Set();
+
+  for (const { resolver } of dnsResolvers.slice(1)) {
+    try {
+      for (const address of await resolver.resolve4(nameserver)) {
+        addresses.add(address);
+      }
+    } catch {}
+
+    try {
+      for (const address of await resolver.resolve6(nameserver)) {
+        addresses.add(address);
+      }
+    } catch {}
+  }
+
+  return [...addresses];
+}
+
+async function resolveAuthoritativeTxt(hostname) {
+  const delegation = await getAuthoritativeNameServers(hostname);
+  const authoritativeResults = [];
+
+  for (const nameserver of delegation.nameservers) {
+    const addresses = await resolveNameserverAddresses(nameserver);
+
+    if (!addresses.length) {
+      authoritativeResults.push({
+        nameserver,
+        address: null,
+        records: [],
+        error: "NAMESERVER_ADDRESS_LOOKUP_FAILED"
+      });
+      continue;
+    }
+
+    for (const address of addresses) {
+      const resolver = new Resolver({
+        timeout: 2500,
+        tries: 2
+      });
+
+      resolver.setServers([address]);
+
+      try {
+        const records = await resolveTxtWithRetry(
+          resolver,
+          hostname
+        );
+
+        authoritativeResults.push({
+          nameserver,
+          address,
+          records: records.map(chunks => chunks.join("")),
+          error: null
+        });
+      } catch (error) {
+        authoritativeResults.push({
+          nameserver,
+          address,
+          records: [],
+          error: dnsErrorCode(error)
+        });
+      }
+    }
+  }
+
+  return {
+    zone: delegation.zone,
+    nameservers: delegation.nameservers,
+    records: [
+      ...new Set(
+        authoritativeResults.flatMap(result => result.records)
+      )
+    ],
+    results: authoritativeResults
+  };
+}
+
+function classifyDnsState({
+  verified,
+  records,
+  resolverResults,
+  authoritativeResults
+}) {
+  if (verified) {
+    return "verified";
+  }
+
+  const authoritativeHasData = authoritativeResults.some(
+    result => result.records.length
+  );
+
+  const authoritativeUnavailable =
+    authoritativeResults.length > 0 &&
+    authoritativeResults.every(result =>
+      result.error && !result.records.length
+    );
+
+  const publicUnavailable =
+    resolverResults.length > 0 &&
+    resolverResults.every(result =>
+      result.error && !result.records.length
+    );
+
+  if (authoritativeUnavailable && publicUnavailable) {
+    return "dns_unavailable";
+  }
+
+  if (records.length > 0 || authoritativeHasData) {
+    return "mismatch";
+  }
+
+  return "propagating";
+}
+
 function getOriginVerification(originUrl, applicationId) {
   if (!originUrl) {
     return {
@@ -731,10 +932,10 @@ function getOriginVerification(originUrl, applicationId) {
     };
   }
 
-  const recordName = `_aceid-challenge.${hostname}`;
+  const recordName = \`_aceid-challenge.${hostname}\`;
   const token = crypto
     .createHmac("sha256", CLIENT_SECRET)
-    .update(`${applicationId}\n${parsed.origin}`)
+    .update(\`${applicationId}\\n${parsed.origin}\`)
     .digest("base64url");
 
   return {
@@ -744,26 +945,8 @@ function getOriginVerification(originUrl, applicationId) {
     hostname,
     record_name: recordName,
     record_type: "TXT",
-    record_value: `token=${token} expiry=never`
+    record_value: \`token=${token} expiry=never\`
   };
-}
-
-async function resolveTxtWithRetry(resolver, hostname) {
-  let lastError = null;
-
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      return await resolver.resolveTxt(hostname);
-    } catch (error) {
-      lastError = error;
-
-      if (attempt === 0) {
-        await new Promise(resolve => setTimeout(resolve, 250));
-      }
-    }
-  }
-
-  throw lastError;
 }
 
 async function verifyOriginDns(originUrl, applicationId) {
@@ -773,11 +956,12 @@ async function verifyOriginDns(originUrl, applicationId) {
     return {
       ...challenge,
       records: [],
-      checked_at: new Date().toISOString()
+      checked_at: new Date().toISOString(),
+      dns_state: "verified"
     };
   }
 
-  const results = await Promise.all(
+  const resolverResults = await Promise.all(
     dnsResolvers.map(async ({ name, resolver }) => {
       try {
         const records = await resolveTxtWithRetry(
@@ -794,40 +978,114 @@ async function verifyOriginDns(originUrl, applicationId) {
         return {
           resolver: name,
           records: [],
-          error: error?.code || "DNS_LOOKUP_FAILED"
+          error: dnsErrorCode(error)
         };
       }
     })
   );
 
-  const records = [
-    ...new Set(results.flatMap(result => result.records))
+  let authoritative;
+
+  try {
+    authoritative = await resolveAuthoritativeTxt(
+      challenge.record_name
+    );
+  } catch (error) {
+    authoritative = {
+      zone: null,
+      nameservers: [],
+      records: [],
+      results: [{
+        nameserver: null,
+        address: null,
+        records: [],
+        error: dnsErrorCode(error)
+      }]
+    };
+  }
+
+  const publicRecords = [
+    ...new Set(
+      resolverResults.flatMap(result =>
+        result.records.map(normalizeTxtRecord)
+      )
+    )
   ];
 
-  const verified = records.includes(challenge.record_value);
-  const hadDnsData = records.length > 0;
-  const allUnavailable = results.every(
-    result => result.error && !result.records.length
+  const authoritativeRecords = [
+    ...new Set(
+      authoritative.records.map(normalizeTxtRecord)
+    )
+  ];
+
+  const records = [
+    ...new Set([
+      ...authoritativeRecords,
+      ...publicRecords
+    ])
+  ];
+
+  const authoritativeVerified = authoritativeRecords.some(record =>
+    txtRecordMatchesChallenge(record, challenge.record_value)
   );
+
+  const publicResolversVerified = publicRecords.some(record =>
+    txtRecordMatchesChallenge(record, challenge.record_value)
+  );
+
+  const verified = authoritativeVerified || publicResolversVerified;
+  const dnsState = classifyDnsState({
+    verified,
+    records,
+    resolverResults,
+    authoritativeResults: authoritative.results
+  });
 
   return {
     ...challenge,
     verified,
+    authoritative_verified: authoritativeVerified,
+    public_resolvers_verified: publicResolversVerified,
     records,
     checked_at: new Date().toISOString(),
-    resolver_results: results.map(result => ({
+    dns_state: dnsState,
+    authoritative_zone: authoritative.zone,
+    authoritative_nameservers: authoritative.nameservers,
+    resolver_results: resolverResults.map(result => ({
       resolver: result.resolver,
       record_count: result.records.length,
       error: result.error
     })),
+    authoritative_results: authoritative.results.map(result => ({
+      nameserver: result.nameserver,
+      address: result.address,
+      record_count: result.records.length,
+      error: result.error
+    })),
     reason: verified
-      ? "TXT record verified"
-      : hadDnsData
+      ? authoritativeVerified
+        ? "TXT record verified by the authoritative nameserver"
+        : "TXT record verified by a public DNS resolver"
+      : dnsState === "mismatch"
         ? "TXT records were found, but none matched the challenge"
-        : allUnavailable
+        : dnsState === "dns_unavailable"
           ? "DNS TXT lookup is unavailable from the verification service"
-          : "TXT record not found yet"
+          : "TXT record has not reached the authoritative or public DNS path yet"
   };
+}
+
+async function verifyOriginDnsWithPropagationRetry(originUrl, applicationId) {
+  let verification = await verifyOriginDns(originUrl, applicationId);
+
+  for (const delayMs of [500, 1500, 3000]) {
+    if (verification.verified) break;
+    if (!["propagating", "dns_unavailable"].includes(verification.dns_state)) break;
+
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+    verification = await verifyOriginDns(originUrl, applicationId);
+  }
+
+  return verification;
 }
 
 async function cloudflareApiRequest(token, path, options = {}) {
@@ -999,7 +1257,7 @@ async function addCloudflareOriginRecord(
   let verification;
 
   try {
-    verification = await verifyOriginDns(
+    verification = await verifyOriginDnsWithPropagationRetry(
       originUrl,
       applicationId
     );
