@@ -3675,11 +3675,10 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
 
       const app = getApplication(AIDC, this.applicationId);
       const previewName = this.displayName.trim() || app?.name || "Your application";
-      const previewText = AIDC.utils.contrastTextColor?.(previewColor) || "#111111";
-      const previewText = AIDC.utils.contrastTextColor?.(previewColor) || "#111111";
       const previewColor = /^#[0-9a-f]{6}$/i.test(this.accentColor.trim())
         ? this.accentColor.trim()
         : "#111111";
+      const previewText = AIDC.utils.contrastTextColor?.(previewColor) || "#111111";
 
       return html`
         <div class="aidc-branding-layout">

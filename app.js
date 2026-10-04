@@ -70,7 +70,6 @@ const state = {
     notices: [],
     dirty: false,
     dirtyLabel: "",
-],
     deleteApplication: null,
     createModal: false,
     consoleOpen: false
