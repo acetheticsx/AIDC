@@ -932,10 +932,10 @@ function getOriginVerification(originUrl, applicationId) {
     };
   }
 
-  const recordName = \`_aceid-challenge.${hostname}\`;
+  const recordName = `_aceid-challenge.${hostname}`;
   const token = crypto
     .createHmac("sha256", CLIENT_SECRET)
-    .update(\`${applicationId}\\n${parsed.origin}\`)
+    .update(`${applicationId}\n${parsed.origin}`)
     .digest("base64url");
 
   return {
@@ -945,7 +945,7 @@ function getOriginVerification(originUrl, applicationId) {
     hostname,
     record_name: recordName,
     record_type: "TXT",
-    record_value: \`token=${token} expiry=never\`
+    record_value: `token=${token} expiry=never`
   };
 }
 
