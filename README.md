@@ -1,6 +1,6 @@
 ## AIDC
 
-`Ace Identity Developer Console`
+Ace Identity Developer Console
 
 *AIDC is the developer-facing console for Ace Base Identity, providing a clean interface for managing identity applications, OAuth/OIDC configuration, credentials, redirects, scopes, and related developer settings.*
 
@@ -15,35 +15,47 @@ The public repository contains the console frontend and its supporting public re
 ## Features
 
 - Application management
-
 - OAuth / OIDC configuration
-
 - Client credentials management
-
 - Redirect URI configuration
-
 - Scope management
-
 - Application branding
-
 - Activity and authentication logs
-
 - Developer settings
-
 - Responsive interface
-
 - Lightweight browser-native architecture
 
-- Technology
+## Ace Base plans
+
+Ace Base uses three subscription tiers:
+
+| | **Origin** | **Core** | **Apex** |
+|---|---:|---:|---:|
+| Price | **Free** | **₹299/month** | **₹549/month** |
+| Applications | **8** | **15** | **25** |
+| Monthly active users | **5,000** | **20,000** | **50,000** |
+| Custom domain | ✅ | ✅ | ✅ |
+| Custom database | ✅ | ✅ | ✅ |
+| OAuth / OIDC | ✅ | ✅ | ✅ |
+| PKCE | ✅ | ✅ | ✅ |
+| MFA | ✅ | ✅ | ✅ |
+| Passkeys | ✅ | ✅ | ✅ |
+| Session management | ✅ | ✅ | ✅ |
+| Developer Console | ✅ | ✅ | ✅ |
+| API access | ✅ | ✅ | ✅ |
+
+**Core and Apex pricing are launch targets and may change before public billing is enabled.**
+
+Security fundamentals are available on every tier. Paid plans are differentiated by capacity and advanced operational features, not by withholding basic authentication security.
+
+See docs/subscriptions.md for the billing architecture, payment flow, and administrator subscription-grant procedure.
+
+## Technology
 
 - HTML
-
 - CSS
-
 - JavaScript
-
 - Lit
-
 - Open Props
 
 No build system is required for the frontend.
@@ -54,6 +66,7 @@ AIDC/<br>
 ├── index.html <br>
 ├── app.js <br>
 ├── components/ <br>
+├── docs/ <br>
 └── assets/ <br>
 
 ## Development
@@ -69,31 +82,24 @@ The public repository does not contain private Ace Identity infrastructure, prod
 **Never commit:**
 
 - API keys
-
 - OAuth client secrets
-
 - private keys
-
 - access tokens
-
 - production credentials
-
 - environment-specific secrets
-
 
 ## Server deployment hardening
 
 The server supports explicit reverse-proxy and PostgreSQL TLS configuration.
 
-- Set `AIDC_TRUST_PROXY_HOPS` to the exact number of trusted reverse-proxy hops when the server is behind a proxy. Leave it at `0` when the server is directly exposed.
-- Set `DATABASE_SSL_CA` when the PostgreSQL provider requires a custom CA certificate.
-- Use an HTTPS `AIDC_PUBLIC_ORIGIN` in production so secure cookies and HSTS are enabled.
-- Do not set `AIDC_TRUST_PROXY_HOPS` to a guessed value. Express uses trusted proxy configuration to derive client IP information, which the rate limiter relies on.
+- Set AIDC_TRUST_PROXY_HOPS to the exact number of trusted reverse-proxy hops when the server is behind a proxy. Leave it at 0 when the server is directly exposed.
+- Set DATABASE_SSL_CA when the PostgreSQL provider requires a custom CA certificate.
+- Use an HTTPS AIDC_PUBLIC_ORIGIN in production so secure cookies and HSTS are enabled.
+- Do not set AIDC_TRUST_PROXY_HOPS to a guessed value. Express uses trusted proxy configuration to derive client IP information, which the rate limiter relies on.
 
 ## The Ace Base
 
 Is Where Better Begins...
-
 
 ## Origin URL domain verification
 
@@ -103,9 +109,9 @@ AIDC generates a TXT challenge scoped to the application and exact Origin URL:
 
 1. Save the HTTPS Origin URL.
 2. Open the Origin URL settings and copy the displayed TXT record.
-3. Create the TXT record at the displayed `_aceid-challenge.<host>` name.
+3. Create the TXT record at the displayed _aceid-challenge.<host> name.
 4. Wait for DNS propagation, then choose **Verify TXT record**.
-5. Keep the TXT record in DNS while the Origin URL is in use. AIDC treats the record as a persistent authorization signal and labels `expiry=never`.
+5. Keep the TXT record in DNS while the Origin URL is in use. AIDC treats the record as a persistent authorization signal and labels expiry=never.
 
 Localhost HTTP origins do not require DNS verification. HTTPS IP-address origins are rejected because they cannot provide the requested domain-control proof.
 

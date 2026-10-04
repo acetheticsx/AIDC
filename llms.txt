@@ -18,6 +18,36 @@ AIDC is a web developer console for creating and managing Ace Base Identity appl
 - Application branding
 - Authentication analytics
 - Application activity and audit events
+- Ace Base subscription plan management
+
+## Ace Base plans
+
+Ace Base has three tiers:
+
+- Origin: free, 8 applications, 5,000 monthly active users
+- Core: ₹299/month launch target, 15 applications, 20,000 monthly active users
+- Apex: ₹549/month launch target, 25 applications, 50,000 monthly active users
+
+All tiers include custom domains, custom database connections, OAuth/OIDC, PKCE, MFA, passkeys, session management, the developer console, and API access.
+
+Core and Apex prices are launch targets and are not a statement that live billing is already enabled.
+
+## Subscription architecture
+
+AIDC should treat its own subscription/entitlement record as the source of truth for product access. A payment provider such as Razorpay handles recurring payment collection and payment webhooks; it should not directly decide application limits.
+
+Subscriptions should support:
+
+- Origin, Core, and Apex plan IDs
+- active, trialing, past_due, cancelled, and expired states
+- billing period start/end
+- provider customer and subscription IDs
+- webhook event IDs for idempotency
+- administrator-granted subscriptions
+- grant start/end timestamps
+- an audit trail for grants, changes, cancellations, and revocations
+
+Administrators must be able to grant Core or Apex to any valid Ace Base account without requiring a payment. A grant should be explicitly marked as administrator-granted, include the granting administrator, and have an optional expiration time.
 
 ## Public resources
 
