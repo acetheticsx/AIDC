@@ -4546,9 +4546,10 @@ body:has(
   gap:4px;
   min-width:0;
   padding:18px;
-  border:1px solid var(--aidc-border);
+  border:1px solid color-mix(in srgb, var(--aidc-preview-accent) 28%, var(--aidc-border));
   border-radius:16px;
   background:var(--aidc-surface);
+  color:var(--aidc-preview-accent);
 }
 .aidc-analytics-metric > span{
   font-size:12px;
@@ -4763,7 +4764,8 @@ body:has(
   min-width:0;
 }
 .aidc-branding-preview{
-  --aidc-preview-accent:#111;
+  --aidc-preview-accent:#111111;
+  --aidc-preview-accent-contrast:#ffffff;
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -4809,9 +4811,9 @@ body:has(
 .aidc-branding-preview-button{
   width:min(220px,100%);
   padding:11px 16px;
-  border-radius:10px;
+  border-radius:12px;
   background:var(--aidc-preview-accent);
-  color:#fff;
+  color:var(--aidc-preview-accent-contrast);
   font-size:13px;
   font-weight:600;
 }
@@ -6951,7 +6953,7 @@ body:has(
   padding:14px 16px;
   border:0;
   border-right:1px solid var(--aidc-border);
-  border-radius:0;
+  border-radius:10px;
   background:var(--aidc-surface-soft);
 }
 .aidc-metric-segment:last-child{
@@ -8070,8 +8072,9 @@ html::before{
   height:44px;
   padding:4px;
   border:1px solid var(--aidc-border);
-  border-radius:0;
-  background:var(--aidc-surface);
+  border-radius:12px;
+  background-color:var(--aidc-color-swatch, var(--aidc-surface)) !important;
+  background-clip:padding-box;
   cursor:pointer;
 }
 .aidc-color-option{
@@ -8085,7 +8088,7 @@ html::before{
   width:min(300px,calc(100vw - 48px));
   padding:12px;
   border:1px solid var(--aidc-border);
-  border-radius:0;
+  border-radius:10px;
   background:var(--aidc-surface);
   color:var(--aidc-text);
   box-shadow:0 18px 50px rgb(0 0 0 / .16);
@@ -8100,7 +8103,7 @@ html::before{
   height:36px;
   padding:3px;
   border:1px solid var(--aidc-border);
-  border-radius:0;
+  border-radius:10px;
   cursor:pointer;
 }
 .aidc-color-option[aria-pressed="true"]{
@@ -8112,7 +8115,7 @@ html::before{
   width:100%;
   min-height:36px;
   border:1px solid var(--aidc-border);
-  border-radius:0;
+  border-radius:10px;
   background:var(--aidc-surface-soft);
   color:var(--aidc-text);
   font:inherit;
@@ -8123,14 +8126,6 @@ html::before{
     width:min(280px,calc(100vw - 40px));
   }
 }
-
-/* AIDC sharp stepped geometry: no pills, no rounded controls, no underlined action chrome. */
-:root{--aidc-step:7px}
-.aidc-button,.aidc-danger-button,.aidc-icon-button,.aidc-theme-toggle,.aidc-help-top,.aidc-health-check-fix,.aidc-switch-account,.aidc-nav-item,.aidc-mobile-nav-item,.aidc-landing-cta,.aidc-account-fab,.aidc-account-fab-options,.aidc-account-fab-option,.aidc-cookie-dialog,.aidc-cookie-list>div{border-radius:0!important}
-.aidc-button,.aidc-danger-button{clip-path:polygon(0 0,calc(100% - var(--aidc-step)) 0,100% var(--aidc-step),100% 100%,var(--aidc-step) 100%,0 calc(100% - var(--aidc-step)));-webkit-clip-path:polygon(0 0,calc(100% - var(--aidc-step)) 0,100% var(--aidc-step),100% 100%,var(--aidc-step) 100%,0 calc(100% - var(--aidc-step)))}
-.aidc-icon-button,.aidc-theme-toggle,.aidc-help-top,.aidc-health-check-fix,.aidc-account-fab{clip-path:polygon(0 0,calc(100% - 5px) 0,100% 5px,100% 100%,5px 100%,0 calc(100% - 5px));-webkit-clip-path:polygon(0 0,calc(100% - 5px) 0,100% 5px,100% 100%,5px 100%,0 calc(100% - 5px))}
-.aidc-text-button,.aidc-back-link,.aidc-help-link,.aidc-sidebar-link,.aidc-landing-link,.aidc-landing-account-link,.aidc-cookie-link,.aidc-row-main{text-decoration:none!important}
-.aidc-noscript,.aidc-landing,.aidc-landing *{user-select:text;-webkit-user-select:text}
 
 /* Desktop-site mobile repair.
    Android browsers can expose a desktop-sized CSS viewport while still

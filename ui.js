@@ -3517,6 +3517,14 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
      BRANDING
      ═══════════════════════════════════════ */
 
+  function brandingContrastColor(hex) {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return "#ffffff";
+    const channels = [1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16) / 255);
+    const linear = channels.map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    const luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+    return (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05) ? "#000000" : "#ffffff";
+  }
+
   class AIDCBranding extends AIDCElement {
     static properties = {
       applicationId: {
@@ -3668,6 +3676,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       const previewColor = /^#[0-9a-f]{6}$/i.test(this.accentColor.trim())
         ? this.accentColor.trim()
         : "#111111";
+      const previewContrast = brandingContrastColor(previewColor);
 
       return html`
         <div class="aidc-branding-layout">
@@ -3714,7 +3723,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                       aria-label="Choose accent color"
                       aria-haspopup="dialog"
                       aria-expanded=${this.colorPickerOpen}
-                      style=${`background-color: ${previewColor}`}
+                      style=${`--aidc-color-swatch: ${previewColor}`}
                       @click=${() => (this.colorPickerOpen = !this.colorPickerOpen)}
                     ></button>
                     <input
@@ -3788,7 +3797,10 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
               <p>A simplified preview of the identity users will see.</p>
             </header>
 
-            <div class="aidc-branding-preview" style=${`--aidc-preview-accent: ${previewColor}`}>
+            <div
+              class="aidc-branding-preview"
+              style=${`--aidc-preview-accent: ${previewColor}; --aidc-preview-accent-contrast: ${previewContrast}`}
+            >
               <div class="aidc-branding-preview-logo">
                 ${this.logoUrl
                   ? html`<img src=${this.logoUrl} alt="" loading="lazy" decoding="async" />`
