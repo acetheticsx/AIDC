@@ -34,21 +34,17 @@ Ace Base uses three subscription tiers:
 | Price | **Free** | **₹299/month** | **₹549/month** |
 | Applications | **8** | **15** | **25** |
 | Monthly active users | **5,000** | **20,000** | **50,000** |
-| Custom domain | ✅ | ✅ | ✅ |
-| Custom database | ✅ | ✅ | ✅ |
-| OAuth / OIDC | ✅ | ✅ | ✅ |
-| PKCE | ✅ | ✅ | ✅ |
-| MFA | ✅ | ✅ | ✅ |
-| Passkeys | ✅ | ✅ | ✅ |
-| Session management | ✅ | ✅ | ✅ |
-| Developer Console | ✅ | ✅ | ✅ |
-| API access | ✅ | ✅ | ✅ |
 
 **Core and Apex pricing are launch targets and may change before public billing is enabled.**
 
-Security fundamentals are available on every tier. Paid plans are differentiated by capacity and advanced operational features, not by withholding basic authentication security.
+Subscriptions, billing, entitlements, offers, and subscriber accessories belong to **Ace ID**, not AIDC. AIDC consumes Ace ID entitlements for authenticated users.
 
-See docs/subscriptions.md for the billing architecture, payment flow, and administrator subscription-grant procedure.
+Only the **Ace ID owner** can manually grant, revoke, extend, or change paid subscriptions. There is no general administrator subscription-grant permission.
+
+Offers and subscriber accessories can apply **across TAB**, with eligibility, redemption, expiry, and usage enforced server-side by Ace ID.
+
+See docs/subscriptions.md for the complete subscription architecture and implementation guidance.
+
 
 ## Technology
 

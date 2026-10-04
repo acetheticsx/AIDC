@@ -34,20 +34,25 @@ Core and Apex prices are launch targets and are not a statement that live billin
 
 ## Subscription architecture
 
-AIDC should treat its own subscription/entitlement record as the source of truth for product access. A payment provider such as Razorpay handles recurring payment collection and payment webhooks; it should not directly decide application limits.
+Ace ID is the system of record for subscriptions, billing, entitlements, promotional offers, subscriber accessories, and owner-only manual grants.
 
-Subscriptions should support:
+AIDC is a consumer of Ace ID entitlements. It must not maintain an independent subscription or billing authority.
 
-- Origin, Core, and Apex plan IDs
-- active, trialing, past_due, cancelled, and expired states
-- billing period start/end
-- provider customer and subscription IDs
-- webhook event IDs for idempotency
-- administrator-granted subscriptions
-- grant start/end timestamps
-- an audit trail for grants, changes, cancellations, and revocations
+Plans:
+- Origin: free, 8 applications, 5,000 monthly active users
+- Core: ₹299/month launch target, 15 applications, 20,000 monthly active users
+- Apex: ₹549/month launch target, 25 applications, 50,000 monthly active users
 
-Administrators must be able to grant Core or Apex to any valid Ace Base account without requiring a payment. A grant should be explicitly marked as administrator-granted, include the granting administrator, and have an optional expiration time.
+All tiers include the core identity stack, including OAuth/OIDC, PKCE, MFA, passkeys, session management, Developer Console, API access, custom domains, and custom database connections.
+
+A payment provider such as Razorpay handles recurring payment collection and signed webhooks. Ace ID verifies provider events, stores subscription state, and calculates effective entitlements.
+
+Only the designated Ace ID owner can manually grant, revoke, extend, or change paid subscriptions. Owner grants do not require a payment transaction and must be server-side and audited.
+
+Offers and subscriber accessories are also owned by Ace ID and apply **across TAB**, not just inside AIDC. Eligibility, redemption, availability, expiry, and usage are server-controlled.
+
+See docs/subscriptions.md for the detailed architecture and implementation guidance.
+
 
 ## Public resources
 
