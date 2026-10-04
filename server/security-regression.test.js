@@ -49,11 +49,17 @@ test("responses have server-generated request correlation IDs", () => {
   assert.match(server, /request_id: req\.requestId/);
 });
 
-test("rate-limit buckets are isolated by traffic class", () => {
-  assert.match(server, /name = "default"/);
-  assert.match(server, /const key = .*name.*ip/);
-  assert.match(server, /name: "auth"/);
-  assert.match(server, /name: "api"/);
+test("rate-limiters are isolated by traffic class", () => {
+  assert.match(
+    server,
+    /const authRateLimit = rateLimit\(\{ windowMs: 10 \* 60_000, limit: 20/
+  );
+  assert.match(
+    server,
+    /const apiRateLimit = rateLimit\(\{ windowMs: 60_000, limit: 120/
+  );
+  assert.match(server, /app\.use\(\["\/auth\/login", "\/auth\/callback"\], authRateLimit\)/);
+  assert.match(server, /app\.use\("\/api", apiRateLimit\)/);
 });
 
 test("HTTP server has bounded request and header timeouts", () => {
@@ -134,13 +140,10 @@ test("proxy trust is explicit and bounded", () => {
 });
 
 test("rate limits protect authentication and API traffic", () => {
-  assert.match(server, /\/auth\/login/);
-  assert.match(server, /\/auth\/callback/);
-  assert.match(
-    server,
-    /rateLimit\(\{ windowMs: 60_000, max: 120, name: ["']api["'] \}\)/
-  );
-  assert.match(server, /status\(429\)/);
+  assert.match(server, /app\.use\(\["\/auth\/login", "\/auth\/callback"\], authRateLimit\)/);
+  assert.match(server, /app\.use\("\/api", apiRateLimit\)/);
+  assert.match(server, /standardHeaders: "draft-8"/);
+  assert.match(server, /legacyHeaders: false/);
 });
 
 test("redirect URI listing does not validate an undefined request body value", () => {
