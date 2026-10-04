@@ -1,4 +1,9 @@
 import express from "express";
+import { rateLimit } from "express-rate-limit";
+
+const authRateLimit = rateLimit({ windowMs: 10 * 60_000, limit: 20, standardHeaders: "draft-8", legacyHeaders: false });
+const apiRateLimit = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: "draft-8", legacyHeaders: false });
+
 import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -349,79 +354,8 @@ app.use((req, res, next) => {
   next();
 });
 
-const rateLimitBuckets = new Map();
-
-function rateLimit({
-  windowMs = 60_000,
-  max = 120,
-  name = "default"
-} = {}) {
-  return (req, res, next) => {
-    const now = Date.now();
-    const ip = req.ip || req.socket.remoteAddress || "unknown";
-    const key = `${name}:${ip}`;
-    const current = rateLimitBuckets.get(key);
-
-    if (!current || current.resetAt <= now) {
-      rateLimitBuckets.set(key, {
-        count: 1,
-        resetAt: now + windowMs
-      });
-      return next();
-    }
-
-    current.count += 1;
-
-    if (current.count > max) {
-      const retryAfter = Math.max(
-        1,
-        Math.ceil((current.resetAt - now) / 1000)
-      );
-
-      res.set("Retry-After", String(retryAfter));
-      return res
-        .status(429)
-        .json({ error: "Too many requests. Try again later." });
-    }
-
-    return next();
-  };
-}
-
-setInterval(() => {
-  const now = Date.now();
-
-  for (const [key, bucket] of rateLimitBuckets) {
-    if (bucket.resetAt <= now) {
-      rateLimitBuckets.delete(key);
-    }
-  }
-
-  if (rateLimitBuckets.size > 10_000) {
-    const removeCount = Math.ceil(rateLimitBuckets.size * 0.1);
-    const iterator = rateLimitBuckets.keys();
-
-    for (let index = 0; index < removeCount; index += 1) {
-      const next = iterator.next();
-
-      if (next.done) {
-        break;
-      }
-
-      rateLimitBuckets.delete(next.value);
-    }
-  }
-}, 5 * 60_000).unref();
-
-app.use(
-  ["/auth/login", "/auth/callback"],
-  rateLimit({ windowMs: 10 * 60_000, max: 20, name: "auth" })
-);
-
-app.use(
-  "/api",
-  rateLimit({ windowMs: 60_000, max: 120, name: "api" })
-);
+app.use(["/auth/login", "/auth/callback"], authRateLimit);
+app.use("/api", apiRateLimit);
 
 app.use(express.json({ limit: "1mb", strict: true }));
 
@@ -2264,7 +2198,7 @@ app.get(
 
 app.patch(
   "/api/applications/:id",
-  rateLimit({ windowMs: 60_000, max: 60, name: "api-application-write" }),
+  apiRateLimit,
   requireAuth,
   async (req, res) => {
     const { id } = req.params;
