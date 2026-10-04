@@ -3934,7 +3934,7 @@ app.get(
     try {
       const [sessionsResult, uptimeResult] = await Promise.all([
         pool.query(
-          """
+          `
           WITH owned_clients AS (
             SELECT id, name, client_id
             FROM public.applications
@@ -3968,11 +3968,11 @@ app.get(
           FROM session_rows
           ORDER BY COALESCE(last_seen_at, created_at) DESC
           LIMIT 12
-          """,
+          `,
           [req.developer.id]
         ),
         pool.query(
-          """
+          `
           WITH owned_apps AS (
             SELECT id, name, status
             FROM public.applications
@@ -4002,7 +4002,7 @@ app.get(
           ORDER BY
             CASE WHEN a.status = 'active' THEN 0 ELSE 1 END,
             a.name ASC
-          """,
+          `,
           [req.developer.id, days]
         )
       ]);
