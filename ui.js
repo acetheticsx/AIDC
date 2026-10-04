@@ -590,7 +590,15 @@ export function registerAIDCComponents(AIDC) {
               ${icon("layers-01")}
             </div>
 
-          </section>          <section class="aidc-section">
+          </section>
+
+          <section class="aidc-card aidc-entitlement-card" aria-labelledby="aidc-entitlement-title">
+            <header class="aidc-card-section-header"><div><span class="aidc-eyebrow">Ace ID entitlement</span><h2 id="aidc-entitlement-title">${text(state.quota.name || "Base")} plan</h2><p>${state.quota.status === "active" ? "Entitlement is active." : "Entitlement is not currently active."}</p></div><span class="aidc-entitlement-plan">${text(String(state.quota.plan || "base").toUpperCase())}</span></header>
+            <div class="aidc-entitlement-grid"><div><span>Applications</span><strong>${state.quota.count} / ${state.quota.limit}</strong><small>${state.quota.remaining} remaining</small></div><div><span>Monthly active users</span><strong>${Number(state.quota.mau || 0).toLocaleString()}</strong><small>Enforced by Ace ID</small></div></div>
+            <div class="aidc-quota-track" aria-label="Application quota usage"><span style=${`width:${state.quota.limit ? Math.min((state.quota.count / state.quota.limit) * 100, 100) : 0}%`}></span></div>
+          </section>
+
+          <section class="aidc-section">
 
             <div class="aidc-section-header">
 
@@ -1278,6 +1286,21 @@ export function registerAIDCComponents(AIDC) {
       );
     }
 
+    async toggleStatus() {
+      const app = this.application;
+      if (!app?.id) return;
+      const nextStatus = app.status === "active" ? "disabled" : "active";
+      const action = nextStatus === "active" ? "enable" : "disable";
+      if (!window.confirm(`Are you sure you want to ${action} this application?`)) return;
+      try {
+        await applications.update(app.id, { status: nextStatus });
+        notify(nextStatus === "active" ? "Application enabled" : "Application disabled");
+        haptic?.(8);
+      } catch {
+        // applications.update() already reports the error.
+      }
+    }
+
     render() {
       const app =
         this.application;
@@ -1365,14 +1388,11 @@ export function registerAIDCComponents(AIDC) {
 
             </div>
 
-            <button
-              class="aidc-danger-button"
-              @click=${() =>
-                modals.openDelete(app)}
-            >
-              ${icon("delete-02")}
-                Delete application
-              </button>
+            <div class="aidc-detail-actions">
+              <span class="aidc-status ${app.status === "active" ? "aidc-status-active" : "aidc-status-disabled"}"><span class="aidc-status-dot"></span>${app.status === "active" ? "Active" : "Disabled"}</span>
+              <button class="aidc-button aidc-button-secondary" type="button" @click=${this.toggleStatus}>${icon(app.status === "active" ? "pause" : "play")}${app.status === "active" ? "Disable" : "Enable"}</button>
+              <button class="aidc-danger-button" @click=${() => modals.openDelete(app)}>${icon("delete-02")}Delete application</button>
+            </div>
             </div>
 
           </header>
@@ -1681,7 +1701,8 @@ export function registerAIDCComponents(AIDC) {
         redirects: "redirect-uris",
         credentials: "credentials",
         scopes: "scopes",
-        status: "overview"
+        status: "overview",
+        oidc: "playground"
       };
 
       const section = sectionByKey[key];
@@ -4383,9 +4404,8 @@ await auth.signIn();</code></pre>
         type: String
       },
 
-      events: {
-        state: true
-      },
+      events: { state: true },
+      authEvents: { state: true },
 
       loading: {
         state: true
@@ -4397,6 +4417,7 @@ await auth.signIn();</code></pre>
 
       this.applicationId = null;
       this.events = [];
+      this.authEvents = [];
       this.loading = true;
     }
 
@@ -4428,14 +4449,14 @@ await auth.signIn();</code></pre>
       this.loading = true;
 
       try {
-        const events =
-          await activity.list(applicationId);
+        const [events, authEvents] = await Promise.all([activity.list(applicationId), activity.authEvents(applicationId)]);
 
         if (this.applicationId !== applicationId) {
           return;
         }
 
         this.events = events;
+        this.authEvents = authEvents;
       } finally {
         if (this.applicationId === applicationId) {
           this.loading = false;
@@ -4449,8 +4470,14 @@ await auth.signIn();</code></pre>
           "Client secret rotated",
         "credential.revoked":
           "Client secret revoked",
-        "branding.updated":
-          "Branding updated"
+        "branding.updated": "Branding updated",
+        "application.status_changed": "Application status changed",
+        login_failed: "Sign-in failed",
+        login_success: "Sign-in succeeded",
+        login_succeeded: "Sign-in succeeded",
+        logout: "Signed out",
+        token_issued: "Token issued",
+        authorization_denied: "Authorization denied"
       };
 
       return labels[type] || type;
@@ -4533,6 +4560,8 @@ await auth.signIn();</code></pre>
                       "Authentication and audit events will appear here."
                   })
           }
+
+        <div class="aidc-auth-event-detail"><div class="aidc-section-header"><div><h3>Authentication events</h3><p>Recent sign-in events reported by Ace ID. Sensitive credentials are never displayed.</p></div></div>${this.authEvents.length ? html`<div class="aidc-auth-event-list">${this.authEvents.map(event => html`<div class="aidc-auth-event-row"><span class="aidc-status ${event.success ? "aidc-status-active" : "aidc-status-disabled"}"><span class="aidc-status-dot"></span>${event.success ? "Success" : "Failed"}</span><strong>${this.labelFor(event.event_type)}</strong><time>${formatDate(event.created_at)}</time></div>`)}</div>` : html`<p class="aidc-muted">No authentication events recorded yet.</p>`}</div>
 
         </section>
       `;

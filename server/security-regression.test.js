@@ -343,3 +343,19 @@ test("AIDC exposes the new feature services and routes", () => {
   assert.match(style, /\.aidc-data-row/);
   assert.match(style, /\.aidc-uptime-history/);
 });
+
+
+test("application lifecycle controls audit status changes and expose safe auth-event details", () => {
+  assert.match(server, /application\.status_changed/);
+  assert.match(server, /\/api\/applications\/:id\/auth-events/);
+  assert.match(server, /FROM public\.aceid_auth_events/);
+  assert.match(api, /authEvents\(applicationId/);
+  assert.match(ui, /toggleStatus\(\)/);
+  assert.match(ui, /Authentication events/);
+});
+
+test("integration health checks live Ace ID discovery", () => {
+  assert.match(app, /api\.playground\.config\(\)/);
+  assert.match(app, /key: "oidc"/);
+  assert.match(ui, /Run OAuth test/);
+});
