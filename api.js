@@ -270,7 +270,21 @@ export const api = {
 
   analytics: {
     logins(days = 7) {
-      return request(`/analytics/logins?days=${encodeURIComponent(days)}`);
+      const safeDays = [7, 14, 30].includes(Number(days))
+        ? Number(days)
+        : 7;
+      return request(
+        "/analytics/logins?days=" + encodeURIComponent(safeDays)
+      );
+    },
+
+    operations(days = 30) {
+      const safeDays = [7, 14, 30].includes(Number(days))
+        ? Number(days)
+        : 30;
+      return request(
+        "/analytics/operations?days=" + safeDays
+      );
     }
   },
 

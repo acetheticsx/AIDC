@@ -57,6 +57,16 @@ const state = {
     applications: [],
     topUsers: [],
     hourly: [],
+    sessions: {
+      active: 0,
+      recent: []
+    },
+    uptime: {
+      operational: 0,
+      total: 0,
+      averagePercent: null,
+      applications: []
+    },
     loading: false,
     error: null
   },
@@ -1129,7 +1139,18 @@ const analytics = {
     state.analytics = { ...state.analytics, days: normalized, loading: true, error: null };
     emitState();
     try {
-      const data = await api.analytics.logins(normalized);
+      const [loginResult, operationsResult] = await Promise.allSettled([
+        api.analytics.logins(normalized),
+        api.analytics.operations(30)
+      ]);
+      const data =
+        loginResult.status === "fulfilled"
+          ? loginResult.value
+          : null;
+      const operations =
+        operationsResult.status === "fulfilled"
+          ? operationsResult.value
+          : null;
       state.analytics = {
         days: normalized,
         items: Array.isArray(data?.items) ? data.items : [],
@@ -1142,6 +1163,23 @@ const analytics = {
         applications: Array.isArray(data?.applications) ? data.applications : [],
         topUsers: Array.isArray(data?.topUsers) ? data.topUsers : [],
         hourly: Array.isArray(data?.hourly) ? data.hourly : [],
+        sessions: {
+          active: Number(operations?.sessions?.active) || 0,
+          recent: Array.isArray(operations?.sessions?.recent)
+            ? operations.sessions.recent
+            : []
+        },
+        uptime: {
+          operational: Number(operations?.uptime?.operational) || 0,
+          total: Number(operations?.uptime?.total) || 0,
+          averagePercent:
+            operations?.uptime?.average_percent == null
+              ? null
+              : Number(operations.uptime.average_percent),
+          applications: Array.isArray(operations?.uptime?.applications)
+            ? operations.uptime.applications
+            : []
+        },
         loading: false,
         error: null
       };
