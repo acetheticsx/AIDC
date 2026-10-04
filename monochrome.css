@@ -1,7 +1,6 @@
 /* AIDC monochrome finish. Keep semantic UI readable without browser/theme colour leakage. */
 
 html {
-  filter: grayscale(1) !important;
   color-scheme: inherit !important;
 }
 
@@ -9,7 +8,7 @@ input,
 select,
 textarea,
 button {
-  accent-color: var(--aidc-black) !important;
+  accent-color: var(--aidc-text) !important;
 }
 
 input[type="checkbox"],
