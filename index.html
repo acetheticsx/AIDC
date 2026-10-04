@@ -7,6 +7,56 @@
   <meta name="description" content="AIDC manages identity applications, OAuth 2.0, OpenID Connect, PKCE, redirect URIs, scopes, credentials, branding, and authentication activity.">
   <meta name="application-name" content="AIDC">
   <meta name="author" content="The Ace Base">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://ace-base.cc/#organization",
+        "name": "Ace Base",
+        "url": "https://ace-base.cc/"
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://console.ace-base.cc/#website",
+        "name": "AIDC",
+        "url": "https://console.ace-base.cc/",
+        "publisher": {
+          "@id": "https://ace-base.cc/#organization"
+        }
+      },
+      {
+        "@type": "WebPage",
+        "@id": "https://console.ace-base.cc/#webpage",
+        "name": "Ace Identity Developer Console",
+        "url": "https://console.ace-base.cc/",
+        "isPartOf": {
+          "@id": "https://console.ace-base.cc/#website"
+        }
+      },
+      {
+        "@type": "WebApplication",
+        "@id": "https://console.ace-base.cc/#application",
+        "name": "AIDC",
+        "url": "https://console.ace-base.cc/#application",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Web",
+        "featureList": [
+          "Identity application management",
+          "OAuth 2.0 and OpenID Connect configuration",
+          "PKCE configuration",
+          "Redirect URI management",
+          "Application branding",
+          "Authentication activity and audit logs",
+          "User lookup",
+          "Session viewer",
+          "OAuth uptime history"
+        ]
+      }
+    ]
+  }
+  </script>
   <meta name="theme-color" content="#111111">
   <meta name="keywords" content="AIDC, Ace Identity Developer Console, Ace ID, Ace Base, OAuth 2.0, OpenID Connect, OIDC, PKCE, identity applications, authentication, redirect URI, client credentials">
   <link rel="canonical" href="https://console.ace-base.cc/">
