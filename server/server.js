@@ -2256,25 +2256,6 @@ app.patch(
       });
     }
 
-    let previousStatus = null;
-    if (status !== undefined) {
-      const statusResult = await pool.query(
-        `
-        SELECT status
-        FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
-        `,
-        [id, req.developer.id]
-      );
-
-      if (!statusResult.rows.length) {
-        return res.status(404).json({ error: "Application not found" });
-      }
-
-      previousStatus = statusResult.rows[0].status;
-    }
-
     let origin = null;
     if (origin_url !== undefined && origin_url !== null) {
       const originValidation = validateOriginUrl(origin_url, { required: true });
@@ -2290,21 +2271,6 @@ app.patch(
     let forcedStatus = status;
 
     if (origin_url !== undefined && origin !== null) {
-      const currentResult = await pool.query(
-        `
-        SELECT origin_url, application_type, status
-        FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
-        `,
-        [id, req.developer.id]
-      );
-
-      if (!currentResult.rows.length) {
-        return res.status(404).json({ error: "Application not found" });
-      }
-
-      const currentApplication = currentResult.rows[0];
       const effectiveType =
         application_type !== undefined
           ? application_type
@@ -2343,29 +2309,15 @@ app.patch(
     }
 
     if (status === "active") {
-      const originResult = await pool.query(
-        `
-        SELECT origin_url, application_type
-        FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
-        `,
-        [id, req.developer.id]
-      );
-
-      if (!originResult.rows.length) {
-        return res.status(404).json({ error: "Application not found" });
-      }
-
       const targetOrigin =
         origin_url !== undefined
           ? origin
-          : originResult.rows[0].origin_url;
+          : currentApplication.origin_url;
 
       const targetType =
         application_type !== undefined
           ? application_type
-          : originResult.rows[0].application_type;
+          : currentApplication.application_type;
 
       if (targetType === "web" && targetOrigin) {
         const verification = await verifyOriginDns(targetOrigin, id);
@@ -2391,23 +2343,24 @@ app.patch(
       return res.status(400).json({ error: "No fields to update" });
     }
 
+    const applicationResult = await pool.query(
+      `
+      SELECT origin_url, application_type, status
+      FROM public.applications
+      WHERE id = $1
+        AND owner_id = $2
+      `,
+      [id, req.developer.id]
+    );
+
+    if (!applicationResult.rows.length) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    const currentApplication = applicationResult.rows[0];
+    const previousStatus = currentApplication.status;
+
     if (application_type !== undefined) {
-      const applicationResult = await pool.query(
-        `
-        SELECT id
-        FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
-        `,
-        [id, req.developer.id]
-      );
-
-      if (!applicationResult.rows.length) {
-        return res.status(404).json({
-          error: "Application not found"
-        });
-      }
-
       const redirectResult = await pool.query(
         `
         SELECT uri
