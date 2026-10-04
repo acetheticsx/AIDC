@@ -2270,6 +2270,23 @@ app.patch(
     }
     let forcedStatus = status;
 
+    const applicationResult = await pool.query(
+      `
+      SELECT origin_url, application_type, status
+      FROM public.applications
+      WHERE id = $1
+        AND owner_id = $2
+      `,
+      [id, req.developer.id]
+    );
+
+    if (!applicationResult.rows.length) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    const currentApplication = applicationResult.rows[0];
+    const previousStatus = currentApplication.status;
+
     if (origin_url !== undefined && origin !== null) {
       const effectiveType =
         application_type !== undefined
@@ -2342,23 +2359,6 @@ app.patch(
     ) {
       return res.status(400).json({ error: "No fields to update" });
     }
-
-    const applicationResult = await pool.query(
-      `
-      SELECT origin_url, application_type, status
-      FROM public.applications
-      WHERE id = $1
-        AND owner_id = $2
-      `,
-      [id, req.developer.id]
-    );
-
-    if (!applicationResult.rows.length) {
-      return res.status(404).json({ error: "Application not found" });
-    }
-
-    const currentApplication = applicationResult.rows[0];
-    const previousStatus = currentApplication.status;
 
     if (application_type !== undefined) {
       const redirectResult = await pool.query(
@@ -3921,6 +3921,158 @@ app.post("/api/applications/:id/uptime/check", requireAuth, async (req, res) => 
  * Activity
  * ═══════════════════════════════════════════
  */
+
+app.get(
+  "/api/analytics/operations",
+  requireAuth,
+  async (req, res) => {
+    const requestedDays = Number.parseInt(req.query.days, 10);
+    const days = [7, 14, 30].includes(requestedDays)
+      ? requestedDays
+      : 30;
+
+    try {
+      const [sessionsResult, uptimeResult] = await Promise.all([
+        pool.query(
+          """
+          WITH owned_clients AS (
+            SELECT id, name, client_id
+            FROM public.applications
+            WHERE owner_id = $1
+          ),
+          session_rows AS (
+            SELECT DISTINCT ON (s.id)
+              s.id,
+              s.user_id,
+              u.email,
+              u.username,
+              u.display_name,
+              u.avatar_url,
+              s.created_at,
+              s.last_seen_at,
+              s.expires_at,
+              s.revoked_at,
+              s.user_agent,
+              s.authenticated_at,
+              c.name AS application_name,
+              c.id AS application_id
+            FROM public.aceid_sessions s
+            JOIN public.aceid_users u ON u.id = s.user_id
+            JOIN public.aceid_consents consent ON consent.user_id = s.user_id
+            JOIN owned_clients c ON c.client_id = consent.client_id
+            WHERE s.expires_at > now()
+              AND s.revoked_at IS NULL
+            ORDER BY s.id, COALESCE(s.last_seen_at, s.created_at) DESC
+          )
+          SELECT *
+          FROM session_rows
+          ORDER BY COALESCE(last_seen_at, created_at) DESC
+          LIMIT 12
+          """,
+          [req.developer.id]
+        ),
+        pool.query(
+          """
+          WITH owned_apps AS (
+            SELECT id, name, status
+            FROM public.applications
+            WHERE owner_id = $1
+          )
+          SELECT
+            a.id,
+            a.name,
+            a.status AS application_status,
+            COUNT(activity.*)::int AS total_checks,
+            COUNT(activity.*) FILTER (WHERE activity.success)::int AS successful_checks,
+            ROUND(
+              100.0 * COUNT(activity.*) FILTER (WHERE activity.success)
+              / NULLIF(COUNT(activity.*), 0),
+              2
+            ) AS uptime_percent,
+            MAX(activity.created_at) AS last_checked_at,
+            BOOL_OR(activity.success)
+              FILTER (WHERE activity.created_at >= now() - INTERVAL '15 minutes')
+              AS recent_success
+          FROM owned_apps a
+          LEFT JOIN public.application_activity activity
+            ON activity.application_id = a.id
+           AND activity.event_type = 'uptime.check'
+           AND activity.created_at >= now() - ($2::int * INTERVAL '1 day')
+          GROUP BY a.id, a.name, a.status
+          ORDER BY
+            CASE WHEN a.status = 'active' THEN 0 ELSE 1 END,
+            a.name ASC
+          """,
+          [req.developer.id, days]
+        )
+      ]);
+
+      const sessions = sessionsResult.rows.map(session => ({
+        ...session,
+        status: session.revoked_at
+          ? "revoked"
+          : new Date(session.expires_at) <= new Date()
+            ? "expired"
+            : "active"
+      }));
+
+      const uptime = uptimeResult.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        application_status: row.application_status,
+        total_checks: Number(row.total_checks) || 0,
+        successful_checks: Number(row.successful_checks) || 0,
+        uptime_percent:
+          row.uptime_percent === null
+            ? null
+            : Number(row.uptime_percent),
+        last_checked_at: row.last_checked_at || null,
+        status:
+          row.recent_success === true
+            ? "operational"
+            : row.recent_success === false
+              ? "degraded"
+              : "no_data"
+      }));
+
+      const operational = uptime.filter(
+        item => item.status === "operational"
+      ).length;
+
+      const uptimeValues = uptime
+        .filter(item => item.uptime_percent !== null)
+        .map(item => item.uptime_percent);
+
+      res.json({
+        days,
+        sessions: {
+          active: sessions.length,
+          recent: sessions
+        },
+        uptime: {
+          operational,
+          total: uptime.length,
+          average_percent: uptimeValues.length
+            ? Number(
+                (
+                  uptimeValues.reduce(
+                    (sum, value) => sum + value,
+                    0
+                  ) / uptimeValues.length
+                ).toFixed(2)
+              )
+            : null,
+          applications: uptime
+        }
+      });
+    } catch (error) {
+      console.error("GET /api/analytics/operations:", error);
+      res.status(500).json({
+        error: "Failed to load analytics operations"
+      });
+    }
+  }
+);
 
 app.get(
   "/api/analytics/logins",
