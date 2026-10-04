@@ -287,13 +287,6 @@ export const api = {
           limit
         )}`
       );
-    },
-    authEvents(applicationId, limit = 50) {
-      return request(
-        `/applications/${id(applicationId)}/auth-events?limit=${encodeURIComponent(
-          limit
-        )}`
-      );
     }
   },
   users: {

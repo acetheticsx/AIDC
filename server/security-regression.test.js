@@ -345,13 +345,11 @@ test("AIDC exposes the new feature services and routes", () => {
 });
 
 
-test("application lifecycle controls audit status changes and expose safe auth-event details", () => {
+test("application lifecycle controls audit status changes and expose safe authentication-session details", () => {
   assert.match(server, /application\.status_changed/);
-  assert.match(server, /\/api\/applications\/:id\/auth-events/);
-  assert.match(server, /FROM public\.aceid_auth_events/);
-  assert.match(api, /authEvents\(applicationId/);
+  assert.match(app, /api\.sessions\.list\(applicationId/);
   assert.match(ui, /toggleStatus\(\)/);
-  assert.match(ui, /Authentication events/);
+  assert.match(ui, /Authentication sessions/);
 });
 
 test("integration health checks live Ace ID discovery", () => {

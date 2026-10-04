@@ -1180,13 +1180,13 @@ const activity = {
     }
   },
 
-  async authEvents(applicationId, limit = 50) {
+  async sessions(applicationId, limit = 50) {
     if (!applicationId) return [];
     try {
-      const data = await api.activity.authEvents(applicationId, limit);
-      return Array.isArray(data?.events) ? data.events : [];
+      const data = await api.sessions.list(applicationId, { limit, status: "all" });
+      return Array.isArray(data?.sessions) ? data.sessions : [];
     } catch (error) {
-      handleError(error, "Failed to load authentication events");
+      handleError(error, "Failed to load authentication sessions");
       return [];
     }
   }

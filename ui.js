@@ -4405,7 +4405,7 @@ await auth.signIn();</code></pre>
       },
 
       events: { state: true },
-      authEvents: { state: true },
+      sessions: { state: true },
 
       loading: {
         state: true
@@ -4417,7 +4417,7 @@ await auth.signIn();</code></pre>
 
       this.applicationId = null;
       this.events = [];
-      this.authEvents = [];
+      this.sessions = [];
       this.loading = true;
     }
 
@@ -4449,14 +4449,14 @@ await auth.signIn();</code></pre>
       this.loading = true;
 
       try {
-        const [events, authEvents] = await Promise.all([activity.list(applicationId), activity.authEvents(applicationId)]);
+        const [events, sessions] = await Promise.all([activity.list(applicationId), activity.sessions(applicationId)]);
 
         if (this.applicationId !== applicationId) {
           return;
         }
 
         this.events = events;
-        this.authEvents = authEvents;
+        this.sessions = sessions;
       } finally {
         if (this.applicationId === applicationId) {
           this.loading = false;
@@ -4472,12 +4472,6 @@ await auth.signIn();</code></pre>
           "Client secret revoked",
         "branding.updated": "Branding updated",
         "application.status_changed": "Application status changed",
-        login_failed: "Sign-in failed",
-        login_success: "Sign-in succeeded",
-        login_succeeded: "Sign-in succeeded",
-        logout: "Signed out",
-        token_issued: "Token issued",
-        authorization_denied: "Authorization denied"
       };
 
       return labels[type] || type;
@@ -4561,7 +4555,7 @@ await auth.signIn();</code></pre>
                   })
           }
 
-        <div class="aidc-auth-event-detail"><div class="aidc-section-header"><div><h3>Authentication events</h3><p>Recent sign-in events reported by Ace ID. Sensitive credentials are never displayed.</p></div></div>${this.authEvents.length ? html`<div class="aidc-auth-event-list">${this.authEvents.map(event => html`<div class="aidc-auth-event-row"><span class="aidc-status ${event.success ? "aidc-status-active" : "aidc-status-disabled"}"><span class="aidc-status-dot"></span>${event.success ? "Success" : "Failed"}</span><strong>${this.labelFor(event.event_type)}</strong><time>${formatDate(event.created_at)}</time></div>`)}</div>` : html`<p class="aidc-muted">No authentication events recorded yet.</p>`}</div>
+        <div class="aidc-auth-event-detail"><div class="aidc-section-header"><div><h3>Authentication sessions</h3><p>Recent sessions associated with this application, sourced from Ace ID.</p></div></div>${this.sessions.length ? html`<div class="aidc-auth-event-list">${this.sessions.map(session => html`<div class="aidc-auth-event-row"><span class="aidc-status ${session.status === "active" ? "aidc-status-active" : "aidc-status-disabled"}"><span class="aidc-status-dot"></span>${text(session.status || "unknown")}</span><strong>${text(session.display_name || session.username || session.email || shortId(session.user_id))}</strong><time>${formatDate(session.last_seen_at || session.authenticated_at || session.created_at)}</time></div>`)}</div>` : html`<p class="aidc-muted">No authentication sessions recorded yet.</p>`}</div>
 
         </section>
       `;

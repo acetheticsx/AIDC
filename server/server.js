@@ -4445,40 +4445,6 @@ app.get(
   }
 );
 
-app.get(
-  "/api/applications/:id/auth-events",
-  requireAuth,
-  async (req, res) => {
-    const { id } = req.params;
-    if (!isValidUuid(id)) return res.status(400).json({ error: "Invalid application ID" });
-
-    const requestedLimit = Number.parseInt(req.query.limit, 10);
-    const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 50;
-
-    try {
-      const application = await pool.query(
-        `SELECT client_id FROM public.applications WHERE id = $1 AND owner_id = $2`,
-        [id, req.developer.id]
-      );
-      if (!application.rows.length) return res.status(404).json({ error: "Application not found" });
-
-      const result = await pool.query(
-        `SELECT event_type, created_at FROM public.aceid_auth_events WHERE client_id = $1 ORDER BY created_at DESC LIMIT $2`,
-        [application.rows[0].client_id, limit]
-      );
-
-      res.json({ events: result.rows.map(event => ({
-        event_type: event.event_type,
-        success: event.event_type !== "login_failed",
-        created_at: event.created_at
-      })) });
-    } catch (error) {
-      console.error("GET auth events:", error);
-      res.status(500).json({ error: "Failed to fetch authentication events" });
-    }
-  }
-);
-
 /*
  * ═══════════════════════════════════════════
  * Frontend
