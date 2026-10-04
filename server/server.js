@@ -3647,7 +3647,7 @@ app.get("/api/users/search", requireAuth, async (req, res) => {
 
   try {
     const result = await pool.query(
-      """
+`
       WITH owned_clients AS (
         SELECT DISTINCT client_id FROM public.applications WHERE owner_id = $1
       ),
@@ -3697,7 +3697,7 @@ app.get("/api/applications/:id/sessions", requireAuth, async (req, res) => {
     if (!application.rows.length) return res.status(404).json({ error: "Application not found" });
 
     const result = await pool.query(
-      """
+`
       WITH authorized_users AS (
         SELECT DISTINCT user_id FROM public.aceid_consents WHERE client_id = $1
       )
@@ -3739,7 +3739,7 @@ async function recordApplicationUptime(applicationId) {
 
   try {
     const application = await pool.query(
-      """
+`
       SELECT a.id, a.client_id, a.status, c.client_id AS registered_client_id
       FROM public.applications a
       LEFT JOIN public.aceid_clients c ON c.client_id = a.client_id
@@ -3772,7 +3772,7 @@ async function recordApplicationUptime(applicationId) {
       discoveryOk;
 
     await pool.query(
-      """
+`
       INSERT INTO public.application_activity
         (application_id, event_type, success, metadata)
       VALUES ($1, 'uptime.check', $2, $3::jsonb)
@@ -3822,7 +3822,7 @@ app.get("/api/applications/:id/uptime", requireAuth, async (req, res) => {
 
     const [summary, daily, latest] = await Promise.all([
       pool.query(
-        """
+`
         SELECT COUNT(*)::int AS total_checks,
                COUNT(*) FILTER (WHERE success)::int AS successful_checks,
                ROUND(100.0 * COUNT(*) FILTER (WHERE success) / NULLIF(COUNT(*), 0), 2) AS uptime_percent,
@@ -3836,7 +3836,7 @@ app.get("/api/applications/:id/uptime", requireAuth, async (req, res) => {
         [id, days]
       ),
       pool.query(
-        """
+`
         SELECT date_trunc('day', created_at) AS day,
                COUNT(*)::int AS checks,
                COUNT(*) FILTER (WHERE success)::int AS successes,
@@ -3851,7 +3851,7 @@ app.get("/api/applications/:id/uptime", requireAuth, async (req, res) => {
         [id, days]
       ),
       pool.query(
-        """
+`
         SELECT success, created_at, metadata
         FROM public.application_activity
         WHERE application_id = $1 AND event_type = 'uptime.check'
@@ -3900,7 +3900,7 @@ app.post("/api/applications/:id/uptime/check", requireAuth, async (req, res) => 
     await recordApplicationUptime(id);
 
     const latest = await pool.query(
-      """
+`
       SELECT success, created_at, metadata
       FROM public.application_activity
       WHERE application_id = $1 AND event_type = 'uptime.check'
