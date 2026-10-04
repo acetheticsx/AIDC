@@ -3546,6 +3546,10 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
 
       colorPickerOpen: {
         state: true
+      },
+
+      initialBranding: {
+        state: true
       }
     };
 
@@ -3559,6 +3563,11 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       this.loading = true;
       this.saving = false;
       this.colorPickerOpen = false;
+      this.initialBranding = {
+        display_name: "",
+        logo_url: "",
+        accent_color: ""
+      };
     }
 
     updated(changed) {
@@ -3571,6 +3580,11 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
         this.displayName = "";
         this.logoUrl = "";
         this.accentColor = "";
+        this.initialBranding = {
+          display_name: "",
+          logo_url: "",
+          accent_color: ""
+        };
       }
 
       if (
@@ -3605,6 +3619,13 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
           data?.logo_url || "";
         this.accentColor =
           data?.accent_color || "";
+
+        this.initialBranding = {
+          display_name: this.displayName,
+          logo_url: this.logoUrl,
+          accent_color: this.accentColor
+        };
+        AIDC.utils.clearDirty();
       } finally {
         if (this.applicationId === applicationId) {
           this.loading = false;
@@ -3643,6 +3664,12 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
         );
 
         await applications.load();
+        this.initialBranding = {
+          display_name: this.displayName,
+          logo_url: this.logoUrl,
+          accent_color: this.accentColor
+        };
+        AIDC.utils.clearDirty();
         notify("Branding updated");
         haptic?.(8);
       } finally {
@@ -3670,6 +3697,24 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
         ? this.accentColor.trim()
         : "#111111";
       const previewText = AIDC.utils.contrastTextColor?.(previewColor) || "#111111";
+
+      const currentBranding = {
+        display_name: this.displayName.trim(),
+        logo_url: this.logoUrl.trim(),
+        accent_color: this.accentColor.trim().toLowerCase()
+      };
+
+      const savedBranding = {
+        display_name: String(this.initialBranding?.display_name || "").trim(),
+        logo_url: String(this.initialBranding?.logo_url || "").trim(),
+        accent_color: String(this.initialBranding?.accent_color || "").trim().toLowerCase()
+      };
+
+      const brandingChanges = [
+        ["Display name", savedBranding.display_name || "Default application name", currentBranding.display_name || "Default application name"],
+        ["Logo URL", savedBranding.logo_url || "No logo", currentBranding.logo_url || "No logo"],
+        ["Accent color", savedBranding.accent_color || "Default", currentBranding.accent_color || "Default"]
+      ].filter(([, before, after]) => before !== after);
 
       return html`
         <div class="aidc-branding-layout">
@@ -3780,6 +3825,39 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                   <span class="aidc-button-loading">Saving…</span>
                 </button>
               </div>
+
+              <section class="aidc-change-preview ${brandingChanges.length ? "is-dirty" : ""}" aria-labelledby="aidc-branding-change-preview-title">
+                <header class="aidc-change-preview-head">
+                  <div>
+                    <span class="aidc-eyebrow">Change preview</span>
+                    <h3 id="aidc-branding-change-preview-title">Review before saving</h3>
+                    <p>${brandingChanges.length ? brandingChanges.length + " branding field" + (brandingChanges.length === 1 ? "" : "s") + " will change." : "No pending branding changes."}</p>
+                  </div>
+                  <span class="aidc-change-preview-state">${brandingChanges.length ? "Unsaved" : "Saved"}</span>
+                </header>
+
+                ${brandingChanges.length
+  ? html`
+      <div class="aidc-change-preview-list">
+        ${brandingChanges.map(([label, before, after]) => html`
+          <div class="aidc-change-preview-row">
+            <span>${label`</span>
+            <div>
+              <code>${before`</code>
+              <span aria-hidden="true">→</span>
+              <code>${after`</code>
+            </div>
+          </div>
+        `)
+      </div>
+    `
+  : html`
+      <div class="aidc-change-preview-empty">
+        ${icon("checkmark-circle-02")`
+        <span>The saved branding matches this editor.</span>
+      </div>
+    `
+              </section>
             </div>
           </section>
 

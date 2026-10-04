@@ -9,6 +9,21 @@ const APP_NAME = "AIDC";
 
 const LOGIN_PATH = "/auth/login";
 
+const APPLICATION_TEMPLATES = Object.freeze({
+  web: Object.freeze({
+    name: "Web application",
+    description: "Browser-based application using Ace ID for authentication.",
+    origin_url: "",
+    application_type: "web"
+  }),
+  native: Object.freeze({
+    name: "Native application",
+    description: "Native mobile or desktop application using Ace ID with PKCE.",
+    origin_url: "",
+    application_type: "native"
+  })
+});
+
 const SUPPORTED_SCOPES = Object.freeze([
   "openid",
   "profile",
@@ -1556,6 +1571,41 @@ async function copyToClipboard(value) {
   } catch {
     return false;
   }
+}
+
+/* ─────────────────────────────────────────────
+   Frontend helpers
+───────────────────────────────────────────── */
+
+function contrastTextColor(value) {
+  const hex = String(value || "").trim().replace(/^#/, "");
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return "#ffffff";
+
+  const channels = [0, 2, 4].map(offset => {
+    const channel = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return channel <= 0.03928
+      ? channel / 12.92
+      : Math.pow((channel + 0.055) / 1.055, 2.4);
+  });
+
+  const luminance =
+    channels[0] * 0.2126 +
+    channels[1] * 0.7152 +
+    channels[2] * 0.0722;
+
+  return luminance > 0.179 ? "#111111" : "#ffffff";
+}
+
+function markDirty(label = "Unsaved changes") {
+  state.ui.dirty = true;
+  state.ui.dirtyLabel = String(label || "Unsaved changes");
+  emitState();
+}
+
+function clearDirty() {
+  state.ui.dirty = false;
+  state.ui.dirtyLabel = "";
+  emitState();
 }
 
 /* ─────────────────────────────────────────────

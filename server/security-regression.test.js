@@ -281,3 +281,27 @@ test("mobile overlays stay above navigation and branding color selection stays i
   assert.doesNotMatch(ui, /type="color"/);
   assert.match(style, /\.aidc-color-option/);
 });
+
+
+test("frontend public bridge defines all boot-critical helpers and templates", () => {
+  assert.match(app, /const APPLICATION_TEMPLATES = Object\.freeze\(/);
+  assert.match(app, /function contrastTextColor\(/);
+  assert.match(app, /function markDirty\(/);
+  assert.match(app, /function clearDirty\(/);
+  assert.match(app, /applicationTemplates: APPLICATION_TEMPLATES/);
+  assert.match(app, /contrastTextColor,/);
+  assert.match(app, /markDirty,/);
+  assert.match(app, /clearDirty,/);
+});
+
+test("branding change preview compares saved and pending values", () => {
+  assert.match(ui, /initialBranding/);
+  assert.match(ui, /brandingChanges/);
+  assert.match(ui, /Review before saving/);
+  assert.match(style, /\.aidc-change-preview/);
+});
+
+test("undo remains hidden from the application UI", () => {
+  assert.doesNotMatch(ui, /Undo last change/);
+  assert.doesNotMatch(ui, /applications\.undoLast\(app\.id\)/);
+});
