@@ -2032,7 +2032,7 @@ app.get(
       ]);
 
       const verified = userResult.rows[0]?.email_verified === true;
-      const limit = verified ? 10 : 3;
+      const limit = verified ? 8 : 3;
 
       res.json({
         applications: applicationsResult.rows,
@@ -2115,7 +2115,7 @@ app.post(
       }
 
       const verified = userResult.rows[0].email_verified === true;
-      const limit = verified ? 10 : 3;
+      const limit = verified ? 8 : 3;
 
       const countResult = await client.query(
         'SELECT COUNT(*)::integer AS count FROM public.applications WHERE owner_id = $1',
