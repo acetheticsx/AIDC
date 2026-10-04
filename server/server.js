@@ -4570,4 +4570,39 @@ async function shutdown(signal) {
 
   shuttingDown = true;
 
-  console.log(
+  console.log(      `${signal} received. Shutting down...`
+    );
+
+    const forceExitTimer = setTimeout(() => {
+      console.error("Forced shutdown after timeout.");
+      process.exit(1);
+    }, 10_000);
+
+    forceExitTimer.unref();
+
+    server.close(async () => {
+      try {
+        await pool.end();
+
+        console.log("Database connection closed.");
+        clearTimeout(forceExitTimer);
+
+        process.exit(0);
+      } catch (error) {
+        console.error(
+          "Failed to close database connection:",
+          error
+        );
+
+        process.exit(1);
+      }
+    });
+  }
+
+  process.on("SIGTERM", () => {
+    shutdown("SIGTERM");
+  });
+
+  process.on("SIGINT", () => {
+    shutdown("SIGINT");
+  });
