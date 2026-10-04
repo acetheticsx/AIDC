@@ -24,7 +24,7 @@ AIDC is a web developer console for creating and managing Ace Base Identity appl
 
 Ace Base has three tiers:
 
-- Origin: free, 8 applications, 5,000 monthly active users
+- Base: free, 8 applications, 5,000 monthly active users
 - Core: ₹299/month launch target, 15 applications, 20,000 monthly active users
 - Apex: ₹549/month launch target, 25 applications, 50,000 monthly active users
 
@@ -39,7 +39,7 @@ Ace ID is the system of record for subscriptions, billing, entitlements, promoti
 AIDC is a consumer of Ace ID entitlements. It must not maintain an independent subscription or billing authority.
 
 Plans:
-- Origin: free, 8 applications, 5,000 monthly active users
+- Base: free, 8 applications, 5,000 monthly active users
 - Core: ₹299/month launch target, 15 applications, 20,000 monthly active users
 - Apex: ₹549/month launch target, 25 applications, 50,000 monthly active users
 

@@ -29,7 +29,7 @@ The public repository contains the console frontend and its supporting public re
 
 Ace Base uses three subscription tiers:
 
-| | **Origin** | **Core** | **Apex** |
+| | **Base** | **Core** | **Apex** |
 |---|---:|---:|---:|
 | Price | **Free** | **₹299/month** | **₹549/month** |
 | Applications | **8** | **15** | **25** |

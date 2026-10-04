@@ -8,7 +8,7 @@ Ace ID is the system of record for subscription status, billing, entitlements, p
 
 | Tier | Price | Applications | Monthly active users |
 |---|---:|---:|---:|
-| **Origin** | Free | 8 | 5,000 |
+| **Base** | Free | 8 | 5,000 |
 | **Core** | ₹299/month | 15 | 20,000 |
 | **Apex** | ₹549/month | 25 | 50,000 |
 
@@ -70,7 +70,7 @@ AIDC must not implement independent billing or subscription ownership. It should
 ## Launch checklist
 
 - [ ] Implement subscription storage in Ace ID.
-- [ ] Create stable Origin, Core, and Apex plan IDs.
+- [ ] Create stable Base, Core, and Apex plan IDs.
 - [ ] Implement server-side entitlement resolution in Ace ID.
 - [ ] Integrate Razorpay behind the Ace ID billing adapter.
 - [ ] Configure signed webhook processing.
