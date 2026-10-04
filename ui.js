@@ -3543,12 +3543,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       saving: {
         state: true
       },
-      previewOpen: {
-        state: true
-      },
-      previewChanges: {
-        state: true
-      },
 
       colorPickerOpen: {
         state: true
@@ -3564,9 +3558,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       this.accentColor = "";
       this.loading = true;
       this.saving = false;
-      this.previewOpen = false;
-      this.previewChanges = [];
-      this.savedBranding = { display_name: '', logo_url: '', accent_color: '' };
       this.colorPickerOpen = false;
     }
 
@@ -3614,48 +3605,11 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
           data?.logo_url || "";
         this.accentColor =
           data?.accent_color || "";
-        this.savedBranding = { display_name: this.displayName, logo_url: this.logoUrl, accent_color: this.accentColor };
       } finally {
         if (this.applicationId === applicationId) {
           this.loading = false;
         }
       }
-    }
-
-    openPreview() {
-      const next = {
-        display_name: this.displayName.trim(),
-        logo_url: this.logoUrl.trim(),
-        accent_color: this.accentColor.trim()
-      };
-      const previous = this.savedBranding || {
-        display_name: "",
-        logo_url: "",
-        accent_color: ""
-      };
-      const labels = {
-        display_name: "Display name",
-        logo_url: "Logo URL",
-        accent_color: "Accent color"
-      };
-      this.previewChanges = Object.keys(next)
-        .filter(key => (previous[key] || "") !== (next[key] || ""))
-        .map(key => ({
-          key,
-          label: labels[key],
-          before: previous[key] || "Not set",
-          after: next[key] || "Not set"
-        }));
-      if (!this.previewChanges.length) {
-        notify("No branding changes to save");
-        return;
-      }
-      this.previewOpen = true;
-    }
-
-    closePreview() {
-      if (this.saving) return;
-      this.previewOpen = false;
     }
 
     async save() {
@@ -3688,13 +3642,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
           }
         );
 
-        this.savedBranding = {
-          display_name: this.displayName.trim(),
-          logo_url: this.logoUrl.trim(),
-          accent_color: accent
-        };
-        this.previewOpen = false;
-        this.previewChanges = [];
         await applications.load();
         notify("Branding updated");
         haptic?.(8);
@@ -3819,35 +3766,12 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                 </label>
               </div>
 
-              ${this.previewOpen ? html`<section class="aidc-change-preview" aria-labelledby="aidc-change-preview-title">
-                <div class="aidc-change-preview-head">
-                  <div>
-                    <span class="aidc-eyebrow">Change preview</span>
-                    <h3 id="aidc-change-preview-title">Review branding changes</h3>
-                    <p>Check the before and after values before saving.</p>
-                  </div>
-                  <button class="aidc-icon-button" type="button" aria-label="Close change preview" @click=${this.closePreview}>${icon("cancel-01")}</button>
-                </div>
-                <div class="aidc-change-preview-list">
-                  ${this.previewChanges.map(change => html`<div class="aidc-change-preview-row">
-                    <strong>${change.label}</strong>
-                    <div class="aidc-change-preview-values">
-                      <div><span>Before</span><code>${change.before}</code></div>
-                      <div><span>After</span><code>${change.after}</code></div>
-                    </div>
-                  </div>`)}
-                </div>
-                <div class="aidc-dialog-actions">
-                  <button class="aidc-button aidc-button-secondary" type="button" @click=${this.closePreview}>Cancel</button>
-                  <button class="aidc-button aidc-button-primary" type="button" ?disabled=${this.saving} @click=${this.save}>${icon("checkmark-circle-02")}Save changes</button>
-                </div>
-              </section>` : ""}
               <div class="aidc-dialog-actions">
                 <button
                   class="aidc-button aidc-button-primary ${this.saving ? "is-loading" : ""}"
                   type="button"
                   ?disabled=${this.saving}
-                  @click=${this.openPreview}
+                  @click=${this.save}
                 >
                   <span class="aidc-button-content">
                     ${icon("checkmark-circle-02")}
