@@ -1364,13 +1364,23 @@ export function registerAIDCComponents(AIDC) {
             </div>
 
             <button
+              class="aidc-button aidc-button-secondary"
+              type="button"
+              @click=${() => applications.undoLast(app.id)}
+            >
+              ${icon("undo-02")}
+              Undo last change
+            </button>
+
+            <button
               class="aidc-danger-button"
               @click=${() =>
                 modals.openDelete(app)}
             >
               ${icon("delete-02")}
-              Delete application
-            </button>
+                Delete application
+              </button>
+            </div>
 
           </header>
 
@@ -3665,6 +3675,8 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
 
       const app = getApplication(AIDC, this.applicationId);
       const previewName = this.displayName.trim() || app?.name || "Your application";
+      const previewText = AIDC.utils.contrastTextColor?.(previewColor) || "#111111";
+      const previewText = AIDC.utils.contrastTextColor?.(previewColor) || "#111111";
       const previewColor = /^#[0-9a-f]{6}$/i.test(this.accentColor.trim())
         ? this.accentColor.trim()
         : "#111111";
@@ -3788,7 +3800,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
               <p>A simplified preview of the identity users will see.</p>
             </header>
 
-            <div class="aidc-branding-preview" style=${`--aidc-preview-accent: ${previewColor}`}>
+            <div class="aidc-branding-preview" style=${`--aidc-preview-accent: ${previewColor}; --aidc-preview-accent-contrast: ${previewText}`}>
               <div class="aidc-branding-preview-logo">
                 ${this.logoUrl
                   ? html`<img src=${this.logoUrl} alt="" loading="lazy" decoding="async" />`
@@ -3908,6 +3920,14 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       if (this.authorizationUrl) window.open(this.authorizationUrl, "_blank", "noopener,noreferrer");
     }
 
+    async runOAuthTest() {
+      await this.buildAuthorizationUrl();
+      if (!this.authorizationUrl) return;
+      window.open(this.authorizationUrl, "_blank", "noopener,noreferrer");
+      notify("OAuth test started. Complete the sign-in in the new tab.");
+      haptic?.(12);
+    }
+
     async copyUrl() {
       if (this.authorizationUrl && await copyToClipboard(this.authorizationUrl)) notify("Authorization URL copied");
     }
@@ -3957,7 +3977,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                   </div>
                 </div>
                 <div class="aidc-dialog-actions">
-                  <button class="aidc-button aidc-button-primary" type="button" ?disabled=${!redirects.length} @click=${this.openAuthorization}>${icon("arrow-up-right-01")}Open authorization</button>
+                  <button class="aidc-button aidc-button-primary" type="button" ?disabled=${!redirects.length} @click=${this.openAuthorization}>${icon("arrow-up-right-01")}Run OAuth test</button>
                   <button class="aidc-button aidc-button-secondary" type="button" ?disabled=${!redirects.length} @click=${this.buildAuthorizationUrl}>${icon("computer-programming-02")}Build request</button>
                 </div>
               </div>
@@ -4226,6 +4246,9 @@ await auth.signIn();</code></pre>
 
       error: {
         state: true
+      },
+      template: {
+        state: true
       }
     };
 
@@ -4236,6 +4259,7 @@ await auth.signIn();</code></pre>
       this.description = "";
       this.originUrl = "";
       this.applicationType = "web";
+      this.template = "blank";
       this.submitting = false;
       this.error = "";
 
@@ -4254,6 +4278,18 @@ await auth.signIn();</code></pre>
       }
 
       this._wasOpen = open;
+    }
+
+    applyTemplate(key) {
+      const template = AIDC.utils.applicationTemplates?.[key];
+      if (!template) return;
+      this.template = key;
+      this.name = template.name;
+      this.description = template.description;
+      this.originUrl = template.origin_url;
+      this.applicationType = template.application_type;
+      this.error = "";
+      AIDC.utils.markDirty("Unsaved application draft");
     }
 
     handleEscape() {
@@ -4307,6 +4343,8 @@ await auth.signIn();</code></pre>
         this.description = "";
         this.originUrl = "";
         this.applicationType = "web";
+      this.template = "blank";
+      AIDC.utils.clearDirty();
 
         modals.closeCreate();
 
@@ -4395,6 +4433,26 @@ await auth.signIn();</code></pre>
               class="aidc-dialog-form"
               @submit=${this.submit}
             >
+              <label class="aidc-field">
+                <span>Start from template</span>
+                <select
+                  .value=${this.template}
+                  @change=${event => {
+                    const key = event.target.value;
+                    if (key === "blank") {
+                      this.template = "blank";
+                      return;
+                    }
+                    this.applyTemplate(key);
+                  }}
+                  ?disabled=${this.submitting}
+                >
+                  <option value="blank">Blank application</option>
+                  <option value="web">Web application</option>
+                  <option value="native">Native application</option>
+                </select>
+              </label>
+
 
               <label class="aidc-field">
 
@@ -4415,6 +4473,7 @@ await auth.signIn();</code></pre>
                       event.target.value;
 
                     this.error = "";
+                    AIDC.utils.markDirty("Unsaved application draft");
                   }}
                   ?disabled=${this.submitting}
                 />
@@ -4476,6 +4535,7 @@ await auth.signIn();</code></pre>
                   @input=${event => {
                     this.originUrl =
                       event.target.value;
+                    AIDC.utils.markDirty("Unsaved application draft");
 
                     this.error = "";
                   }}

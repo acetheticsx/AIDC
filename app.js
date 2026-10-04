@@ -68,6 +68,9 @@ const state = {
 
   ui: {
     notices: [],
+    dirty: false,
+    dirtyLabel: "",
+],
     deleteApplication: null,
     createModal: false,
     consoleOpen: false
@@ -82,6 +85,59 @@ let redirectUriRequestId = 0;
 let scopeRequestId = 0;
 
 let applicationsLoadPromise = null;
+
+const applicationHistory = [];
+const APPLICATION_HISTORY_LIMIT = 20;
+
+const APPLICATION_TEMPLATES = Object.freeze({
+  web: {
+    name: "Web application",
+    description: "OAuth application for a web service.",
+    application_type: "web",
+    origin_url: ""
+  },
+  native: {
+    name: "Native application",
+    description: "OAuth application for a native Android or desktop client.",
+    application_type: "native",
+    origin_url: ""
+  }
+});
+
+function markDirty(label = "Unsaved changes") {
+  state.ui.dirty = true;
+  state.ui.dirtyLabel = label;
+  emitState();
+}
+
+function clearDirty() {
+  if (!state.ui.dirty) return;
+  state.ui.dirty = false;
+  state.ui.dirtyLabel = "";
+  emitState();
+}
+
+function contrastTextColor(hex) {
+  const value = String(hex || "").replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(value)) return "#111111";
+  const rgb = value.match(/.{2}/g).map(part => parseInt(part, 16) / 255);
+  const linear = rgb.map(channel => channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+  const luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  return luminance > 0.179 ? "#111111" : "#ffffff";
+}
+
+function pushApplicationHistory(id, before, changes) {
+  if (!id || !before || !changes) return;
+  const previous = {};
+  for (const key of Object.keys(changes)) {
+    if (Object.prototype.hasOwnProperty.call(before, key)) previous[key] = before[key];
+  }
+  if (!Object.keys(previous).length) return;
+  applicationHistory.unshift({ id, previous, changedAt: Date.now() });
+  applicationHistory.splice(APPLICATION_HISTORY_LIMIT);
+}
+
+
 
 /*
  * Set once the auth-required redirect has been
@@ -481,11 +537,15 @@ const applications = {
 
     haptic(8);
 
+    const current = applications.find(id);
+
     try {
       const data = await api.applications.update(
         id,
         changes
       );
+
+      pushApplicationHistory(id, current, changes);
 
       const updated = data?.application;
 
@@ -521,6 +581,29 @@ const applications = {
         "Failed to update application"
       );
 
+      throw error;
+    }
+  },
+
+  async undoLast(id = null) {
+    const index = applicationHistory.findIndex(item => !id || item.id === id);
+    if (index === -1) {
+      notify("No application change to undo", "error");
+      return null;
+    }
+    const entry = applicationHistory[index];
+    applicationHistory.splice(index, 1);
+    try {
+      const restored = await api.applications.update(entry.id, entry.previous);
+      const appIndex = state.applications.findIndex(application => application.id === entry.id);
+      if (appIndex !== -1) state.applications[appIndex] = { ...state.applications[appIndex], ...restored };
+      emitState();
+      notify("Last application change undone");
+      haptic(10);
+      return restored;
+    } catch (error) {
+      applicationHistory.splice(index, 0, entry);
+      handleError(error, "Failed to undo application change");
       throw error;
     }
   },
@@ -1599,6 +1682,11 @@ const AIDC = {
 
   utils: {
     findApplication: applications.find,
+    applicationTemplates: APPLICATION_TEMPLATES,
+    contrastTextColor,
+    markDirty,
+    clearDirty,
+    isDirty: () => state.ui.dirty,
     supportedScopes: scopes.supported
   },
 
@@ -1722,4 +1810,9 @@ auth.bootstrap().then(user => {
     lastRouteKey = "";
     handleRouteChange();
   });
+});
+window.addEventListener("beforeunload", event => {
+  if (!state.ui.dirty) return;
+  event.preventDefault();
+  event.returnValue = "";
 });
