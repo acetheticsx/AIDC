@@ -1,4 +1,9 @@
 import express from "express";
+import { rateLimit } from "express-rate-limit";
+
+const authRateLimit = rateLimit({ windowMs: 10 * 60_000, limit: 20, standardHeaders: "draft-8", legacyHeaders: false });
+const apiRateLimit = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: "draft-8", legacyHeaders: false });
+
 import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -349,79 +354,8 @@ app.use((req, res, next) => {
   next();
 });
 
-const rateLimitBuckets = new Map();
-
-function rateLimit({
-  windowMs = 60_000,
-  max = 120,
-  name = "default"
-} = {}) {
-  return (req, res, next) => {
-    const now = Date.now();
-    const ip = req.ip || req.socket.remoteAddress || "unknown";
-    const key = `${name}:${ip}`;
-    const current = rateLimitBuckets.get(key);
-
-    if (!current || current.resetAt <= now) {
-      rateLimitBuckets.set(key, {
-        count: 1,
-        resetAt: now + windowMs
-      });
-      return next();
-    }
-
-    current.count += 1;
-
-    if (current.count > max) {
-      const retryAfter = Math.max(
-        1,
-        Math.ceil((current.resetAt - now) / 1000)
-      );
-
-      res.set("Retry-After", String(retryAfter));
-      return res
-        .status(429)
-        .json({ error: "Too many requests. Try again later." });
-    }
-
-    return next();
-  };
-}
-
-setInterval(() => {
-  const now = Date.now();
-
-  for (const [key, bucket] of rateLimitBuckets) {
-    if (bucket.resetAt <= now) {
-      rateLimitBuckets.delete(key);
-    }
-  }
-
-  if (rateLimitBuckets.size > 10_000) {
-    const removeCount = Math.ceil(rateLimitBuckets.size * 0.1);
-    const iterator = rateLimitBuckets.keys();
-
-    for (let index = 0; index < removeCount; index += 1) {
-      const next = iterator.next();
-
-      if (next.done) {
-        break;
-      }
-
-      rateLimitBuckets.delete(next.value);
-    }
-  }
-}, 5 * 60_000).unref();
-
-app.use(
-  ["/auth/login", "/auth/callback"],
-  rateLimit({ windowMs: 10 * 60_000, max: 20, name: "auth" })
-);
-
-app.use(
-  "/api",
-  rateLimit({ windowMs: 60_000, max: 120, name: "api" })
-);
+app.use(["/auth/login", "/auth/callback"], authRateLimit);
+app.use("/api", apiRateLimit);
 
 app.use(express.json({ limit: "1mb", strict: true }));
 
@@ -2040,6 +1974,8 @@ app.get(
         quota: {
           plan: entitlements.plan,
           name: entitlements.name,
+          status: entitlements.status,
+          mau: entitlements.mau,
           count,
           limit,
           remaining: Math.max(limit - count, 0)
@@ -2188,6 +2124,8 @@ app.post(
         quota: {
           plan: entitlements.plan,
           name: entitlements.name,
+          status: entitlements.status,
+          mau: entitlements.mau,
           count: count + 1,
           limit,
           remaining: Math.max(limit - (count + 1), 0)
@@ -2260,6 +2198,7 @@ app.get(
 
 app.patch(
   "/api/applications/:id",
+  apiRateLimit,
   requireAuth,
   async (req, res) => {
     const { id } = req.params;
@@ -2332,21 +2271,6 @@ app.patch(
     let forcedStatus = status;
 
     if (origin_url !== undefined && origin !== null) {
-      const currentResult = await pool.query(
-        `
-        SELECT origin_url, application_type, status
-        FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
-        `,
-        [id, req.developer.id]
-      );
-
-      if (!currentResult.rows.length) {
-        return res.status(404).json({ error: "Application not found" });
-      }
-
-      const currentApplication = currentResult.rows[0];
       const effectiveType =
         application_type !== undefined
           ? application_type
@@ -2385,29 +2309,15 @@ app.patch(
     }
 
     if (status === "active") {
-      const originResult = await pool.query(
-        `
-        SELECT origin_url, application_type
-        FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
-        `,
-        [id, req.developer.id]
-      );
-
-      if (!originResult.rows.length) {
-        return res.status(404).json({ error: "Application not found" });
-      }
-
       const targetOrigin =
         origin_url !== undefined
           ? origin
-          : originResult.rows[0].origin_url;
+          : currentApplication.origin_url;
 
       const targetType =
         application_type !== undefined
           ? application_type
-          : originResult.rows[0].application_type;
+          : currentApplication.application_type;
 
       if (targetType === "web" && targetOrigin) {
         const verification = await verifyOriginDns(targetOrigin, id);
@@ -2433,23 +2343,24 @@ app.patch(
       return res.status(400).json({ error: "No fields to update" });
     }
 
+    const applicationResult = await pool.query(
+      `
+      SELECT origin_url, application_type, status
+      FROM public.applications
+      WHERE id = $1
+        AND owner_id = $2
+      `,
+      [id, req.developer.id]
+    );
+
+    if (!applicationResult.rows.length) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    const currentApplication = applicationResult.rows[0];
+    const previousStatus = currentApplication.status;
+
     if (application_type !== undefined) {
-      const applicationResult = await pool.query(
-        `
-        SELECT id
-        FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
-        `,
-        [id, req.developer.id]
-      );
-
-      if (!applicationResult.rows.length) {
-        return res.status(404).json({
-          error: "Application not found"
-        });
-      }
-
       const redirectResult = await pool.query(
         `
         SELECT uri
@@ -2524,6 +2435,21 @@ app.patch(
 
       if (!result.rows.length) {
         return res.status(404).json({ error: "Application not found" });
+      }
+
+      if (status !== undefined && forcedStatus !== undefined && previousStatus !== forcedStatus) {
+        try {
+          await pool.query(
+            `
+            INSERT INTO public.application_activity
+              (application_id, event_type, success, metadata)
+            VALUES ($1, 'application.status_changed', true, $2::jsonb)
+            `,
+            [id, JSON.stringify({ from: previousStatus, to: result.rows[0].status })]
+          );
+        } catch (auditError) {
+          console.error("Application status audit failed:", auditError);
+        }
       }
 
       res.json({ application: result.rows[0] });

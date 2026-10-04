@@ -62,9 +62,13 @@ const state = {
   },
   quota: {
     verified: false,
+    plan: "base",
+    name: "Base",
+    status: "active",
+    mau: 5000,
     count: 0,
-    limit: 3,
-    remaining: 3
+    limit: 8,
+    remaining: 8
   },
   loading: false,
 
@@ -388,8 +392,12 @@ const applications = {
         if (data?.quota) {
           state.quota = {
             verified: data.quota.verified === true,
+            plan: data.quota.plan || data.entitlements?.plan || "base",
+            name: data.quota.name || data.entitlements?.name || "Base",
+            status: data.quota.status || data.entitlements?.status || "active",
+            mau: Number(data.quota.mau ?? data.entitlements?.mau) || 5000,
             count: Number(data.quota.count) || 0,
-            limit: Number(data.quota.limit) || 3,
+            limit: Number(data.quota.limit) || 8,
             remaining: Number(data.quota.remaining) || 0
           };
         }
@@ -1162,25 +1170,23 @@ const playground = {
 
 const activity = {
   async list(applicationId, limit = 50) {
-    if (!applicationId) {
+    if (!applicationId) return [];
+    try {
+      const data = await api.activity.list(applicationId, limit);
+      return Array.isArray(data?.events) ? data.events : [];
+    } catch (error) {
+      handleError(error, "Failed to load activity");
       return [];
     }
+  },
 
+  async sessions(applicationId, limit = 50) {
+    if (!applicationId) return [];
     try {
-      const data = await api.activity.list(
-        applicationId,
-        limit
-      );
-
-      return Array.isArray(data?.events)
-        ? data.events
-        : [];
+      const data = await api.sessions.list(applicationId, { limit, status: "all" });
+      return Array.isArray(data?.sessions) ? data.sessions : [];
     } catch (error) {
-      handleError(
-        error,
-        "Failed to load activity"
-      );
-
+      handleError(error, "Failed to load authentication sessions");
       return [];
     }
   }
@@ -1196,11 +1202,12 @@ const applicationHealth = {
       return null;
     }
 
-    const [redirectResult, credentialResult, scopeResult] =
+    const [redirectResult, credentialResult, scopeResult, discoveryResult] =
       await Promise.allSettled([
         api.redirectUris.list(applicationId),
         api.credentials.list(applicationId),
-        api.scopes.list(applicationId)
+        api.scopes.list(applicationId),
+        api.playground.config()
       ]);
 
     const redirectUris =
@@ -1225,6 +1232,8 @@ const applicationHealth = {
         ? scopeResult.value.scopes
         : [];
 
+    const discovery = discoveryResult.status === "fulfilled" ? discoveryResult.value : null;
+
     const app = applications.find(applicationId);
 
     if (!app) {
@@ -1240,6 +1249,12 @@ const applicationHealth = {
           String(app.status || "active").toLowerCase() === "active"
             ? "Application is active."
             : "Enable the application before accepting sign-ins."
+      },
+      {
+        key: "oidc",
+        label: "Ace ID discovery",
+        ok: Boolean(discovery?.issuer && discovery?.authorization_endpoint && discovery?.token_endpoint),
+        detail: discovery?.issuer ? `Discovery and OAuth endpoints are reachable at ${discovery.issuer}.` : "Ace ID discovery is unavailable right now."
       },
       {
         key: "origin",
