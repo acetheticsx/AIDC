@@ -1418,9 +1418,9 @@ export function registerAIDCComponents(AIDC) {
               "paint-board"
             )}
 
-            ${{this.tab("sessions", "Sessions", "computer-user")}
+            ${this.tab("sessions", "Sessions", "computer-user")}
 
-            ${{this.tab("uptime", "Uptime", "activity-01")}
+            ${this.tab("uptime", "Uptime", "activity-01")}
 
           </nav>
 
@@ -1497,10 +1497,10 @@ export function registerAIDCComponents(AIDC) {
           `;
 
         case "sessions":
-          return html`<aidc-sessions .applicationId=${{app.id}></aidc-sessions>`;
+          return html`<aidc-sessions .applicationId=${app.id}></aidc-sessions>`;
 
         case "uptime":
-          return html`<aidc-uptime .applicationId=${{app.id}></aidc-uptime>`;
+          return html`<aidc-uptime .applicationId=${app.id}></aidc-uptime>`;
 
         case "overview":
         default:
@@ -3853,22 +3853,22 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       <div class="aidc-change-preview-list">
         ${brandingChanges.map(([label, before, after]) => html`
           <div class="aidc-change-preview-row">
-            <span>${label`</span>
+            <span>${label}</span>
             <div>
-              <code>${before`</code>
+              <code>${before}</code>
               <span aria-hidden="true">→</span>
-              <code>${after`</code>
+              <code>${after}</code>
             </div>
           </div>
-        `)
+        `)}
       </div>
     `
   : html`
       <div class="aidc-change-preview-empty">
-        ${icon("checkmark-circle-02")`
+        ${icon("checkmark-circle-02")}
         <span>The saved branding matches this editor.</span>
       </div>
-    `
+    `}
               </section>
             </div>
           </section>
