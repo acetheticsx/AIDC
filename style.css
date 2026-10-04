@@ -8169,3 +8169,67 @@ html::before{
   -webkit-clip-path: none !important;
   border-radius: 12px !important;
 }
+
+
+/* Change preview */
+.aidc-change-preview {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--aidc-border, #d9d9d9);
+  border-radius: 1rem;
+  background: var(--aidc-surface, #fff);
+}
+.aidc-change-preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.aidc-change-preview-head h3 {
+  margin: .25rem 0;
+}
+.aidc-change-preview-head p {
+  margin: 0;
+  color: var(--aidc-muted, #666);
+}
+.aidc-change-preview-list {
+  display: grid;
+  gap: .65rem;
+  margin-top: 1rem;
+}
+.aidc-change-preview-row {
+  display: grid;
+  gap: .5rem;
+  padding: .75rem;
+  border: 1px solid var(--aidc-border, #d9d9d9);
+  border-radius: .8rem;
+}
+.aidc-change-preview-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+}
+.aidc-change-preview-values > div {
+  display: grid;
+  gap: .3rem;
+  min-width: 0;
+}
+.aidc-change-preview-values span {
+  font-size: .75rem;
+  color: var(--aidc-muted, #666);
+}
+.aidc-change-preview-values code {
+  display: block;
+  min-width: 0;
+  overflow: auto;
+  padding: .55rem .65rem;
+  border-radius: .6rem;
+  background: var(--aidc-code-surface, #f5f5f5);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .aidc-change-preview-values {
+    grid-template-columns: 1fr;
+  }
+}
