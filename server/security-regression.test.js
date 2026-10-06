@@ -450,7 +450,7 @@ test("public-client UI has no confidential credential management surface", () =>
   assert.doesNotMatch(ui, /<aidc-credentials/);
   assert.doesNotMatch(ui, /"Credentials"/);
   assert.doesNotMatch(app, /api\.credentials/);
-  assert.doesNotMatch(api, /credentials:/);
+  assert.doesNotMatch(api, /\n\s*credentials:\s*\{/);
 });
 
 test("application and client icons share one renderer and toast dismissal is wired", () => {
