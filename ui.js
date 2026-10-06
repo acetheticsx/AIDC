@@ -1,7 +1,7 @@
 import {
   html,
   LitElement
-} from "https://cdn.jsdelivr.net/npm/lit@3/+esm";
+} from "./vendor/lit.js";
 
 import {
   icon,
