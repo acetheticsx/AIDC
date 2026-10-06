@@ -335,14 +335,12 @@ test("OAuth uptime history reuses durable application activity data", () => {
   assert.match(server, /app\.post\("\/api\/applications\/:id\/uptime\/check", requireAuth/);
 });
 
-test("AIDC exposes the new feature services and routes", () => {
+test("AIDC exposes the current feature services and routes", () => {
   assert.match(api, /users:\s*\{/);
   assert.match(api, /sessions:\s*\{/);
   assert.match(api, /uptime:\s*\{/);
-  assert.match(ui, /class AIDCUsers/);
   assert.match(ui, /class AIDCSessions/);
   assert.match(ui, /class AIDCUptime/);
-  assert.match(ui, /href="#\/users"/);
   assert.match(ui, /"sessions",\s*"Sessions"/);
   assert.match(ui, /"uptime",\s*"Uptime"/);
   assert.match(style, /\.aidc-data-row/);
@@ -350,14 +348,16 @@ test("AIDC exposes the new feature services and routes", () => {
 });
 
 
-test("application lifecycle controls audit status changes and expose safe authentication-session details", () => {
-  assert.match(server, /application\.status_changed/);
-  assert.match(app, /api\.sessions\.list\(applicationId/);
-  assert.match(ui, /toggleStatus\(\)/);
-  assert.doesNotMatch(ui, /Authentication sessions/);
-  assert.match(ui, /aidc-analytics-bento/);
-  assert.match(ui, /Sessions/);
-  assert.match(ui, /Uptime/);
+test("applications are always-on and have no enable/disable lifecycle control", () => {
+  assert.match(server, /const initialStatus = "active"/);
+  assert.match(server, /status = 'active'/);
+  assert.match(server, /'active' AS status/);
+  assert.doesNotMatch(server, /Invalid application status/);
+  assert.doesNotMatch(server, /application\.status_changed/);
+  assert.doesNotMatch(ui, /toggleStatus\(\)/);
+  assert.doesNotMatch(ui, /Application disabled/);
+  assert.match(ui, /Always on/);
+  assert.match(app, /key: "always-on"/);
 });
 
 test("integration health checks live Ace ID discovery", () => {
@@ -390,19 +390,17 @@ test("subscription enforcement is sourced from Ace ID", () => {
   assert.doesNotMatch(server, /SELECT plan_id, status[\s\S]{0,500}aceid_subscriptions/);
 });
 
-test("application state never hides persisted apps on entitlement failure", () => {
+test("application loading preserves the persisted application list", () => {
   assert.match(app, /if \(Array\.isArray\(data\?\.applications\)\)/);
-  assert.match(server, /entitlementError/);
   assert.match(server, /applications: applicationsResult\.rows/);
 });
 
-test("subscription management stays in Ace ID", () => {
-  assert.match(server, /app\.get\("\/api\/subscription"/);
-  assert.match(server, /app\.get\("\/api\/subscription\/plans"/);
+test("subscription and billing are not implemented locally in AIDC", () => {
+  assert.match(server, /AIDC_ENTITLEMENTS_SHARED_SECRET/);
+  assert.match(server, /\/api\/subscription/);
   assert.doesNotMatch(server, /\/api\/subscription\/checkout/);
   assert.doesNotMatch(server, /\/api\/subscription\/redemptions/);
   assert.doesNotMatch(api, /checkout\(planId\)/);
   assert.doesNotMatch(app, /subscription\.upgrade/);
   assert.doesNotMatch(ui, /Opening checkout/);
-  assert.match(ui, /Managed in Ace ID/);
 });

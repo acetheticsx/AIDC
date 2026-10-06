@@ -1394,21 +1394,6 @@ export function registerAIDCComponents(AIDC) {
       );
     }
 
-    async toggleStatus() {
-      const app = this.application;
-      if (!app?.id) return;
-      const nextStatus = app.status === "active" ? "disabled" : "active";
-      const action = nextStatus === "active" ? "enable" : "disable";
-      if (!window.confirm(`Are you sure you want to ${action} this application?`)) return;
-      try {
-        await applications.update(app.id, { status: nextStatus });
-        notify(nextStatus === "active" ? "Application enabled" : "Application disabled");
-        haptic?.(8);
-      } catch {
-        // applications.update() already reports the error.
-      }
-    }
-
     render() {
       const app =
         this.application;
@@ -1497,8 +1482,7 @@ export function registerAIDCComponents(AIDC) {
             </div>
 
             <div class="aidc-detail-actions">
-              <span class="aidc-status ${app.status === "active" ? "aidc-status-active" : "aidc-status-disabled"}"><span class="aidc-status-dot"></span>${app.status === "active" ? "Active" : "Disabled"}</span>
-              <button class="aidc-button aidc-button-secondary" type="button" @click=${this.toggleStatus}>${icon(app.status === "active" ? "pause" : "play")}${app.status === "active" ? "Disable" : "Enable"}</button>
+              <span class="aidc-status aidc-status-active"><span class="aidc-status-dot"></span>Always on</span>
               <button class="aidc-danger-button" @click=${() => modals.openDelete(app)}>${icon("delete-02")}Delete application</button>
             </div>
             </div>

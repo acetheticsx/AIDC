@@ -1946,7 +1946,7 @@ app.get(
           public.applications.client_id,
           COALESCE(aceid.application_type, public.applications.application_type, 'web') AS application_type,
           public.applications.origin_url,
-          public.applications.status,
+          'active' AS status,
           public.applications.created_at,
           public.applications.updated_at,
           branding.logo_url
@@ -2071,12 +2071,9 @@ app.post(
         });
       }
 
-      const initialStatus =
-        application_type === "web" &&
-        originValidation.origin &&
-        new URL(originValidation.origin).protocol === "https:"
-          ? "disabled"
-          : "active";
+      // Applications are always-on. Origin verification is diagnostic/configuration
+      // hygiene, not a lifecycle gate.
+      const initialStatus = "active";
 
       const result = await client.query(
         `
@@ -2158,7 +2155,7 @@ app.get(
           public.applications.client_id,
           COALESCE(aceid.application_type, public.applications.application_type, 'web') AS application_type,
           public.applications.origin_url,
-          public.applications.status,
+          'active' AS status,
           public.applications.created_at,
           public.applications.updated_at,
           branding.logo_url
@@ -2200,8 +2197,7 @@ app.patch(
       name,
       description,
       application_type,
-      origin_url,
-      status
+      origin_url
     } = req.body ?? {};
 
     if (name !== undefined && (typeof name !== "string" || !name.trim())) {
@@ -2254,10 +2250,7 @@ app.patch(
       origin = originValidation.origin;
     }
 
-    if (status !== undefined && !["active", "disabled"].includes(status)) {
-      return res.status(400).json({ error: "Invalid application status" });
-    }
-    let forcedStatus = status;
+    // Application lifecycle is intentionally not client-controlled.
 
     const applicationResult = await pool.query(
       `
@@ -2274,69 +2267,6 @@ app.patch(
     }
 
     const currentApplication = applicationResult.rows[0];
-    const previousStatus = currentApplication.status;
-
-    if (origin_url !== undefined && origin !== null) {
-      const effectiveType =
-        application_type !== undefined
-          ? application_type
-          : currentApplication.application_type;
-      const originProtocol = new URL(origin).protocol;
-
-      if (
-        effectiveType === "web" &&
-        originProtocol === "https:" &&
-        origin !== currentApplication.origin_url
-      ) {
-        const verification = await verifyOriginDns(origin, id);
-
-        if (!verification.verified) {
-          if (status === "active") {
-            return res.status(409).json({
-              error: "Verify the Origin URL domain before enabling this application.",
-              code: "ORIGIN_DOMAIN_UNVERIFIED",
-              verification
-            });
-          }
-
-          if (status === undefined && currentApplication.status === "active") {
-            forcedStatus = "disabled";
-          }
-        }
-      }
-
-      if (
-        application_type === "web" &&
-        originProtocol === "https:" &&
-        status === undefined
-      ) {
-        forcedStatus = "disabled";
-      }
-    }
-
-    if (status === "active") {
-      const targetOrigin =
-        origin_url !== undefined
-          ? origin
-          : currentApplication.origin_url;
-
-      const targetType =
-        application_type !== undefined
-          ? application_type
-          : currentApplication.application_type;
-
-      if (targetType === "web" && targetOrigin) {
-        const verification = await verifyOriginDns(targetOrigin, id);
-
-        if (verification.required && !verification.verified) {
-          return res.status(409).json({
-            error: "Verify the Origin URL domain before enabling this application.",
-            code: "ORIGIN_DOMAIN_UNVERIFIED",
-            verification
-          });
-        }
-      }
-    }
 
 
     if (
@@ -2386,7 +2316,7 @@ app.patch(
           description = CASE WHEN $3::boolean THEN $4 ELSE description END,
           application_type = CASE WHEN $5::boolean THEN $6 ELSE application_type END,
           origin_url = CASE WHEN $7::boolean THEN $8 ELSE origin_url END,
-          status = CASE WHEN $9::boolean THEN $10 ELSE status END,
+          status = 'active',
           updated_at = now()
         WHERE id = $11
           AND owner_id = $12
@@ -2415,8 +2345,6 @@ app.patch(
           application_type ?? null,
           origin_url !== undefined,
           origin,
-          forcedStatus !== undefined,
-          forcedStatus ?? null,
           id,
           req.developer.id
         ]
@@ -2424,21 +2352,6 @@ app.patch(
 
       if (!result.rows.length) {
         return res.status(404).json({ error: "Application not found" });
-      }
-
-      if (status !== undefined && forcedStatus !== undefined && previousStatus !== forcedStatus) {
-        try {
-          await pool.query(
-            `
-            INSERT INTO public.application_activity
-              (application_id, event_type, success, metadata)
-            VALUES ($1, 'application.status_changed', true, $2::jsonb)
-            `,
-            [id, JSON.stringify({ from: previousStatus, to: result.rows[0].status })]
-          );
-        } catch (auditError) {
-          console.error("Application status audit failed:", auditError);
-        }
       }
 
       res.json({ application: result.rows[0] });

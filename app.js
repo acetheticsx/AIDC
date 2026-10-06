@@ -1237,13 +1237,10 @@ const applicationHealth = {
 
     const checks = [
       {
-        key: "status",
-        label: "Application status",
-        ok: String(app.status || "active").toLowerCase() === "active",
-        detail:
-          String(app.status || "active").toLowerCase() === "active"
-            ? "Application is active."
-            : "Enable the application before accepting sign-ins."
+        key: "always-on",
+        label: "Application availability",
+        ok: true,
+        detail: "Applications are always on. Origin verification is handled separately."
       },
       {
         key: "oidc",
