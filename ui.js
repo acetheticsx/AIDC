@@ -4398,15 +4398,6 @@ if (!query) return true;
 
           </section>
 
-          ${state.applicationsError
-            ? html`
-                <div class="aidc-dialog-note">
-                  ${icon("alert-02")}
-                  <span>${text(state.applicationsError)}</span>
-                </div>
-              `
-            : ""}
-
           ${clients.length
             ? html`
                 <section
