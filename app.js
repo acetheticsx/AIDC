@@ -1,4 +1,4 @@
-import { registerAIDCComponents } from "./ui.js?v=20261006-7";
+import { registerAIDCComponents } from "./ui.js?v=20261006-8";
 import { api } from "./api.js?v=20261004-3";
 
 /* ─────────────────────────────────────────────
@@ -8,21 +8,6 @@ import { api } from "./api.js?v=20261004-3";
 const APP_NAME = "AIDC";
 
 const LOGIN_PATH = "/auth/login";
-
-const APPLICATION_TEMPLATES = Object.freeze({
-  web: Object.freeze({
-    name: "Web application",
-    description: "Browser-based application using Ace ID for authentication.",
-    origin_url: "",
-    application_type: "web"
-  }),
-  native: Object.freeze({
-    name: "Native application",
-    description: "Native mobile or desktop application using Ace ID with PKCE.",
-    origin_url: "",
-    application_type: "native"
-  })
-});
 
 const SUPPORTED_SCOPES = Object.freeze([
   "openid",
@@ -428,7 +413,12 @@ const applications = {
           application_type
         });
 
-      const application = data?.application;
+      const application = data?.application
+        ? {
+            ...data.application,
+            verification: data?.verification || null
+          }
+        : null;
 
       if (!application) {
         throw new Error(
@@ -950,94 +940,6 @@ const scopes = {
 };
 
 /* ─────────────────────────────────────────────
-   Credentials
-───────────────────────────────────────────── */
-
-const credentials = {
-  async list(applicationId) {
-    if (!applicationId) {
-      return [];
-    }
-
-    try {
-      const data =
-        await api.credentials.list(applicationId);
-
-      return Array.isArray(data?.credentials)
-        ? data.credentials
-        : [];
-    } catch (error) {
-      handleError(
-        error,
-        "Failed to load credentials"
-      );
-
-      return [];
-    }
-  },
-
-  async rotate(applicationId) {
-    if (!applicationId) {
-      throw new Error(
-        "Application ID is required."
-      );
-    }
-
-    haptic(10);
-
-    try {
-      const data =
-        await api.credentials.rotate(applicationId);
-
-      if (!data?.credential?.secret) {
-        throw new Error(
-          "The server did not return the new client secret."
-        );
-      }
-
-      notify("Client secret rotated");
-
-      return data.credential;
-    } catch (error) {
-      handleError(
-        error,
-        "Failed to rotate credentials"
-      );
-
-      throw error;
-    }
-  },
-
-  async revoke(applicationId, credentialId) {
-    if (!applicationId || !credentialId) {
-      throw new Error(
-        "Credential information is required."
-      );
-    }
-
-    haptic(10);
-
-    try {
-      await api.credentials.revoke(
-        applicationId,
-        credentialId
-      );
-
-      notify("Client secret revoked");
-
-      return true;
-    } catch (error) {
-      handleError(
-        error,
-        "Failed to revoke credentials"
-      );
-
-      throw error;
-    }
-  }
-};
-
-/* ─────────────────────────────────────────────
    Branding
 ───────────────────────────────────────────── */
 
@@ -1075,9 +977,25 @@ const branding = {
         payload
       );
 
+      const updatedBranding = data?.branding || null;
+
+      if (updatedBranding && Array.isArray(state.applications)) {
+        const index = state.applications.findIndex(
+          application => application.id === applicationId
+        );
+
+        if (index !== -1) {
+          state.applications[index] = {
+            ...state.applications[index],
+            logo_url: updatedBranding.logo_url || null
+          };
+          emitState();
+        }
+      }
+
       notify("Branding saved");
 
-      return data?.branding || null;
+      return updatedBranding;
     } catch (error) {
       handleError(
         error,
@@ -1197,10 +1115,9 @@ const applicationHealth = {
       return null;
     }
 
-    const [redirectResult, credentialResult, scopeResult, discoveryResult] =
+    const [redirectResult, scopeResult, discoveryResult] =
       await Promise.allSettled([
         api.redirectUris.list(applicationId),
-        api.credentials.list(applicationId),
         api.scopes.list(applicationId),
         api.playground.config()
       ]);
@@ -1210,16 +1127,6 @@ const applicationHealth = {
       Array.isArray(redirectResult.value?.redirect_uris)
         ? redirectResult.value.redirect_uris
         : [];
-
-    const credentials =
-      credentialResult.status === "fulfilled" &&
-      Array.isArray(credentialResult.value?.credentials)
-        ? credentialResult.value.credentials
-        : [];
-
-    const activeCredentials = credentials.filter(
-      credential => !credential?.revoked_at
-    );
 
     const scopes =
       scopeResult.status === "fulfilled" &&
@@ -1271,17 +1178,10 @@ const applicationHealth = {
             : "Add at least one callback URL for OAuth redirects."
       },
       {
-        key: "credentials",
-        label: "Credentials",
-        ok:
-          app.application_type === "native" ||
-          activeCredentials.length > 0,
-        detail:
-          app.application_type === "native"
-            ? "Not required for public native clients."
-            : activeCredentials.length > 0
-              ? `${activeCredentials.length} active credential${activeCredentials.length === 1 ? "" : "s"} available.`
-              : "Create a client credential before server-side token exchange."
+        key: "public-client",
+        label: "Client security",
+        ok: true,
+        detail: "Public OAuth client. No client secret is required or stored."
       },
       {
         key: "scopes",
@@ -1301,8 +1201,8 @@ const applicationHealth = {
       total: checks.length,
       healthy: passed === checks.length,
       redirectUris,
-      credentials,
-      scopes
+      scopes,
+      publicClient: true
     };
   }
 };
@@ -1642,7 +1542,6 @@ const AIDC = {
 
   scopes,
 
-  credentials,
 
   branding,
 
@@ -1664,7 +1563,6 @@ const AIDC = {
 
   utils: {
     findApplication: applications.find,
-    applicationTemplates: APPLICATION_TEMPLATES,
     contrastTextColor,
     markDirty,
     clearDirty,

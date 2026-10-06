@@ -56,6 +56,22 @@ export function registerAIDCComponents(AIDC) {
       </span>
     `;
   }
+  function applicationLogo(application) {
+    const src = String(application?.logo_url || "").trim();
+
+    return src
+      ? html`
+          <img
+            class="aidc-app-logo"
+            src=${src}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+        `
+      : icon("app-window");
+  }
+
   /* ═══════════════════════════════════════
      BASE
      ═══════════════════════════════════════ */
@@ -504,7 +520,7 @@ export function registerAIDCComponents(AIDC) {
           <div class="aidc-row-main">
 
             <div class="aidc-row-icon">
-              ${app.logo_url ? html`<img class="aidc-app-logo" src=${app.logo_url} alt="" loading="lazy" decoding="async" />` : icon("app-window")}
+              ${applicationLogo(app)}
             </div>
 
             <div class="aidc-row-info">
@@ -1446,7 +1462,7 @@ export function registerAIDCComponents(AIDC) {
             <div class="aidc-detail-heading">
 
               <div class="aidc-app-symbol large">
-                ${app.logo_url ? html`<img class="aidc-app-logo" src=${app.logo_url} alt="" loading="lazy" decoding="async" />` : icon("app-window")}
+                ${applicationLogo(app)}
               </div>
 
               <div>
@@ -1498,12 +1514,6 @@ export function registerAIDCComponents(AIDC) {
               "overview",
               "Overview",
               "information-circle"
-            )}
-
-            ${this.tab(
-              "credentials",
-              "Credentials",
-              "key-01"
             )}
 
             ${this.tab(
@@ -1582,14 +1592,7 @@ export function registerAIDCComponents(AIDC) {
 
     renderSection(section, app) {
       switch (section) {
-        case "credentials":
-          return html`
-            <aidc-credentials
-              .applicationId=${app.id}
-            ></aidc-credentials>
-          `;
-
-        case "url-configs":
+case "url-configs":
         case "redirect-uris":
           return html`
             <aidc-url-configs .application=${app}></aidc-url-configs>
@@ -2052,14 +2055,6 @@ export function registerAIDCComponents(AIDC) {
                 "link-01",
                 "URL Configs",
                 "Configure origin and callback URLs."
-              )}
-
-              ${this.configItem(
-                app.id,
-                "credentials",
-                "key-01",
-                "Credentials",
-                "Manage client credentials."
               )}
 
               ${this.configItem(
@@ -3331,341 +3326,6 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
      CREDENTIALS
      ═══════════════════════════════════════ */
 
-  class AIDCCredentials extends AIDCElement {
-    static properties = {
-      applicationId: {
-        type: String
-      },
-
-      credentials: {
-        state: true
-      },
-
-      loading: {
-        state: true
-      },
-
-      rotating: {
-        state: true
-      },
-
-      secret: {
-        state: true
-      }
-    };
-
-    constructor() {
-      super();
-
-      this.applicationId = null;
-      this.credentials = [];
-      this.loading = false;
-      this.rotating = false;
-      this.secret = "";
-    }
-
-    updated(changed) {
-      /*
-       * Clear the one-time secret on app switch.
-       * Doing this here - and not in load() - means
-       * rotate() -> load() does not wipe the secret
-       * that was just displayed.
-       */
-      if (changed.has("applicationId")) {
-        this.secret = "";
-      }
-
-      if (
-        changed.has("applicationId") &&
-        this.applicationId
-      ) {
-        this.load();
-      }
-    }
-
-    disconnectedCallback() {
-      /*
-       * Clear the secret when the component is removed
-       * from the DOM to prevent memory retention.
-       */
-      this.secret = "";
-      super.disconnectedCallback?.();
-    }
-
-    async load() {
-      const applicationId =
-        this.applicationId;
-
-      if (!applicationId) {
-        return;
-      }
-
-      this.loading = true;
-
-      try {
-        const result =
-          await credentials.list(applicationId);
-
-        if (this.applicationId !== applicationId) {
-          return;
-        }
-
-        this.credentials = result;
-      } finally {
-        if (this.applicationId === applicationId) {
-          this.loading = false;
-        }
-      }
-    }
-
-    async rotate() {
-      if (this.rotating) {
-        return;
-      }
-
-      const confirmed = window.confirm(
-        "Rotate the client secret? The current secret will be revoked."
-      );
-
-      if (!confirmed) {
-        return;
-      }
-
-      this.rotating = true;
-      this.secret = "";
-
-      try {
-        const credential =
-          await credentials.rotate(
-            this.applicationId
-          );
-
-        this.secret = credential.secret;
-        this.requestUpdate();
-
-        await this.load();
-      } finally {
-        this.rotating = false;
-      }
-    }
-
-    async revoke(item) {
-      if (!item?.id) {
-        return;
-      }
-
-      const confirmed = window.confirm(
-        "Revoke this client secret?"
-      );
-
-      if (!confirmed) {
-        return;
-      }
-
-      await credentials.revoke(
-        this.applicationId,
-        item.id
-      );
-
-      await this.load();
-    }
-
-    async copySecret() {
-      if (!this.secret) {
-        return;
-      }
-
-      const copied =
-        await copyToClipboard(this.secret);
-
-      if (copied) {
-        notify("Client secret copied");
-
-        /*
-         * Clear the secret after successful copy as a
-         * convenience to encourage one-time use.
-         */
-        this.secret = "";
-        this.requestUpdate();
-      }
-    }
-
-    render() {
-      return html`
-        <section class="aidc-card">
-
-          <header
-            class="aidc-card-section-header"
-          >
-            <h2>Credentials</h2>
-
-            <p>
-              Manage the credentials used by this
-              OAuth application.
-            </p>
-          </header>
-
-          ${
-            this.secret
-              ? html`
-                  <div class="aidc-dialog-note">
-                    ${icon("alert-02")}
-
-                    <span>
-                      This secret is shown once.
-                      Store it securely before
-                      leaving this page.
-                    </span>
-                  </div>
-
-                  <div class="aidc-detail-field">
-                    <span>New client secret</span>
-
-                    <div class="aidc-copy-field">
-                      <code class="aidc-mono">
-                        ${this.secret}
-                      </code>
-
-                      <button
-                        class="aidc-icon-button"
-                        type="button"
-                        aria-label="Copy client secret"
-                        title="Copy client secret"
-                        @click=${this.copySecret}
-                      >
-                        ${icon("copy-01")}
-                      </button>
-                    </div>
-                  </div>
-                `
-              : ""
-          }
-
-          ${
-            this.loading
-              ? html`
-                  <div class="aidc-loading-card aidc-skeleton-card" aria-busy="true" aria-label="Loading credentials"><div class="aidc-skeleton aidc-skeleton-title"></div><div class="aidc-skeleton aidc-skeleton-row"></div><div class="aidc-skeleton aidc-skeleton-row short"></div><div class="aidc-skeleton aidc-skeleton-row"></div></div>
-                `
-              : html`
-                  <div class="aidc-detail-fields">
-                    ${
-                      this.credentials.length
-                        ? this.credentials.map(
-                            item => html`
-                              <div
-                                class="aidc-detail-field"
-                              >
-                                <span>
-                                  Client secret
-                                </span>
-
-                                <div>
-                                  <code class="aidc-mono">
-                                    ${item.secret_prefix}••••••••
-                                  </code>
-
-                                  ${
-                                    item.revoked_at
-                                      ? html`
-                                          <span
-                                            class="aidc-status aidc-status-disabled"
-                                          >
-                                            <span
-                                              class="aidc-status-dot"
-                                            ></span>
-                                            Revoked
-                                          </span>
-                                        `
-                                      : html`
-                                          <span
-                                            class="aidc-status aidc-status-active"
-                                          >
-                                            <span
-                                              class="aidc-status-dot"
-                                            ></span>
-                                            Active
-                                          </span>
-                                        `
-                                  }
-                                </div>
-
-                                <small>
-                                  Created
-                                  ${formatDate(
-                                    item.created_at
-                                  )}
-                                </small>
-
-                                ${
-                                  !item.revoked_at
-                                    ? html`
-                                        <button
-                                          class="aidc-danger-button"
-                                          type="button"
-                                          @click=${() =>
-                                            this.revoke(
-                                              item
-                                            )}
-                                        >
-                                          ${icon(
-                                            "delete-02"
-                                          )}
-                                          Revoke
-                                        </button>
-                                      `
-                                    : ""
-                                }
-                              </div>
-                            `
-                          )
-                        : emptyState({
-                            iconName: "key-01",
-                            title:
-                              "No credentials",
-                            description:
-                              "Generate a client secret to authenticate this application."
-                          })
-                    }
-                  </div>
-
-                  <div class="aidc-dialog-actions">
-                    <button
-                      class="aidc-button aidc-button-primary ${
-                        this.rotating
-                          ? "is-loading"
-                          : ""
-                      }"
-                      type="button"
-                      ?disabled=${this.loading ||
-                      this.rotating}
-                      @click=${this.rotate}
-                    >
-                      <span class="aidc-button-content">
-                        ${icon("refresh-01")}
-                        ${
-                          this.credentials.length
-                            ? "Rotate secret"
-                            : "Generate secret"
-                        }
-                      </span>
-
-                      <span class="aidc-button-loading">
-                        Rotating…
-                      </span>
-                    </button>
-                  </div>
-                `
-          }
-
-        </section>
-      `;
-    }
-  }
-
-  /* ═══════════════════════════════════════
-     BRANDING
-     ═══════════════════════════════════════ */
-
   class AIDCBranding extends AIDCElement {
     static properties = {
       applicationId: {
@@ -4276,15 +3936,13 @@ if (!query) return true;
           <div class="aidc-client-card-head">
             <div class="aidc-client-card-title">
               <span class="aidc-app-symbol">
-                ${app.logo_url
-                  ? html`<img class="aidc-app-logo" src=${app.logo_url} alt="" loading="lazy" decoding="async" />`
-                  : icon("app-window")}
+                ${applicationLogo(app)}
               </span>
 
               <div>
                 <h2>${text(app.name || "Untitled client")}</h2>
                 <span>
-                  ${type} client · Created ${formatDate(app.created_at)}
+                  Public client · ${type} · Created ${formatDate(app.created_at)}
                 </span>
               </div>
             </div>
@@ -4319,8 +3977,8 @@ if (!query) return true;
             </div>
 
             <div>
-              <span>Credentials</span>
-              <strong>Managed in client settings</strong>
+              <span>Client security</span>
+              <strong>Public client · no client secret</strong>
             </div>
           </div>
 
@@ -4932,12 +4590,8 @@ if (!query) return true;
         state: true
       },
 
-      error: {
-        state: true
-      },
-      template: {
-        state: true
-      }
+      dnsVerification: { state: true },
+      createdApplication: { state: true }
     };
 
     constructor() {
@@ -4947,9 +4601,9 @@ if (!query) return true;
       this.description = "";
       this.originUrl = "";
       this.applicationType = "web";
-      this.template = "blank";
       this.submitting = false;
-      this.error = "";
+      this.dnsVerification = null;
+      this.createdApplication = null;
 
       this._wasOpen = false;
     }
@@ -4966,18 +4620,6 @@ if (!query) return true;
       }
 
       this._wasOpen = open;
-    }
-
-    applyTemplate(key) {
-      const template = AIDC.utils.applicationTemplates?.[key];
-      if (!template) return;
-      this.template = key;
-      this.name = template.name;
-      this.description = template.description;
-      this.originUrl = template.origin_url;
-      this.applicationType = template.application_type;
-      this.error = "";
-      AIDC.utils.markDirty("Unsaved application draft");
     }
 
     handleEscape() {
@@ -5039,33 +4681,26 @@ if (!query) return true;
         this.originUrl.trim();
 
       if (!name) {
-        this.error =
-          "Application name is required.";
-
+        notify("Application name is required.", "error");
         return;
       }
 
       if (name.length > 120) {
-        this.error =
-          "Application name must be 120 characters or fewer.";
-
+        notify("Application name must be 120 characters or fewer.", "error");
         return;
       }
 
       if (description.length > 2000) {
-        this.error =
-          "Description must be 2000 characters or fewer.";
-
+        notify("Description must be 2000 characters or fewer.", "error");
         return;
       }
 
       const originValidation = this.validateOrigin(originUrl);
       if (!originValidation.valid) {
-        this.error = originValidation.error;
+        notify(originValidation.error, "error");
         return;
       }
 
-      this.error = "";
       this.submitting = true;
 
       try {
@@ -5082,24 +4717,19 @@ if (!query) return true;
         this.description = "";
         this.originUrl = "";
         this.applicationType = "web";
-      this.template = "blank";
-      AIDC.utils.clearDirty();
+        this.dnsVerification = application?.verification || null;
+        this.createdApplication = application;
+        AIDC.utils.clearDirty();
 
-        modals.closeCreate();
+        notify(`${application.name} created`);
 
-        notify(
-          `${application.name} created`
-        );
-
-        router.navigate(
-          `/applications/${application.id}`
-        );
+        if (application?.verification?.required) {
+          notify("DNS verification TXT record is ready to copy.");
+        }
 
         haptic?.(10);
       } catch (error) {
-        this.error =
-          error.message ||
-          "Unable to create application.";
+        /* applications.create() already surfaced the API error as a snackbar. */
       } finally {
         this.submitting = false;
       }
@@ -5173,27 +4803,6 @@ if (!query) return true;
               @submit=${this.submit}
             >
               <label class="aidc-field">
-                <span>Start from template</span>
-                <select
-                  .value=${this.template}
-                  @change=${event => {
-                    const key = event.target.value;
-                    if (key === "blank") {
-                      this.template = "blank";
-                      return;
-                    }
-                    this.applyTemplate(key);
-                  }}
-                  ?disabled=${this.submitting}
-                >
-                  <option value="blank">Blank application</option>
-                  <option value="web">Web application</option>
-                  <option value="native">Native application</option>
-                </select>
-              </label>
-
-
-              <label class="aidc-field">
 
                 <span>
                   Application name
@@ -5211,7 +4820,6 @@ if (!query) return true;
                     this.name =
                       event.target.value;
 
-                    this.error = "";
                     AIDC.utils.markDirty("Unsaved application draft");
                   }}
                   ?disabled=${this.submitting}
@@ -5245,7 +4853,6 @@ if (!query) return true;
                   .value=${this.applicationType}
                   @change=${event => {
                     this.applicationType = event.target.value;
-                    this.error = "";
                   }}
                   ?disabled=${this.submitting}
                 >
@@ -5276,7 +4883,6 @@ if (!query) return true;
                       event.target.value;
                     AIDC.utils.markDirty("Unsaved application draft");
 
-                    this.error = "";
                   }}
                   ?disabled=${this.submitting}
                 />
@@ -5302,57 +4908,37 @@ if (!query) return true;
               </label>
 
               ${
-                this.error
+                this.dnsVerification?.required
                   ? html`
-                      <div
-                        class="aidc-dialog-note"
-                      >
-                        ${icon("alert-02")}
-
-                        <span>
-                          ${this.error}
-                        </span>
-                      </div>
+                      <section class="aidc-dialog-note" aria-labelledby="aidc-dns-verification-title">
+                        ${icon("globe-02")}
+                        <div>
+                          <strong id="aidc-dns-verification-title">DNS verification</strong>
+                          <p>Add this TXT record to verify <code class="aidc-mono">${text(this.dnsVerification.hostname)}</code>.</p>
+                          <div class="aidc-detail-fields">
+                            <div class="aidc-detail-field"><span>Record name</span><div class="aidc-copy-field"><code class="aidc-mono">${text(this.dnsVerification.record_name)}</code><button class="aidc-icon-button" type="button" aria-label="Copy DNS record name" title="Copy DNS record name" @click=${async () => { if (await copyToClipboard(this.dnsVerification.record_name)) notify("DNS record name copied"); else notify("Unable to copy DNS record name.", "error"); }}>${icon("copy-01")}</button></div></div>
+                            <div class="aidc-detail-field"><span>TXT value</span><div class="aidc-copy-field"><code class="aidc-mono">${text(this.dnsVerification.record_value)}</code><button class="aidc-icon-button" type="button" aria-label="Copy DNS TXT value" title="Copy DNS TXT value" @click=${async () => { if (await copyToClipboard(this.dnsVerification.record_value)) notify("DNS TXT value copied"); else notify("Unable to copy DNS TXT value.", "error"); }}>${icon("copy-01")}</button></div></div>
+                          </div>
+                          <small>DNS verification is diagnostic and does not control application availability.</small>
+                        </div>
+                      </section>
                     `
                   : ""
               }
+
+              ${this.createdApplication ? html`<div class="aidc-dialog-note">${icon("checkmark-circle-02")}<span>Application created. Close this dialog to open its configuration.</span></div>` : ""}
 
               <div
                 class="aidc-dialog-actions"
               >
 
-                <button
-                  type="button"
-                  class="aidc-button aidc-button-secondary"
-                  ?disabled=${this.submitting}
-                  @click=${modals.closeCreate}
-                >
-                  Cancel
+                <button type="button" class="aidc-button aidc-button-secondary" ?disabled=${this.submitting} @click=${() => { modals.closeCreate(); if (this.createdApplication?.id) router.navigate(`/applications/${this.createdApplication.id}`); }}>
+                  ${this.createdApplication ? "Open application" : "Cancel"}
                 </button>
 
-                <button
-                  type="submit"
-                  class="aidc-button aidc-button-primary ${
-                    this.submitting
-                      ? "is-loading"
-                      : ""
-                  }"
-                  ?disabled=${this.submitting}
-                >
-
-                  <span
-                    class="aidc-button-content"
-                  >
-                    ${icon("plus-sign")}
-                    Create application
-                  </span>
-
-                  <span
-                    class="aidc-button-loading"
-                  >
-                    Creating…
-                  </span>
-
+                <button type="submit" class="aidc-button aidc-button-primary ${this.submitting ? "is-loading" : ""}" ?disabled=${this.submitting || Boolean(this.createdApplication)}>
+                  <span class="aidc-button-content">${icon("plus-sign")}Create application</span>
+                  <span class="aidc-button-loading">Creating…</span>
                 </button>
 
               </div>
@@ -6385,11 +5971,6 @@ if (!query) return true;
   customElements.define(
     "aidc-scopes",
     AIDCScopes
-  );
-
-  customElements.define(
-    "aidc-credentials",
-    AIDCCredentials
   );
 
   customElements.define(
