@@ -4577,9 +4577,6 @@ if (!query) return true;
         state: true
       },
 
-      error: {
-        state: true
-      },
       createdApplication: {
         state: true
       },
@@ -4598,7 +4595,6 @@ if (!query) return true;
       this.createdApplication = null;
       this.dnsVerification = null;
       this.submitting = false;
-      this.error = "";
 
       this._wasOpen = false;
     }
@@ -4729,8 +4725,8 @@ if (!query) return true;
 
         notify(`${application.name} created`);
         haptic?.(10);
-      } catch (error) {
-        notify(error?.message || "Unable to create application.", "error");
+      } catch {
+        // applications.create() already routes API failures through the snackbar handler.
       } finally {
         this.submitting = false;
       }
