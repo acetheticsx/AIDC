@@ -9,21 +9,6 @@ const APP_NAME = "AIDC";
 
 const LOGIN_PATH = "/auth/login";
 
-const APPLICATION_TEMPLATES = Object.freeze({
-  web: Object.freeze({
-    name: "Web application",
-    description: "Browser-based application using Ace ID for authentication.",
-    origin_url: "",
-    application_type: "web"
-  }),
-  native: Object.freeze({
-    name: "Native application",
-    description: "Native mobile or desktop application using Ace ID with PKCE.",
-    origin_url: "",
-    application_type: "native"
-  })
-});
-
 const SUPPORTED_SCOPES = Object.freeze([
   "openid",
   "profile",
@@ -1664,7 +1649,6 @@ const AIDC = {
 
   utils: {
     findApplication: applications.find,
-    applicationTemplates: APPLICATION_TEMPLATES,
     contrastTextColor,
     markDirty,
     clearDirty,

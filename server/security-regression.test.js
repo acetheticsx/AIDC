@@ -322,7 +322,6 @@ test("frontend public bridge defines all boot-critical helpers and templates", (
   assert.match(app, /function contrastTextColor\(/);
   assert.match(app, /function markDirty\(/);
   assert.match(app, /function clearDirty\(/);
-  assert.match(app, /applicationTemplates: APPLICATION_TEMPLATES/);
   assert.match(app, /contrastTextColor,/);
   assert.match(app, /markDirty,/);
   assert.match(app, /clearDirty,/);
