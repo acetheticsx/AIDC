@@ -111,6 +111,7 @@ test("applications are public OAuth clients without credential management", () =
   assert.match(server, /status\(410\)/);
   assert.doesNotMatch(ui, /<aidc-credentials/);
   assert.doesNotMatch(ui, /"Credentials"/);
+  assert.doesNotMatch(ui, /client credentials/);
   assert.doesNotMatch(api, /credentials:\s*\{/);
 });
 

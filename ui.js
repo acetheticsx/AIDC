@@ -23,7 +23,6 @@ export function registerAIDCComponents(AIDC) {
     applications,
     redirectUris,
     scopes,
-    credentials,
     branding,
     activity,
     applicationHealth,
@@ -1810,7 +1809,6 @@ case "url-configs":
       const sectionByKey = {
         origin: "url-configs",
         redirects: "redirect-uris",
-        credentials: "credentials",
         scopes: "scopes",
         status: "overview",
         oidc: "playground"
@@ -5440,7 +5438,7 @@ if (!query) return true;
 
               <p class="aidc-landing-copy">
                 Manage Ace ID applications, OAuth configuration,
-                credentials, redirect URIs, scopes, and developer settings
+                redirect URIs, scopes, branding, and developer settings
                 from one focused console.
               </p>
 
@@ -5502,7 +5500,7 @@ if (!query) return true;
                   <span>${icon("shield-01")}</span>
                   <div>
                     <strong>OAuth / OIDC</strong>
-                    <p>Configure scopes, redirects, and credentials.</p>
+                    <p>Configure scopes, redirects, PKCE, and public clients.</p>
                   </div>
                 </article>
 
@@ -5530,12 +5528,12 @@ if (!query) return true;
 
                   <details>
                     <summary>What can AIDC manage?</summary>
-                    <p>AIDC manages application settings, redirect URIs, OAuth scopes, client credentials, branding, authentication activity, and analytics.</p>
+                    <p>AIDC manages application settings, redirect URIs, OAuth scopes, public clients, branding, authentication activity, and analytics.</p>
                   </details>
 
                   <details>
                     <summary>Does AIDC support OAuth 2.0 and OpenID Connect?</summary>
-                    <p>Yes. AIDC provides configuration for OAuth 2.0 and OpenID Connect applications, including PKCE, redirect URIs, scopes, and client credentials.</p>
+                    <p>Yes. AIDC provides configuration for OAuth 2.0 and OpenID Connect applications, including PKCE, redirect URIs, scopes, and public clients.</p>
                   </details>
 
                   <details>
@@ -5868,7 +5866,7 @@ if (!query) return true;
                         <p>AIDC is the identity workspace for creating and managing applications connected to Ace ID.</p>
                         <div class="aidc-about-list">
                           <div><span>Applications</span><strong>OAuth and OpenID Connect</strong></div>
-                          <div><span>Configuration</span><strong>Redirect URIs, scopes, credentials</strong></div>
+                          <div><span>Configuration</span><strong>Redirect URIs, scopes, public clients</strong></div>
                           <div><span>Insights</span><strong>Authentication activity and analytics</strong></div>
                         </div>
                       </div>
