@@ -341,8 +341,8 @@ test("AIDC exposes the new feature services and routes", () => {
   assert.match(ui, /class AIDCSessions/);
   assert.match(ui, /class AIDCUptime/);
   assert.match(ui, /href="#\/users"/);
-  assert.match(ui, /"sessions", "Sessions"/);
-  assert.match(ui, /"uptime", "Uptime"/);
+  assert.match(ui, /"sessions",\s*"Sessions"/);
+  assert.match(ui, /"uptime",\s*"Uptime"/);
   assert.match(style, /\.aidc-data-row/);
   assert.match(style, /\.aidc-uptime-history/);
 });
