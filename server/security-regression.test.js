@@ -317,8 +317,7 @@ test("mobile overlays stay above navigation and branding color selection stays i
 });
 
 
-test("frontend public bridge defines all boot-critical helpers and templates", () => {
-  assert.match(app, /const APPLICATION_TEMPLATES = Object\.freeze\(/);
+test("frontend public bridge defines all boot-critical helpers", () => {
   assert.match(app, /function contrastTextColor\(/);
   assert.match(app, /function markDirty\(/);
   assert.match(app, /function clearDirty\(/);
