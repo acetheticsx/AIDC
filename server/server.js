@@ -3678,6 +3678,17 @@ const AIDC_PLAN_LIMITS = Object.freeze({
   apex: Object.freeze({ name: "Apex", applications: 25, mau: 50000 })
 });
 
+function resolveEntitlementLimit(payload, key, fallback) {
+  const direct = Number(payload?.[key]);
+  const nested = Number(payload?.limits?.[key]);
+  const value = Number.isFinite(direct) && direct >= 0
+    ? direct
+    : Number.isFinite(nested) && nested >= 0
+      ? nested
+      : fallback;
+  return Math.floor(value);
+}
+
 async function getAceIdEntitlements(developerId) {
   const userId = String(developerId || "").trim();
   if (!userId) throw new Error("entitlement_user_required");
@@ -3703,11 +3714,15 @@ async function getAceIdEntitlements(developerId) {
 
     return {
       ...limits,
+      applications: resolveEntitlementLimit(payload, "applications", limits.applications),
+      mau: resolveEntitlementLimit(payload, "mau", limits.mau),
       plan,
       name: String(payload?.name || limits.name),
       status: String(payload?.status || "active"),
-      mau: Number(payload?.mau) || limits.mau,
-      features: payload?.features || {},
+      features:
+        payload?.features && typeof payload.features === "object"
+          ? payload.features
+          : {},
       offers: Array.isArray(payload?.offers) ? payload.offers : [],
       accessories: Array.isArray(payload?.accessories) ? payload.accessories : [],
       subscription: payload?.subscription || null,
@@ -4621,6 +4636,21 @@ app.get(
 app.get(
   "/boot-fallback.css",
   sendFrontendFile("boot-fallback.css")
+);
+
+app.use(
+  "/vendor",
+  express.static(
+    path.join(PROJECT_ROOT, "vendor"),
+    {
+      fallthrough: false,
+      dotfiles: "deny",
+      index: false,
+      setHeaders(res) {
+        res.set("Cache-Control", NO_STORE);
+      }
+    }
+  )
 );
 
 app.use(

@@ -365,6 +365,20 @@ test("integration health checks live Ace ID discovery", () => {
 });
 
 
+
+
+test("frontend serves the bundled Lit vendor dependency", () => {
+  assert.match(server, /app\.use\(\s*["']\/vendor["']/);
+  assert.match(server, /path\.join\(PROJECT_ROOT, ["']vendor["']\)/);
+  assert.match(ui, /from ["']\.\/vendor\/lit\.js/);
+});
+
+test("entitlement limits prefer Ace ID values over local plan defaults", () => {
+  assert.match(server, /resolveEntitlementLimit\(payload, "applications", limits\.applications\)/);
+  assert.match(server, /resolveEntitlementLimit\(payload, "mau", limits\.mau\)/);
+  assert.match(server, /X-Ace-ID-Entitlements-Secret/);
+});
+
 test("subscription enforcement is sourced from Ace ID", () => {
   assert.match(server, /AIDC_ENTITLEMENTS_SHARED_SECRET/);
   assert.match(server, /\/api\/subscription/);
