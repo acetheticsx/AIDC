@@ -254,11 +254,12 @@ test("AIDC loading UI keeps skeleton animation and domain records", () => {
   assert.match(ui, /Domain Records/);
 });
 
-test("origin verification uses a scoped TXT challenge", () => {
+test("origin verification uses a scoped TXT challenge without controlling lifecycle", () => {
   assert.match(server, /_aceid-challenge/);
   assert.match(server, /resolveTxt/);
   assert.match(server, /token=/);
-  assert.match(server, /ORIGIN_DOMAIN_UNVERIFIED/);
+  assert.match(server, /verifyOriginDns/);
+  assert.doesNotMatch(server, /ORIGIN_DOMAIN_UNVERIFIED/);
 });
 
 test("Origin URL save binds the application update parameters correctly", () => {
@@ -269,14 +270,13 @@ test("Origin URL save binds the application update parameters correctly", () => 
   assert.match(style, /aidc-record-sheet-layer/);
 });
 
-test("DNS records sheet manages keyboard focus and changed active origins are verified", () => {
+test("DNS records sheet remains usable while applications stay always-on", () => {
   assert.match(ui, /this\._recordsTrigger/);
   assert.match(ui, /handleRecordsKeydown/);
   assert.match(ui, /event\.key === "Escape"/);
   assert.match(ui, /event\.key !== "Tab"/);
-  assert.match(server, /effectiveType/);
-  assert.match(server, /currentApplication\.status === "active"/);
-  assert.match(server, /forcedStatus = "disabled"/);
+  assert.match(server, /verifyOriginDns/);
+  assert.doesNotMatch(server, /forcedStatus = "disabled"/);
 });
 
 test("mobile overlays stay above navigation and branding color selection stays in-app", () => {
