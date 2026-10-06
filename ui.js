@@ -5000,6 +5000,10 @@ if (!query) return true;
           return { valid: false, error: "Origin URL must use HTTP or HTTPS." };
         }
 
+        if (parsed.username || parsed.password) {
+          return { valid: false, error: "Origin URL cannot contain credentials." };
+        }
+
         if (parsed.protocol === "http:" && !localhost) {
           return { valid: false, error: "HTTP Origin URLs are only allowed for localhost." };
         }
@@ -5069,7 +5073,8 @@ if (!query) return true;
           await applications.create({
             name,
             description,
-            origin_url: originUrl || undefined,
+            origin_url:
+              originValidation.value || undefined,
             application_type: this.applicationType
           });
 
