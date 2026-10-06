@@ -5187,6 +5187,7 @@ if (!query) return true;
                     : this.verification
                       ? html`<section class="aidc-dialog-note">${icon("information-circle")}<span>${text(this.verification.reason || "DNS verification is not required for this Origin.")}</span></section>`
                       : ""
+                  }
                   <div class="aidc-dialog-actions">
                     <button type="button" class="aidc-button aidc-button-secondary" @click=${modals.closeCreate}>Close</button>
                     <button type="button" class="aidc-button aidc-button-primary" @click=${() => router.navigate("/applications/" + this.createdApplication.id)}>${icon("settings-01")} Open application</button>
