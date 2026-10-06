@@ -1587,6 +1587,18 @@ export function registerAIDCComponents(AIDC) {
               "paint-board"
             )}
 
+            ${this.tab(
+              "sessions",
+              "Sessions",
+              "user-group"
+            )}
+
+            ${this.tab(
+              "uptime",
+              "Uptime",
+              "activity-01"
+            )}
+
           </nav>
 
           <div class="aidc-detail-content">
@@ -1662,9 +1674,18 @@ export function registerAIDCComponents(AIDC) {
           `;
 
         case "sessions":
+          return html`
+            <aidc-sessions
+              .applicationId=${app.id}
+            ></aidc-sessions>
+          `;
+
         case "uptime":
-          router.navigate("/analytics");
-          return html`<aidc-analytics></aidc-analytics>`;
+          return html`
+            <aidc-uptime
+              .applicationId=${app.id}
+            ></aidc-uptime>
+          `;
 
         case "overview":
         default:
