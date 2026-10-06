@@ -209,13 +209,13 @@ test("frontend uses the first-party boot fallback", () => {
 });
 
 
-test("application health checks reuse authenticated configuration endpoints", () => {
+test("application health checks public-client configuration without secrets", () => {
   assert.match(app, /const applicationHealth = \{/);
   assert.match(app, /api\.redirectUris\.list\(applicationId\)/);
-  assert.match(app, /api\.credentials\.list\(applicationId\)/);
+  assert.doesNotMatch(app, /api\.credentials/);
   assert.match(app, /api\.scopes\.list\(applicationId\)/);
   assert.match(app, /Promise\.allSettled/);
-  assert.match(app, /activeCredentials/);
+  assert.doesNotMatch(app, /activeCredentials/);
 });
 
 test("redirect URI diagnostics reuse the same validation rules", () => {
@@ -432,4 +432,44 @@ test("subscription and billing are not implemented locally in AIDC", () => {
   assert.doesNotMatch(api, /checkout\(planId\)/);
   assert.doesNotMatch(app, /subscription\.upgrade/);
   assert.doesNotMatch(ui, /Opening checkout/);
+});
+
+
+test("public-client create flow has no template picker and reports errors via snackbars", () => {
+  assert.match(ui, /Register a public OAuth\/OIDC client/);
+  assert.doesNotMatch(ui, /Start from template/);
+  assert.doesNotMatch(ui, /applyTemplate/);
+  assert.match(ui, /notify\("Application name is required\.", "error"\)/);
+  assert.match(ui, /createdApplication/);
+  assert.match(ui, /dnsVerification/);
+  assert.match(ui, /record_value/);
+});
+
+test("public-client UI has no confidential credential management surface", () => {
+  assert.doesNotMatch(ui, /class AIDCCredentials/);
+  assert.doesNotMatch(ui, /<aidc-credentials/);
+  assert.doesNotMatch(ui, /"Credentials"/);
+  assert.doesNotMatch(app, /api\.credentials/);
+  assert.doesNotMatch(api, /credentials:/);
+});
+
+test("application and client icons share one renderer and toast dismissal is wired", () => {
+  assert.match(ui, /function applicationIcon\(app, sizeClass = ""\)/);
+  assert.match(ui, /\$\{applicationIcon\(app\)\}/);
+  assert.match(ui, /@click=\$\{\(\) => this\.close\(notice\.id\)\}/);
+  assert.doesNotMatch(ui, /\$click=/);
+});
+
+test("server enforces public OAuth clients and does not expose secret rotation", () => {
+  assert.match(server, /token_endpoint_auth_method = 'none'/);
+  assert.match(server, /client_secret = NULL/);
+  assert.doesNotMatch(server, /generateClientSecret/);
+  assert.doesNotMatch(server, /\/api\/applications\/:id\/credentials/);
+});
+
+test("application patch does not reference an undeclared status field", () => {
+  const patchStart = server.indexOf('app.patch(\n  "/api/applications/:id"');
+  const patchEnd = server.indexOf('app.get(\n  "/api/applications/:id/origin-verification"', patchStart);
+  const patch = server.slice(patchStart, patchEnd);
+  assert.doesNotMatch(patch, /status === undefined/);
 });
