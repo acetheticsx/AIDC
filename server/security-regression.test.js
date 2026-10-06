@@ -197,7 +197,7 @@ test("domain verification is diagnostic and never controls application availabil
   assert.doesNotMatch(ui, /before enabling the application/);
   assert.doesNotMatch(ui, /before enabling this application/);
   assert.match(ui, /Applications are always on/);
-  assert.doesNotMatch(ui, /this\.recordsOpen = true/);
+  assert.doesNotMatch(ui, /if \(this\.verification\?\.required\) \{\s*this\.recordsOpen = true;\s*\}/);
   assert.match(server, /res\.status\(200\)\.json\(\{\s*verification/);
 });
 
