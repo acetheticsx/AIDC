@@ -186,11 +186,13 @@ test("frontend source hardens the reported total redeclaration", () => {
   assert.doesNotMatch(ui, /const total = health\?\.total/);
 });
 
-test("application creation validates origin inputs before submission", () => {
+test("application creation validates and normalizes origin inputs before submission", () => {
   assert.match(ui, /class AIDCCreateDialog/);
   assert.match(ui, /validateOrigin\(value\)/);
+  assert.match(ui, /parsed\.username \|\| parsed\.password/);
   assert.match(ui, /description\.length > 2000/);
   assert.match(ui, /Use the origin only, without a path or query string/);
+  assert.match(ui, /originValidation\.value \|\| undefined/);
 });
 
 test("domain verification is diagnostic and never controls application availability", () => {
