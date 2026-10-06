@@ -1641,8 +1641,6 @@ const AIDC = {
   auth,
 
   applications,
-  subscription,
-
   redirectUris,
 
   scopes,
