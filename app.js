@@ -950,94 +950,6 @@ const scopes = {
 };
 
 /* ─────────────────────────────────────────────
-   Credentials
-───────────────────────────────────────────── */
-
-const credentials = {
-  async list(applicationId) {
-    if (!applicationId) {
-      return [];
-    }
-
-    try {
-      const data =
-        await api.credentials.list(applicationId);
-
-      return Array.isArray(data?.credentials)
-        ? data.credentials
-        : [];
-    } catch (error) {
-      handleError(
-        error,
-        "Failed to load credentials"
-      );
-
-      return [];
-    }
-  },
-
-  async rotate(applicationId) {
-    if (!applicationId) {
-      throw new Error(
-        "Application ID is required."
-      );
-    }
-
-    haptic(10);
-
-    try {
-      const data =
-        await api.credentials.rotate(applicationId);
-
-      if (!data?.credential?.secret) {
-        throw new Error(
-          "The server did not return the new client secret."
-        );
-      }
-
-      notify("Client secret rotated");
-
-      return data.credential;
-    } catch (error) {
-      handleError(
-        error,
-        "Failed to rotate credentials"
-      );
-
-      throw error;
-    }
-  },
-
-  async revoke(applicationId, credentialId) {
-    if (!applicationId || !credentialId) {
-      throw new Error(
-        "Credential information is required."
-      );
-    }
-
-    haptic(10);
-
-    try {
-      await api.credentials.revoke(
-        applicationId,
-        credentialId
-      );
-
-      notify("Client secret revoked");
-
-      return true;
-    } catch (error) {
-      handleError(
-        error,
-        "Failed to revoke credentials"
-      );
-
-      throw error;
-    }
-  }
-};
-
-/* ─────────────────────────────────────────────
    Branding
 ───────────────────────────────────────────── */
 
@@ -1197,10 +1109,9 @@ const applicationHealth = {
       return null;
     }
 
-    const [redirectResult, credentialResult, scopeResult, discoveryResult] =
+    const [redirectResult, scopeResult, discoveryResult] =
       await Promise.allSettled([
         api.redirectUris.list(applicationId),
-        api.credentials.list(applicationId),
         api.scopes.list(applicationId),
         api.playground.config()
       ]);
@@ -1210,16 +1121,6 @@ const applicationHealth = {
       Array.isArray(redirectResult.value?.redirect_uris)
         ? redirectResult.value.redirect_uris
         : [];
-
-    const credentials =
-      credentialResult.status === "fulfilled" &&
-      Array.isArray(credentialResult.value?.credentials)
-        ? credentialResult.value.credentials
-        : [];
-
-    const activeCredentials = credentials.filter(
-      credential => !credential?.revoked_at
-    );
 
     const scopes =
       scopeResult.status === "fulfilled" &&
@@ -1269,19 +1170,6 @@ const applicationHealth = {
           redirectUris.length > 0
             ? `${redirectUris.length} redirect URI${redirectUris.length === 1 ? "" : "s"} configured.`
             : "Add at least one callback URL for OAuth redirects."
-      },
-      {
-        key: "credentials",
-        label: "Credentials",
-        ok:
-          app.application_type === "native" ||
-          activeCredentials.length > 0,
-        detail:
-          app.application_type === "native"
-            ? "Not required for public native clients."
-            : activeCredentials.length > 0
-              ? `${activeCredentials.length} active credential${activeCredentials.length === 1 ? "" : "s"} available.`
-              : "Create a client credential before server-side token exchange."
       },
       {
         key: "scopes",

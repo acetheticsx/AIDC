@@ -236,26 +236,6 @@ export const api = {
     }
   },
 
-  credentials: {
-    list(applicationId) {
-      return request(`/applications/${id(applicationId)}/credentials`);
-    },
-
-    rotate(applicationId) {
-      return request(
-        `/applications/${id(applicationId)}/credentials/rotate`,
-        { method: "POST" }
-      );
-    },
-
-    revoke(applicationId, credentialId) {
-      return request(
-        `/applications/${id(applicationId)}/credentials/${id(credentialId)}`,
-        { method: "DELETE" }
-      );
-    }
-  },
-
   branding: {
     get(applicationId) {
       return request(`/applications/${id(applicationId)}/branding`);
