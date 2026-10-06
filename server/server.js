@@ -368,23 +368,6 @@ function generateClientId() {
   return `aidc_${crypto.randomBytes(24).toString("hex")}`;
 }
 
-function generateClientSecret() {
-  return `aidcs_${crypto
-    .randomBytes(32)
-    .toString("base64url")}`;
-}
-
-function hashSecret(secret) {
-  return crypto
-    .createHash("sha256")
-    .update(secret)
-    .digest("hex");
-}
-
-function secretPrefix(secret) {
-  return secret.slice(0, 18);
-}
-
 function randomToken(bytes = 32) {
   return crypto
     .randomBytes(bytes)
@@ -2074,6 +2057,7 @@ app.post(
       // Applications are always-on. Origin verification is diagnostic/configuration
       // hygiene, not a lifecycle gate.
       const initialStatus = "active";
+      const clientId = generateClientId();
 
       const result = await client.query(
         `
@@ -2095,12 +2079,23 @@ app.post(
         [
           name.trim(),
           description.trim(),
-          generateClientId(),
+          clientId,
           application_type,
           originValidation.origin,
           initialStatus,
           req.developer.id
         ]
+      );
+
+      await client.query(
+        `
+        UPDATE public.aceid_clients
+        SET
+          token_endpoint_auth_method = 'none',
+          client_secret = NULL
+        WHERE client_id = $1
+        `,
+        [clientId]
       );
 
       await client.query("COMMIT");
@@ -2173,6 +2168,17 @@ app.get(
       if (!result.rows.length) {
         return res.status(404).json({ error: "Application not found" });
       }
+
+      await pool.query(
+        `
+        UPDATE public.aceid_clients
+        SET
+          token_endpoint_auth_method = 'none',
+          client_secret = NULL
+        WHERE client_id = $1
+        `,
+        [result.rows[0].client_id]
+      );
 
       res.json({ application: result.rows[0] });
     } catch (error) {
@@ -2273,8 +2279,7 @@ app.patch(
       name === undefined &&
       description === undefined &&
       application_type === undefined &&
-      origin_url === undefined &&
-      status === undefined
+      origin_url === undefined
     ) {
       return res.status(400).json({ error: "No fields to update" });
     }
@@ -3008,267 +3013,6 @@ app.put(
 
       res.status(500).json({
         error: "Failed to update scopes"
-      });
-    } finally {
-      client.release();
-    }
-  }
-);
-
-/*
- * ═══════════════════════════════════════════
- * Credentials
- * ═══════════════════════════════════════════
- */
-
-app.get(
-  "/api/applications/:id/credentials",
-  requireAuth,
-  async (req, res) => {
-    const { id } = req.params;
-
-    if (!isValidUuid(id)) {
-      return res.status(400).json({
-        error: "Invalid application ID"
-      });
-    }
-
-    try {
-      const application = await pool.query(
-        `
-        SELECT id
-        FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
-        `,
-        [id, req.developer.id]
-      );
-
-      if (application.rows.length === 0) {
-        return res.status(404).json({
-          error: "Application not found"
-        });
-      }
-
-      const result = await pool.query(
-        `
-        SELECT
-          id,
-          application_id,
-          secret_prefix,
-          created_at,
-          last_used_at,
-          revoked_at
-        FROM public.application_credentials
-        WHERE application_id = $1
-        ORDER BY created_at DESC
-        `,
-        [id]
-      );
-
-      res.json({
-        credentials: result.rows
-      });
-    } catch (error) {
-      console.error("GET credentials:", error);
-
-      res.status(500).json({
-        error: "Failed to fetch credentials"
-      });
-    }
-  }
-);
-
-app.post(
-  "/api/applications/:id/credentials/rotate",
-  requireAuth,
-  async (req, res) => {
-    const { id } = req.params;
-
-    if (!isValidUuid(id)) {
-      return res.status(400).json({
-        error: "Invalid application ID"
-      });
-    }
-
-    const client = await pool.connect();
-
-    try {
-      await client.query("BEGIN");
-
-      const application = await client.query(
-        `
-        SELECT id
-        FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
-        `,
-        [id, req.developer.id]
-      );
-
-      if (!application.rows.length) {
-        await client.query("ROLLBACK");
-
-        return res.status(404).json({
-          error: "Application not found"
-        });
-      }
-
-      await client.query(
-        `
-        UPDATE public.application_credentials
-        SET revoked_at = now()
-        WHERE application_id = $1
-          AND revoked_at IS NULL
-        `,
-        [id]
-      );
-
-      const secret = generateClientSecret();
-
-      const result = await client.query(
-        `
-        INSERT INTO public.application_credentials
-          (application_id, secret_hash, secret_prefix)
-        VALUES
-          ($1, $2, $3)
-        RETURNING
-          id,
-          application_id,
-          secret_prefix,
-          created_at,
-          last_used_at,
-          revoked_at
-        `,
-        [
-          id,
-          hashSecret(secret),
-          secretPrefix(secret)
-        ]
-      );
-
-      await client.query(
-        `
-        INSERT INTO public.application_activity
-          (application_id, event_type, success, metadata)
-        VALUES
-          ($1, 'credential.rotated', true, '{}'::jsonb)
-        `,
-        [id]
-      );
-
-      await client.query("COMMIT");
-
-      res.status(201).json({
-        credential: {
-          ...result.rows[0],
-          secret
-        }
-      });
-    } catch (error) {
-      await client.query("ROLLBACK");
-
-      console.error(
-        "POST credential rotation:",
-        error
-      );
-
-      res.status(500).json({
-        error: "Failed to rotate credentials"
-      });
-    } finally {
-      client.release();
-    }
-  }
-);
-
-app.delete(
-  "/api/applications/:id/credentials/:credentialId",
-  requireAuth,
-  async (req, res) => {
-    const { id, credentialId } = req.params;
-
-    if (!isValidUuid(id)) {
-      return res.status(400).json({
-        error: "Invalid application ID"
-      });
-    }
-
-    if (!isValidUuid(credentialId)) {
-      return res.status(400).json({
-        error: "Invalid credential ID"
-      });
-    }
-
-    const client = await pool.connect();
-
-    try {
-      await client.query("BEGIN");
-
-      const application = await client.query(
-        `
-        SELECT id
-        FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
-        `,
-        [id, req.developer.id]
-      );
-
-      if (!application.rows.length) {
-        await client.query("ROLLBACK");
-
-        return res.status(404).json({
-          error: "Application not found"
-        });
-      }
-
-      const result = await client.query(
-        `
-        UPDATE public.application_credentials
-        SET revoked_at = now()
-        WHERE id = $1
-          AND application_id = $2
-          AND revoked_at IS NULL
-        RETURNING
-          id,
-          application_id,
-          revoked_at
-        `,
-        [credentialId, id]
-      );
-
-      if (!result.rows.length) {
-        await client.query("ROLLBACK");
-
-        return res.status(404).json({
-          error: "Active credential not found"
-        });
-      }
-
-      await client.query(
-        `
-        INSERT INTO public.application_activity
-          (application_id, event_type, success, metadata)
-        VALUES
-          ($1, 'credential.revoked', true, '{}'::jsonb)
-        `,
-        [id]
-      );
-
-      await client.query("COMMIT");
-
-      res.json({
-        deleted: true,
-        credential: result.rows[0]
-      });
-    } catch (error) {
-      await client.query("ROLLBACK");
-
-      console.error("DELETE credential:", error);
-
-      res.status(500).json({
-        error: "Failed to revoke credential"
       });
     } finally {
       client.release();
