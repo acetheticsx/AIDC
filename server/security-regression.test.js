@@ -387,6 +387,12 @@ test("subscription enforcement is sourced from Ace ID", () => {
   assert.doesNotMatch(server, /SELECT plan_id, status[\s\S]{0,500}aceid_subscriptions/);
 });
 
+test("application mutations preserve authoritative subscription quota", () => {
+  assert.match(app, /data\.quota\.plan \|\| data\.entitlements\?\.plan/);
+  assert.match(app, /data\.quota\.limit \|\| state\.quota\.limit/);
+  assert.match(app, /state\.subscription\.entitlements = data\.entitlements/);
+});
+
 test("subscription checkout proxy and UI exist", () => {
   assert.match(server, /app\.post\("\/api\/subscription\/checkout"/);
   assert.match(server, /app\.get\("\/api\/subscription\/plans"/);

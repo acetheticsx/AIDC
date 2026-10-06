@@ -479,11 +479,21 @@ const applications = {
 
       if (data?.quota) {
         state.quota = {
+          ...state.quota,
           verified: data.quota.verified === true,
+          plan: data.quota.plan || data.entitlements?.plan || state.quota.plan,
+          name: data.quota.name || data.entitlements?.name || state.quota.name,
+          status: data.quota.status || data.entitlements?.status || state.quota.status,
+          mau: Number(data.quota.mau ?? data.entitlements?.mau) || state.quota.mau,
           count: Number(data.quota.count) || 0,
-          limit: Number(data.quota.limit) || 3,
+          limit: Number(data.quota.limit) || state.quota.limit,
           remaining: Number(data.quota.remaining) || 0
         };
+      }
+
+      if (data?.entitlements) {
+        state.subscription.entitlements = data.entitlements;
+        state.subscription.current = data.entitlements.subscription || state.subscription.current;
       }
 
       emitState();
