@@ -2015,18 +2015,18 @@ export function registerAIDCComponents(AIDC) {
                     <div class="aidc-plan-card-head">
                       <div>
                         <span class="aidc-eyebrow">${(text(plan.name))</span>
-                        <h3>${(current ? "Current plan" : text(plan.name))</h3>
+                        <h3>${current ? "Current plan" : text(plan.name)}</h3>
                       </div>
                       ${(current ? `<span class="aidc-plan-current">Current</span>` : "")
                     </div>
                     <strong class="aidc-plan-price">${(amount ? "₹" + Math.round(amount / 100).toLocaleString("en-IN") : "Free")</strong>
                     <div class="aidc-plan-limits">
-                      <span>${(Number(plan.applications).toLocaleString("en-IN")) applications</span>
-                      <span>${(Number(plan.mau).toLocaleString("en-IN")) monthly active users</span>
+                      <span>${Number(plan.applications).toLocaleString("en-IN")} applications</span>
+                      <span>${Number(plan.mau).toLocaleString("en-IN")} monthly active users</span>
                     </div>
                     ${(amount && !current
-                      ? `<button class="aidc-button aidc-button-primary" type="button" @click=${(() => subscription.upgrade(plan.id))>Upgrade to ${(text(plan.name))</button>`
-                      : `<span class="aidc-plan-status">${(current ? "Active entitlement" : "Available")</span>`)
+                      ? `<button class="aidc-button aidc-button-primary" type="button" @click=${() => subscription.upgrade(plan.id)}>Upgrade to ${text(plan.name)}</button>`
+                      : `<span class="aidc-plan-status">${current ? "Active entitlement" : "Available"}</span>`)
                   </article>
                 `
               })
