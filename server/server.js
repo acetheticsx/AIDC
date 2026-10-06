@@ -2479,7 +2479,7 @@ app.post(
         };
       }
 
-      res.status(verification.verified ? 200 : 409).json({
+      res.status(200).json({
         verification
       });
     } catch (error) {

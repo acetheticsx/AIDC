@@ -174,6 +174,33 @@ test("analytics ignores malformed login timestamps", () => {
   );
 });
 
+test("frontend bundles have explicit cache-busted versions", () => {
+  assert.match(app, /\.\/ui\.js\?v=20261006-7/);
+  assert.match(index, /\/app\.js\?v=20261006-7/);
+  assert.match(index, /\/style\.css\?v=20261006-10/);
+});
+
+test("frontend source hardens the reported total redeclaration", () => {
+  assert.match(ui, /const totalChecks = health\?\.total \|\| 0/);
+  assert.match(ui, /const applicationCount = state\.applications\.length/);
+  assert.doesNotMatch(ui, /const total = health\?\.total/);
+});
+
+test("application creation validates origin inputs before submission", () => {
+  assert.match(ui, /class AIDCCreateDialog/);
+  assert.match(ui, /validateOrigin\(value\)/);
+  assert.match(ui, /description\.length > 2000/);
+  assert.match(ui, /Use the origin only, without a path or query string/);
+});
+
+test("domain verification is diagnostic and never controls application availability", () => {
+  assert.doesNotMatch(ui, /before enabling the application/);
+  assert.doesNotMatch(ui, /before enabling this application/);
+  assert.match(ui, /Applications are always on/);
+  assert.doesNotMatch(ui, /this\.recordsOpen = true/);
+  assert.match(server, /res\.status\(200\)\.json\(\{\s*verification/);
+});
+
 test("frontend uses the first-party boot fallback", () => {
   assert.match(index, /<script src=["']\/boot-fallback\.js(?:\?[^"']*)?["'] defer><\/script>/);
   assert.doesNotMatch(index, /setTimeout\(function \(\) \{[\s\S]*Failed to load AIDC/);
