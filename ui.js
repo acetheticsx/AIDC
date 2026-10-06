@@ -23,7 +23,6 @@ export function registerAIDCComponents(AIDC) {
     applications,
     redirectUris,
     scopes,
-    credentials,
     branding,
     activity,
     applicationHealth,
@@ -1589,13 +1588,6 @@ export function registerAIDCComponents(AIDC) {
 
     renderSection(section, app) {
       switch (section) {
-        case "credentials":
-          return html`
-            <aidc-credentials
-              .applicationId=${app.id}
-            ></aidc-credentials>
-          `;
-
         case "url-configs":
         case "redirect-uris":
           return html`
@@ -1814,7 +1806,6 @@ export function registerAIDCComponents(AIDC) {
       const sectionByKey = {
         origin: "url-configs",
         redirects: "redirect-uris",
-        credentials: "credentials",
         scopes: "scopes",
         status: "overview",
         oidc: "playground"
@@ -2059,14 +2050,6 @@ export function registerAIDCComponents(AIDC) {
                 "link-01",
                 "URL Configs",
                 "Configure origin and callback URLs."
-              )}
-
-              ${this.configItem(
-                app.id,
-                "credentials",
-                "key-01",
-                "Credentials",
-                "Manage client credentials."
               )}
 
               ${this.configItem(
