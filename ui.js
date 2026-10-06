@@ -1725,7 +1725,7 @@ export function registerAIDCComponents(AIDC) {
       const health = this.health;
       const checks = health?.checks || [];
       const passed = health?.passed || 0;
-      const total = health?.total || 0;
+      const totalChecks = health?.total || 0;
       const healthy = health?.healthy === true;
 
       return html`
@@ -1752,7 +1752,7 @@ export function registerAIDCComponents(AIDC) {
               </p>
             </div>
             <span class="aidc-health-score ${healthy ? "is-healthy" : ""}">
-              ${this.healthLoading ? "…" : total ? `${passed}/${total}` : "—"}
+              ${this.healthLoading ? "…" : totalChecks ? `${passed}/${totalChecks}` : "—"}
             </span>
           </header>
 
@@ -1968,7 +1968,7 @@ export function registerAIDCComponents(AIDC) {
               <div class="aidc-detail-field">
 
                 <span>
-                  Origin URL
+                  Origin URL ${this.applicationType === "native" ? "(optional)" : ""}
                 </span>
 
                 <code class="aidc-mono">
@@ -2248,9 +2248,6 @@ export function registerAIDCComponents(AIDC) {
 
         if (this.application?.id === applicationId) {
           this.verification = data?.verification || null;
-          if (this.verification?.required) {
-            this.recordsOpen = true;
-          }
         }
       } catch (error) {
         if (this.application?.id === applicationId) {
@@ -2498,7 +2495,7 @@ export function registerAIDCComponents(AIDC) {
               <span class="aidc-eyebrow">Domain Records</span>
               <strong>Domain Records</strong>
               <p>
-                Add this TXT record to prove you control the domain before enabling the application.
+                Add this TXT record to prove you control the domain. Verification is a security/configuration check and does not control application availability.
               </p>
             </div>
             <span class="aidc-origin-verification-badge ${v.verified ? "is-verified" : ""}">
@@ -2512,7 +2509,7 @@ export function registerAIDCComponents(AIDC) {
               View DNS records
             </button>
             <span class="aidc-origin-verification-hint">
-              Add the TXT record before enabling this application.
+              Applications are always on. DNS verification only confirms control of the configured Origin domain.
             </span>
           </div>
 
@@ -2625,7 +2622,7 @@ export function registerAIDCComponents(AIDC) {
                 />
                 <small>
                   Use the origin only, for example https://example.com.
-                  HTTPS domains require DNS TXT verification.
+                  HTTPS domains require DNS TXT verification. This does not disable the application while pending.
                 </small>
               </label>
 
@@ -4352,7 +4349,7 @@ if (!query) return true;
 
     render() {
       const clients = this.clients;
-      const total = state.applications.length;
+      const applicationCount = state.applications.length;
 
       return html`
         <div class="aidc-page">
@@ -4382,7 +4379,7 @@ if (!query) return true;
           >
             <div>
               <span>Total clients</span>
-              <strong>${total}</strong>
+              <strong>${applicationCount}</strong>
             </div>
             <div><span>Availability</span><strong>Always on</strong></div>
           </section>
@@ -4429,7 +4426,7 @@ if (!query) return true;
                   total
                     ? "Try a different search or status filter."
                     : "Create your first OAuth or OpenID Connect client.",
-                action: total
+                action: applicationCount
                   ? html`
                       <button
                         class="aidc-button aidc-button-secondary"
@@ -4992,6 +4989,39 @@ if (!query) return true;
       }
     }
 
+    validateOrigin(value) {
+      if (!value) return { valid: true, value: null };
+
+      try {
+        const parsed = new URL(value);
+        const localhost = ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
+
+        if (!["https:", "http:"].includes(parsed.protocol)) {
+          return { valid: false, error: "Origin URL must use HTTP or HTTPS." };
+        }
+
+        if (parsed.protocol === "http:" && !localhost) {
+          return { valid: false, error: "HTTP Origin URLs are only allowed for localhost." };
+        }
+
+        if (
+          parsed.protocol === "https:" &&
+          /^[0-9a-f:.]+$/i.test(parsed.hostname) &&
+          parsed.hostname.includes(":")
+        ) {
+          return { valid: false, error: "HTTPS Origin URLs must use a domain name for TXT verification." };
+        }
+
+        if (parsed.pathname !== "/" || parsed.search || parsed.hash) {
+          return { valid: false, error: "Use the origin only, without a path or query string." };
+        }
+
+        return { valid: true, value: parsed.origin };
+      } catch {
+        return { valid: false, error: "Enter a valid Origin URL." };
+      }
+    }
+
     async submit(event) {
       event.preventDefault();
 
@@ -5015,6 +5045,19 @@ if (!query) return true;
         this.error =
           "Application name must be 120 characters or fewer.";
 
+        return;
+      }
+
+      if (description.length > 2000) {
+        this.error =
+          "Description must be 2000 characters or fewer.";
+
+        return;
+      }
+
+      const originValidation = this.validateOrigin(originUrl);
+      if (!originValidation.valid) {
+        this.error = originValidation.error;
         return;
       }
 
@@ -5178,7 +5221,7 @@ if (!query) return true;
                 </span>
 
                 <textarea
-                  maxlength="500"
+                  maxlength="2000"
                   placeholder="What is this application used for?"
                   .value=${this.description}
                   @input=${event =>
@@ -5234,7 +5277,9 @@ if (!query) return true;
                 />
 
                 <small>
-                  The domain where Ace ID authentication may originate.
+                  ${this.applicationType === "native"
+                    ? "Optional for native clients. Configure redirect URIs after creation."
+                    : "Use the web origin where Ace ID authentication starts. HTTPS domains receive a DNS verification check after creation."}
                 </small>
 
                 ${!this.originUrl.trim()
@@ -5242,8 +5287,8 @@ if (!query) return true;
                       <div class="aidc-dialog-note aidc-origin-warning">
                         ${icon("alert-02")}
                         <span>
-                          Authentication won't work until an Origin URL is set.
-                          You can configure it after creating the application.
+                          Web authentication needs an Origin URL. You can add it now or configure it after creation.
+                          Native clients can leave this blank and configure redirect URIs instead.
                         </span>
                       </div>
                     `
