@@ -80,6 +80,13 @@ const state = {
     limit: 8,
     remaining: 8
   },
+  subscription: {
+    loading: false,
+    plans: [],
+    current: null,
+    entitlements: null,
+    redemptions: []
+  },
   loading: false,
 
   redirectUris: {
@@ -326,6 +333,7 @@ const auth = {
 
     try {
       await applications.load();
+      await subscription.load();
     } finally {
       lastRouteKey = "";
       handleRouteChange();
@@ -410,6 +418,11 @@ const applications = {
             limit: Number(data.quota.limit) || 8,
             remaining: Number(data.quota.remaining) || 0
           };
+        }
+
+        if (data?.entitlements) {
+          state.subscription.current = data.entitlements.subscription || null;
+          state.subscription.entitlements = data.entitlements;
         }
 
         return state.applications;
@@ -632,6 +645,76 @@ const applications = {
         application => application.id === id
       ) || null
     );
+  }
+};
+
+/* ─────────────────────────────────────────────
+   Subscription
+───────────────────────────────────────────── */
+
+const subscription = {
+  async load() {
+    state.subscription.loading = true;
+    emitState();
+    try {
+      const [entitlements, plans, redemptions] = await Promise.all([
+        api.subscription.get(),
+        api.subscription.plans(),
+        api.subscription.redemptions()
+      ]);
+      state.subscription.entitlements = entitlements || null;
+      state.subscription.current = entitlements?.subscription || null;
+      state.subscription.plans = Array.isArray(plans?.plans) ? plans.plans : [];
+      state.subscription.redemptions = Array.isArray(redemptions?.redemptions) ? redemptions.redemptions : [];
+      if (entitlements) {
+        state.quota = {
+          ...state.quota,
+          verified: entitlements.verified === true,
+          plan: entitlements.plan || "base",
+          name: entitlements.name || "Base",
+          status: entitlements.status || "active",
+          mau: Number(entitlements.mau) || state.quota.mau
+        };
+      }
+      return entitlements;
+    } catch (error) {
+      handleError(error, "Failed to load subscription");
+      return null;
+    } finally {
+      state.subscription.loading = false;
+      emitState();
+    }
+  },
+
+  async upgrade(planId) {
+    const idValue = String(planId || "").trim().toLowerCase();
+    if (!["core", "apex"].includes(idValue)) throw new Error("Invalid paid plan.");
+    haptic(8);
+    try {
+      const data = await api.subscription.checkout(idValue);
+      if (!data?.shortUrl) throw new Error("Checkout URL was not returned.");
+      window.location.assign(data.shortUrl);
+      return data;
+    } catch (error) {
+      handleError(error, "Unable to start checkout");
+      throw error;
+    }
+  },
+
+  async redeemOffer(offerId) {
+    const data = await api.subscription.redeemOffer(offerId);
+    state.subscription.redemptions = [data?.redemption, ...state.subscription.redemptions].filter(Boolean);
+    notify("Offer redeemed.");
+    emitState();
+    return data?.redemption || null;
+  },
+
+  async redeemAccessory(accessoryId, quantity = 1) {
+    const data = await api.subscription.redeemAccessory(accessoryId, quantity);
+    state.subscription.redemptions = [data?.redemption, ...state.subscription.redemptions].filter(Boolean);
+    notify("Accessory redeemed.");
+    emitState();
+    return data?.redemption || null;
   }
 };
 
@@ -1684,6 +1767,7 @@ const AIDC = {
   auth,
 
   applications,
+  subscription,
 
   redirectUris,
 

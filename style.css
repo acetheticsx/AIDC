@@ -8478,3 +8478,17 @@ html::before{
     align-items:flex-start;
   }
 }
+
+
+/* Subscription plans */
+.aidc-subscription-card{margin:24px 0}
+.aidc-plan-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.aidc-plan-card{min-width:0;padding:18px;border:1px solid var(--aidc-border);border-radius:16px;background:var(--aidc-surface);display:grid;gap:14px}
+.aidc-plan-card.is-current{border-color:var(--aidc-text);box-shadow:inset 0 0 0 1px var(--aidc-text)}
+.aidc-plan-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.aidc-plan-card h3{margin:4px 0 0;font-size:17px}
+.aidc-plan-current{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.aidc-plan-price{font-size:32px;line-height:1;letter-spacing:-.05em}
+.aidc-plan-limits{display:grid;gap:7px;color:var(--aidc-muted);font-size:12px}
+.aidc-plan-status{font-size:11px;color:var(--aidc-muted)}
+@media (max-width:900px){.aidc-plan-grid{grid-template-columns:1fr}}

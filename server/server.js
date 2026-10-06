@@ -29,6 +29,8 @@ const ISSUER = process.env.ACE_ID_ISSUER;
 const CLIENT_ID = process.env.ACE_ID_CLIENT_ID;
 const CLIENT_SECRET = process.env.ACE_ID_CLIENT_SECRET;
 const PUBLIC_ORIGIN = process.env.AIDC_PUBLIC_ORIGIN;
+const AIDC_ENTITLEMENTS_SHARED_SECRET =
+  String(process.env.AIDC_ENTITLEMENTS_SHARED_SECRET || "").trim();
 
 if (!DATABASE_URL) {
   console.error("Missing DATABASE_URL environment variable.");
@@ -1925,6 +1927,110 @@ app.get(
 
 /*
  * ═══════════════════════════════════════════
+ * Subscription / entitlement proxy
+ * ═══════════════════════════════════════════
+ */
+
+async function callAceIdSubscription(pathname, developerId, options = {}) {
+  if (!AIDC_ENTITLEMENTS_SHARED_SECRET) throw new Error("entitlements_not_configured");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(ISSUER + pathname, {
+      ...options,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+        "X-Ace-ID-User-ID": String(developerId),
+        "X-Ace-ID-Entitlements-Secret": AIDC_ENTITLEMENTS_SHARED_SECRET
+      },
+      signal: controller.signal
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload?.error || ("Ace ID returned " + response.status));
+      error.status = response.status;
+      error.data = payload;
+      throw error;
+    }
+    return payload;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+app.get("/api/subscription", requireAuth, async (req, res) => {
+  try { return res.json(await callAceIdSubscription("/api/subscription", req.developer.id)); }
+  catch (error) {
+    console.error("GET /api/subscription:", error);
+    return res.status(error?.status === 401 ? 401 : 503).json({ error: "Entitlement service unavailable" });
+  }
+});
+
+app.get("/api/subscription/plans", requireAuth, async (req, res) => {
+  try { return res.json(await callAceIdSubscription("/api/subscription/plans", req.developer.id)); }
+  catch (error) {
+    console.error("GET /api/subscription/plans:", error);
+    return res.status(error?.status === 401 ? 401 : 503).json({ error: "Subscription plans unavailable" });
+  }
+});
+
+app.post("/api/subscription/checkout", requireAuth, async (req, res) => {
+  try {
+    const planId = String(req.body?.planId || "").trim().toLowerCase();
+    if (!["core", "apex"].includes(planId)) return res.status(400).json({ error: "invalid_paid_plan" });
+    const payload = await callAceIdSubscription("/api/subscription/checkout", req.developer.id, {
+      method: "POST",
+      body: JSON.stringify({ planId })
+    });
+    return res.status(201).json(payload);
+  } catch (error) {
+    console.error("POST /api/subscription/checkout:", error);
+    return res.status(error?.status || 503).json({
+      error: error?.data?.error || error?.message || "checkout_creation_failed"
+    });
+  }
+});
+
+app.get("/api/subscription/redemptions", requireAuth, async (req, res) => {
+  try { return res.json(await callAceIdSubscription("/api/subscription/redemptions", req.developer.id)); }
+  catch (error) {
+    console.error("GET /api/subscription/redemptions:", error);
+    return res.status(503).json({ error: "Subscription benefits unavailable" });
+  }
+});
+
+app.post("/api/subscription/offers/:offerId/redeem", requireAuth, async (req, res) => {
+  try {
+    return res.status(201).json(await callAceIdSubscription(
+      "/api/subscription/offers/" + encodeURIComponent(req.params.offerId) + "/redeem",
+      req.developer.id,
+      { method: "POST", body: JSON.stringify({ tab: "AIDC" }) }
+    ));
+  } catch (error) {
+    return res.status(error?.status || 503).json({
+      error: error?.data?.error || error?.message || "benefit_redemption_failed"
+    });
+  }
+});
+
+app.post("/api/subscription/accessories/:accessoryId/redeem", requireAuth, async (req, res) => {
+  try {
+    return res.status(201).json(await callAceIdSubscription(
+      "/api/subscription/accessories/" + encodeURIComponent(req.params.accessoryId) + "/redeem",
+      req.developer.id,
+      { method: "POST", body: JSON.stringify({ tab: "AIDC", quantity: req.body?.quantity }) }
+    ));
+  } catch (error) {
+    return res.status(error?.status || 503).json({
+      error: error?.data?.error || error?.message || "benefit_redemption_failed"
+    });
+  }
+});
+
+/*
+ * ═══════════════════════════════════════════
  * Applications
  * ═══════════════════════════════════════════
  */
@@ -3573,59 +3679,42 @@ const AIDC_PLAN_LIMITS = Object.freeze({
 });
 
 async function getAceIdEntitlements(developerId) {
-  const base = {
-    plan: "base",
-    name: AIDC_PLAN_LIMITS.base.name,
-    applications: AIDC_PLAN_LIMITS.base.applications,
-    mau: AIDC_PLAN_LIMITS.base.mau,
-    status: "active"
-  };
+  const userId = String(developerId || "").trim();
+  if (!userId) throw new Error("entitlement_user_required");
+  if (!AIDC_ENTITLEMENTS_SHARED_SECRET) throw new Error("entitlements_not_configured");
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const result = await pool.query(
-      `
-      SELECT plan_id, status
-      FROM public.aceid_subscriptions
-      WHERE user_id = $1
-        AND (
-          status = 'active'
-          OR (
-            status = 'cancelled'
-            AND COALESCE(grant_expires_at, billing_period_end) > now()
-          )
-        )
-      ORDER BY
-        CASE WHEN status = 'active' THEN 0 ELSE 1 END,
-        updated_at DESC
-      LIMIT 1
-      `,
-      [developerId]
-    );
+    const response = await fetch(ISSUER + "/api/subscription", {
+      headers: {
+        Accept: "application/json",
+        "X-Ace-ID-User-ID": userId,
+        "X-Ace-ID-Entitlements-Secret": AIDC_ENTITLEMENTS_SHARED_SECRET
+      },
+      signal: controller.signal
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || ("entitlement_service_" + response.status));
 
-    const planId = String(result.rows[0]?.plan_id || "base").toLowerCase();
-    const plan = AIDC_PLAN_LIMITS[planId];
-
-    if (!plan) {
-      console.error(
-        "Invalid Ace ID subscription plan; using Base entitlements:",
-        planId
-      );
-      return base;
-    }
+    const plan = String(payload?.plan || "base").toLowerCase();
+    const limits = AIDC_PLAN_LIMITS[plan];
+    if (!limits) throw new Error("invalid_entitlement_plan");
 
     return {
-      plan: planId,
-      name: plan.name,
-      applications: plan.applications,
-      mau: plan.mau,
-      status: result.rows[0]?.status || "active"
+      ...limits,
+      plan,
+      name: String(payload?.name || limits.name),
+      status: String(payload?.status || "active"),
+      mau: Number(payload?.mau) || limits.mau,
+      features: payload?.features || {},
+      offers: Array.isArray(payload?.offers) ? payload.offers : [],
+      accessories: Array.isArray(payload?.accessories) ? payload.accessories : [],
+      subscription: payload?.subscription || null,
+      verified: true
     };
-  } catch (error) {
-    console.error(
-      "Ace ID entitlement lookup failed; using Base limits:",
-      error
-    );
-    return base;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

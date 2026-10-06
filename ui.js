@@ -21,6 +21,7 @@ export function registerAIDCComponents(AIDC) {
     api,
     auth,
     applications,
+    subscription,
     redirectUris,
     scopes,
     credentials,
@@ -1991,6 +1992,45 @@ export function registerAIDCComponents(AIDC) {
             <header class="aidc-card-section-header"><div><span class="aidc-eyebrow">Ace ID entitlement</span><h2 id="aidc-entitlement-title">${text(state.quota.name || "Base")} plan</h2><p>${state.quota.status === "active" ? "Entitlement is active." : "Entitlement is not currently active."}</p></div><span class="aidc-entitlement-plan">${text(String(state.quota.plan || "base").toUpperCase())}</span></header>
             <div class="aidc-entitlement-grid"><div><span>Applications</span><strong>${state.quota.count} / ${state.quota.limit}</strong><small>${state.quota.remaining} remaining</small></div><div><span>Monthly active users</span><strong>${Number(state.quota.mau || 0).toLocaleString()}</strong><small>Enforced by Ace ID</small></div></div>
             <div class="aidc-quota-track" aria-label="Application quota usage"><span style=${`width:${state.quota.limit ? Math.min((state.quota.count / state.quota.limit) * 100, 100) : 0}%`}></span></div>
+          </section>
+
+          <section class="aidc-card aidc-subscription-card" aria-labelledby="aidc-subscription-title">
+            <header class="aidc-card-section-header">
+              <div>
+                <span class="aidc-eyebrow">Subscription</span>
+                <h2 id="aidc-subscription-title">Plans</h2>
+                <p>Entitlements are enforced by Ace ID. Billing runs through Razorpay.</p>
+              </div>
+            </header>
+            <div class="aidc-plan-grid">
+              ${(state.subscription.plans.length ? state.subscription.plans : [
+                { id: "base", name: "Base", amount: 0, applications: 8, mau: 5000 },
+                { id: "core", name: "Core", amount: 29900, applications: 15, mau: 20000 },
+                { id: "apex", name: "Apex", amount: 54900, applications: 25, mau: 50000 }
+              ]).map(plan => {
+                const current = String(plan.id) === String(state.quota.plan);
+                const amount = Number(plan.amount || 0);
+                return `
+                  <article class="aidc-plan-card ${(current ? "is-current" : "")">
+                    <div class="aidc-plan-card-head">
+                      <div>
+                        <span class="aidc-eyebrow">${(text(plan.name))</span>
+                        <h3>${(current ? "Current plan" : text(plan.name))</h3>
+                      </div>
+                      ${(current ? `<span class="aidc-plan-current">Current</span>` : "")
+                    </div>
+                    <strong class="aidc-plan-price">${(amount ? "₹" + Math.round(amount / 100).toLocaleString("en-IN") : "Free")</strong>
+                    <div class="aidc-plan-limits">
+                      <span>${(Number(plan.applications).toLocaleString("en-IN")) applications</span>
+                      <span>${(Number(plan.mau).toLocaleString("en-IN")) monthly active users</span>
+                    </div>
+                    ${(amount && !current
+                      ? `<button class="aidc-button aidc-button-primary" type="button" @click=${(() => subscription.upgrade(plan.id))>Upgrade to ${(text(plan.name))</button>`
+                      : `<span class="aidc-plan-status">${(current ? "Active entitlement" : "Available")</span>`)
+                  </article>
+                `
+              })
+            </div>
           </section>
 
           <section class="aidc-section">

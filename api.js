@@ -147,6 +147,30 @@ export const api = {
     }
   },
 
+  subscription: {
+    get() { return request("/subscription"); },
+    plans() { return request("/subscription/plans"); },
+    checkout(planId) {
+      return request("/subscription/checkout", {
+        method: "POST",
+        body: JSON.stringify({ planId })
+      });
+    },
+    redemptions() { return request("/subscription/redemptions"); },
+    redeemOffer(offerId) {
+      return request("/subscription/offers/" + id(offerId) + "/redeem", {
+        method: "POST",
+        body: JSON.stringify({})
+      });
+    },
+    redeemAccessory(accessoryId, quantity = 1) {
+      return request("/subscription/accessories/" + id(accessoryId) + "/redeem", {
+        method: "POST",
+        body: JSON.stringify({ quantity })
+      });
+    }
+  },
+
   applications: {
     list() {
       return request("/applications");

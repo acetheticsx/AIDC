@@ -363,3 +363,23 @@ test("integration health checks live Ace ID discovery", () => {
   assert.match(app, /key: "oidc"/);
   assert.match(ui, /Run OAuth test/);
 });
+
+
+test("subscription enforcement is sourced from Ace ID", () => {
+  assert.match(server, /AIDC_ENTITLEMENTS_SHARED_SECRET/);
+  assert.match(server, /\/api\/subscription/);
+  assert.match(server, /X-Ace-ID-User-ID/);
+  assert.match(server, /X-Ace-ID-Entitlements-Secret/);
+  assert.doesNotMatch(server, /SELECT plan_id, status[\s\S]{0,500}aceid_subscriptions/);
+});
+
+test("subscription checkout proxy and UI exist", () => {
+  assert.match(server, /app\.post\("\/api\/subscription\/checkout"/);
+  assert.match(server, /app\.get\("\/api\/subscription\/plans"/);
+  assert.match(api, /subscription: \{/);
+  assert.match(api, /checkout\(planId\)/);
+  assert.match(app, /const subscription = \{/);
+  assert.match(app, /window\.location\.assign\(data\.shortUrl\)/);
+  assert.match(ui, /aidc-plan-grid/);
+  assert.match(ui, /Upgrade to/);
+});
