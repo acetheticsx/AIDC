@@ -21,7 +21,6 @@ export function registerAIDCComponents(AIDC) {
     api,
     auth,
     applications,
-    subscription,
     redirectUris,
     scopes,
     credentials,
