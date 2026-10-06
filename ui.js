@@ -446,6 +446,13 @@ export function registerAIDCComponents(AIDC) {
      CREATE DIALOG
      ═══════════════════════════════════════ */
 
+  function applicationIcon(app, sizeClass = "") {
+    const className = ["aidc-app-logo", sizeClass].filter(Boolean).join(" ");
+    return app?.logo_url
+      ? html`<img class=${className} src=${app.logo_url} alt="" loading="lazy" decoding="async" />`
+      : icon("app-window");
+  }
+
   class AIDCApplicationRow extends AIDCElement {
     static properties = {
       application: {
@@ -504,7 +511,7 @@ export function registerAIDCComponents(AIDC) {
           <div class="aidc-row-main">
 
             <div class="aidc-row-icon">
-              ${app.logo_url ? html`<img class="aidc-app-logo" src=${app.logo_url} alt="" loading="lazy" decoding="async" />` : icon("app-window")}
+              ${applicationIcon(app)}
             </div>
 
             <div class="aidc-row-info">
@@ -1446,7 +1453,7 @@ export function registerAIDCComponents(AIDC) {
             <div class="aidc-detail-heading">
 
               <div class="aidc-app-symbol large">
-                ${app.logo_url ? html`<img class="aidc-app-logo" src=${app.logo_url} alt="" loading="lazy" decoding="async" />` : icon("app-window")}
+                ${applicationIcon(app, "large")}
               </div>
 
               <div>
@@ -4276,9 +4283,7 @@ if (!query) return true;
           <div class="aidc-client-card-head">
             <div class="aidc-client-card-title">
               <span class="aidc-app-symbol">
-                ${app.logo_url
-                  ? html`<img class="aidc-app-logo" src=${app.logo_url} alt="" loading="lazy" decoding="async" />`
-                  : icon("app-window")}
+                ${applicationIcon(app)}
               </span>
 
               <div>
@@ -4419,13 +4424,13 @@ if (!query) return true;
             : emptyState({
                 iconName: "app-window",
                 title:
-                  total
+                  applicationCount
                     ? "No clients match"
                     : "No clients yet",
                 description:
-                  total
-                    ? "Try a different search or status filter."
-                    : "Create your first OAuth or OpenID Connect client.",
+                  applicationCount
+                    ? "Try a different search."
+                    : "Create your first public OAuth or OpenID Connect client.",
                 action: applicationCount
                   ? html`
                       <button
@@ -5491,7 +5496,7 @@ if (!query) return true;
           return `<div class="aidc-toast ${isError ? "aidc-toast-error" : ""}" role="${isError ? "alert" : "status"}" aria-live="${isError ? "assertive" : "polite"}">
             <span class="aidc-toast-icon" aria-hidden="true">${icon(isError ? "alert-02" : "checkmark-circle-02")}</span>
             <span class="aidc-toast-message">${notice.message}</span>
-            <button class="aidc-toast-close" aria-label="Dismiss notification" $click=${() => this.close(notice.id)}>${icon("cancel-01")}</button>
+            <button class="aidc-toast-close" type="button" aria-label="Dismiss notification" @click=${() => this.close(notice.id)}>${icon("cancel-01")}</button>
           </div>`;
         })}
       </div>`;
