@@ -433,3 +433,23 @@ test("subscription and billing are not implemented locally in AIDC", () => {
   assert.doesNotMatch(app, /subscription\.upgrade/);
   assert.doesNotMatch(ui, /Opening checkout/);
 });
+
+
+test("new applications are public OIDC clients", () => {
+  assert.match(server, /client_secret = NULL/);
+  assert.match(server, /token_endpoint_auth_method = 'none'/);
+  assert.match(server, /public: true/);
+});
+
+test("create application UI removes templates and uses snackbar errors", () => {
+  assert.doesNotMatch(ui, /Start from template/);
+  assert.doesNotMatch(ui, /applyTemplate\(/);
+  assert.match(ui, /notify\("Application name is required\.", "error"\)/);
+  assert.match(ui, /api\.originVerification\.get\(application\.id\)/);
+  assert.match(ui, /DNS verification/);
+});
+
+test("clients use the same application icon fallback", () => {
+  assert.match(ui, /class AIDCClients/);
+  assert.match(ui, /app\.logo_url[\s\S]*icon\("app-window"\)/);
+});

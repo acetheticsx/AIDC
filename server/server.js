@@ -2103,10 +2103,28 @@ app.post(
         ]
       );
 
+      await client.query(
+        `
+        UPDATE public.aceid_clients
+        SET
+          client_secret = NULL,
+          token_endpoint_auth_method = 'none'
+        WHERE client_id = $1
+          AND owner_id = $2
+        `,
+        [
+          result.rows[0].client_id,
+          req.developer.id
+        ]
+      );
+
       await client.query("COMMIT");
 
       res.status(201).json({
-        application: result.rows[0],
+        application: {
+          ...result.rows[0],
+          public: true
+        },
         quota: {
           plan: entitlements.plan,
           name: entitlements.name,
