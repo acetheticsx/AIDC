@@ -354,7 +354,7 @@ test("applications are always-on and have no enable/disable lifecycle control", 
   assert.match(server, /'active' AS status/);
   assert.doesNotMatch(server, /Invalid application status/);
   assert.doesNotMatch(server, /application\.status_changed/);
-  assert.doesNotMatch(ui, /toggleStatus\(\)/);
+  assert.doesNotMatch(ui, /toggleStatus\(/);
   assert.doesNotMatch(ui, /Application disabled/);
   assert.match(ui, /Always on/);
   assert.match(app, /key: "always-on"/);
