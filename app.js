@@ -1,4 +1,4 @@
-import { registerAIDCComponents } from "./ui.js?v=20261006-4";
+import { registerAIDCComponents } from "./ui.js?v=20261006-5";
 import { api } from "./api.js?v=20261004-3";
 
 /* ─────────────────────────────────────────────
@@ -69,24 +69,6 @@ const state = {
     },
     loading: false,
     error: null
-  },
-  quota: {
-    verified: false,
-    plan: null,
-    name: null,
-    status: "unknown",
-    mau: null,
-    count: 0,
-    limit: null,
-    remaining: null,
-    error: null
-  },
-  subscription: {
-    loading: false,
-    checkoutPlan: null,
-    plans: [],
-    current: null,
-    entitlements: null,
   },
   loading: false,
 
@@ -334,7 +316,6 @@ const auth = {
 
     try {
       await applications.load();
-      await subscription.load();
     } finally {
       lastRouteKey = "";
       handleRouteChange();
@@ -407,30 +388,6 @@ const applications = {
           state.applications = data.applications;
         }
 
-        if (data?.quota) {
-          state.quota = {
-            verified: data.quota.verified === true,
-            plan: data.quota.plan || null,
-            name: data.quota.name || null,
-            status: data.quota.status || "unknown",
-            mau: Number.isFinite(Number(data.quota.mau)) ? Number(data.quota.mau) : null,
-            count: Number(data.quota.count) || 0,
-            limit: Number.isFinite(Number(data.quota.limit)) ? Number(data.quota.limit) : null,
-            remaining: Number.isFinite(Number(data.quota.remaining)) ? Number(data.quota.remaining) : null,
-            error: data.entitlementError || null
-          };
-        } else if (data?.entitlementError) {
-          state.quota = {
-            ...state.quota,
-            verified: false,
-            error: data.entitlementError
-          };
-        }
-
-        if (data?.entitlements) {
-          state.subscription.current = data.entitlements.subscription || null;
-          state.subscription.entitlements = data.entitlements;
-        }
 
         return state.applications;
       } catch (error) {
@@ -484,24 +441,7 @@ const applications = {
         ...state.applications
       ];
 
-      if (data?.quota) {
-        state.quota = {
-          ...state.quota,
-          verified: data.quota.verified === true,
-          plan: data.quota.plan || data.entitlements?.plan || state.quota.plan,
-          name: data.quota.name || data.entitlements?.name || state.quota.name,
-          status: data.quota.status || data.entitlements?.status || state.quota.status,
-          mau: Number(data.quota.mau ?? data.entitlements?.mau) || state.quota.mau,
-          count: Number(data.quota.count) || 0,
-          limit: Number(data.quota.limit) || state.quota.limit,
-          remaining: Number(data.quota.remaining) || 0
-        };
-      }
 
-      if (data?.entitlements) {
-        state.subscription.entitlements = data.entitlements;
-        state.subscription.current = data.entitlements.subscription || state.subscription.current;
-      }
 
       emitState();
 
@@ -609,16 +549,6 @@ const applications = {
           application => application.id !== id
         );
 
-      if (state.quota.count > 0) {
-        state.quota = {
-          ...state.quota,
-          count: state.quota.count - 1,
-          remaining: Math.min(
-            state.quota.limit,
-            state.quota.remaining + 1
-          )
-        };
-      }
 
       redirectUriRequestId++;
 
@@ -663,50 +593,6 @@ const applications = {
       ) || null
     );
   }
-};
-
-/* ─────────────────────────────────────────────
-   Subscription
-───────────────────────────────────────────── */
-
-const subscription = {
-  async load() {
-    state.subscription.loading = true;
-    emitState();
-    try {
-      const [entitlementsResult, plansResult] = await Promise.allSettled([
-        api.subscription.get(),
-        api.subscription.plans()
-      ]);
-      const entitlements = entitlementsResult.status === "fulfilled" ? entitlementsResult.value : null;
-      const plans = plansResult.status === "fulfilled" ? plansResult.value : null;
-      if (entitlementsResult.status === "rejected" && plansResult.status === "rejected") {
-        throw entitlementsResult.reason || plansResult.reason || new Error("Ace ID entitlements unavailable");
-      }
-      state.subscription.entitlements = entitlements || null;
-      state.subscription.current = entitlements?.subscription || null;
-      state.subscription.plans = Array.isArray(plans?.plans) ? plans.plans : [];
-      if (entitlements) {
-        state.quota = {
-          ...state.quota,
-          verified: entitlements.verified === true,
-          plan: entitlements.plan || null,
-          name: entitlements.name || null,
-          status: entitlements.status || "unknown",
-          mau: Number.isFinite(Number(entitlements.mau)) ? Number(entitlements.mau) : null,
-          error: null
-        };
-      }
-      return entitlements;
-    } catch (error) {
-      handleError(error, "Failed to load subscription");
-      return null;
-    } finally {
-      state.subscription.loading = false;
-      emitState();
-    }
-  },
-
 };
 
 /* ─────────────────────────────────────────────

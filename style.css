@@ -8543,3 +8543,220 @@ html::before{
 .aidc-landing-price-card-wide{grid-column:1/-1;min-height:160px;justify-content:center}
 @media (max-width:900px){.aidc-metric-segment:nth-child(1),.aidc-metric-segment:nth-child(2),.aidc-metric-segment:nth-child(3){grid-column:span 6}.aidc-application-bento .aidc-application-row{grid-column:span 6}}
 @media (max-width:640px){.aidc-metric-segments{grid-template-columns:1fr;gap:10px}.aidc-metric-segment:nth-child(1),.aidc-metric-segment:nth-child(2),.aidc-metric-segment:nth-child(3){grid-column:1}.aidc-application-bento{grid-template-columns:1fr}.aidc-application-bento .aidc-application-row{grid-column:1;min-height:0}.aidc-pricing-empty{grid-template-columns:1fr}.aidc-landing-price-card-wide{grid-column:1}}
+
+/* Client management */
+.aidc-client-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.aidc-client-summary > div {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--aidc-border, #e7e7e7);
+  border-radius: 20px;
+  background: var(--aidc-surface, #fff);
+}
+
+.aidc-client-summary span {
+  display: block;
+  color: var(--aidc-muted, #777);
+  font-size: 13px;
+}
+
+.aidc-client-summary strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 28px;
+  letter-spacing: -0.03em;
+}
+
+.aidc-client-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.aidc-feature-search {
+  min-width: 0;
+}
+
+.aidc-feature-search-input,
+.aidc-client-filter {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--aidc-border, #e7e7e7);
+  border-radius: 14px;
+  background: var(--aidc-surface, #fff);
+  color: inherit;
+  padding: 0 14px;
+  font: inherit;
+}
+
+.aidc-client-filter {
+  width: auto;
+  min-width: 140px;
+}
+
+.aidc-client-management-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.aidc-client-card {
+  grid-column: span 6;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid var(--aidc-border, #e7e7e7);
+  border-radius: 24px;
+  background: var(--aidc-surface, #fff);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 4%);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.aidc-client-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgb(0 0 0 / 7%);
+}
+
+.aidc-client-card-head,
+.aidc-client-card-title,
+.aidc-client-card-actions,
+.aidc-client-card-id {
+  display: flex;
+  align-items: center;
+}
+
+.aidc-client-card-head {
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.aidc-client-card-title {
+  min-width: 0;
+  gap: 12px;
+}
+
+.aidc-client-card-title > div {
+  min-width: 0;
+}
+
+.aidc-client-card-title h2 {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+}
+
+.aidc-client-card-title span:not(.aidc-app-symbol) {
+  display: block;
+  margin-top: 4px;
+  color: var(--aidc-muted, #777);
+  font-size: 12px;
+}
+
+.aidc-client-card-id {
+  min-width: 0;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 4%, var(--aidc-surface, #fff));
+}
+
+.aidc-client-card-id > span {
+  flex: 0 0 auto;
+  color: var(--aidc-muted, #777);
+  font-size: 12px;
+}
+
+.aidc-client-card-id code {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aidc-client-card-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.aidc-client-card-meta > div {
+  min-width: 0;
+}
+
+.aidc-client-card-meta span {
+  display: block;
+  color: var(--aidc-muted, #777);
+  font-size: 12px;
+}
+
+.aidc-client-card-meta strong {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.aidc-client-card-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.aidc-client-card-actions .aidc-button,
+.aidc-client-card-actions .aidc-danger-button {
+  min-height: 40px;
+}
+
+@media (max-width: 680px) {
+  .aidc-client-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .aidc-client-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .aidc-client-filter {
+    width: 100%;
+  }
+
+  .aidc-client-management-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .aidc-client-card {
+    grid-column: auto;
+    border-radius: 20px;
+  }
+
+  .aidc-client-card-head {
+    align-items: flex-start;
+  }
+
+  .aidc-client-card-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .aidc-client-card-actions .aidc-button,
+  .aidc-client-card-actions .aidc-danger-button {
+    width: 100%;
+    justify-content: center;
+  }
+}

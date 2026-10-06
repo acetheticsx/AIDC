@@ -147,10 +147,6 @@ export const api = {
     }
   },
 
-  subscription: {
-    get() { return request("/subscription"); },
-    plans() { return request("/subscription/plans"); }
-  },
 
   applications: {
     list() {

@@ -176,7 +176,6 @@ export function registerAIDCComponents(AIDC) {
         route.path === "/applications" ||
         route.path === "/applications/:id";
 
-      const pricingActive = route.path === "/pricing";
 
       return html`
         <aside class="aidc-sidebar">
@@ -250,15 +249,13 @@ export function registerAIDCComponents(AIDC) {
             </a>
 
             <a
-              class="aidc-nav-item ${pricingActive ? "active" : ""}"
-              href="#/pricing"
+              class="aidc-nav-item ${route.path === "/clients" ? "active" : ""}"
+              href="#/clients"
               @click=${() => this.closeMobile()}
             >
-              ${icon("credit-card")}
-              <span>Pricing</span>
+              ${icon("app-window")}
+              <span>Clients</span>
             </a>
-
-                        <a class="aidc-nav-item" href="#/users"><span>Users</span></a>
 
           </nav>
 
@@ -576,85 +573,6 @@ export function registerAIDCComponents(AIDC) {
   }
 
   /* ═══════════════════════════════════════
-     PRICING
-     ═══════════════════════════════════════ */
-
-  class AIDCPricing extends AIDCElement {
-    render() {
-      const plans = Array.isArray(state.subscription.plans)
-        ? state.subscription.plans
-        : [];
-
-      const currentPlan = String(state.quota.plan || "").toLowerCase();
-
-      return html`
-        <div class="aidc-page aidc-pricing-page">
-          <header class="aidc-page-header">
-            <div>
-              <span class="aidc-eyebrow">AIDC · Ace ID</span>
-              <h1>Pricing</h1>
-              <p>Plan catalog and entitlements are owned by Ace ID. AIDC only reads and serves the limits and features Ace ID returns.</p>
-            </div>
-          </header>
-
-          ${plans.length
-            ? html`
-                <section class="aidc-pricing-grid aidc-plan-grid" aria-label="Ace ID pricing plans">
-                  ${plans.map(plan => {
-                    const id = String(plan.id || plan.plan || "").toLowerCase();
-                    const name = String(plan.name || plan.label || id || "Plan");
-                    const amount = Number(plan.amount ?? plan.price ?? NaN);
-                    const applications = Number(plan.applications ?? plan.limits?.applications ?? NaN);
-                    const mau = Number(plan.mau ?? plan.limits?.mau ?? NaN);
-                    const current = id && id === currentPlan;
-
-                    return html`
-                      <article class="aidc-plan-card aidc-pricing-card ${current ? "is-current" : ""}">
-                        <div class="aidc-plan-card-head">
-                          <div>
-                            <span class="aidc-eyebrow">Ace ID plan</span>
-                            <h2>${text(name)}</h2>
-                          </div>
-                          ${current ? html`<span class="aidc-plan-current">Current</span>` : ""}
-                        </div>
-
-                        <div class="aidc-plan-price-wrap">
-                          <strong class="aidc-plan-price">${Number.isFinite(amount) ? "₹" + Math.round(amount / 100).toLocaleString("en-IN") : "See Ace ID"}</strong>
-                          ${Number.isFinite(amount) && amount > 0 ? html`<span class="aidc-pricing-period">/ month</span>` : ""}
-                        </div>
-
-                        <ul class="aidc-pricing-features">
-                          ${Number.isFinite(applications) ? html`<li>${applications.toLocaleString("en-IN")} applications</li>` : ""}
-                          ${Number.isFinite(mau) ? html`<li>${mau.toLocaleString("en-IN")} monthly active users</li>` : ""}
-                          <li>Limits and feature access served by Ace ID</li>
-                        </ul>
-
-                        <span class="aidc-plan-status">${current ? "Active entitlement" : "Managed in Ace ID"}</span>
-                      </article>
-                    `;
-                  })}
-                </section>
-              `
-            : html`
-                <section class="aidc-card aidc-pricing-empty">
-                  <span class="aidc-bento-icon">${icon("credit-card")}</span>
-                  <div>
-                    <span class="aidc-eyebrow">Ace ID</span>
-                    <h2>Pricing is managed in Ace ID</h2>
-                    <p>The plan catalog is temporarily unavailable here. AIDC will not invent prices, limits, or checkout state.</p>
-                  </div>
-                </section>
-              `}
-
-          <p class="aidc-pricing-note">
-            AIDC does not create, change, cancel, or bill subscriptions. Subscription management stays in Ace ID.
-          </p>
-        </div>
-      `;
-    }
-  }
-
-  /* ═══════════════════════════════════════
      OVERVIEW
      ═══════════════════════════════════════ */
 
@@ -720,42 +638,13 @@ export function registerAIDCComponents(AIDC) {
 
             <div class="aidc-metric-segment">
               <div>
-                <span>Project slots</span>
-                <strong>${state.quota.remaining}</strong>
-                <small>of ${state.quota.limit} available</small>
               </div>
               ${icon("layers-01")}
             </div>
 
           </section>
 
-          <section class="aidc-card aidc-entitlement-card" aria-labelledby="aidc-entitlement-title">
-            <header class="aidc-card-section-header">
-              <div>
-                <span class="aidc-eyebrow">Ace ID entitlement</span>
-                <h2 id="aidc-entitlement-title">${text(state.quota.name || "Entitlement status")}</h2>
-                <p>${state.quota.verified ? (state.quota.status === "active" ? "Entitlement is active." : "Ace ID reports this entitlement as inactive.") : "Ace ID entitlement data is temporarily unavailable. Existing applications remain visible."}</p>
-              </div>
-              <span class="aidc-entitlement-plan">${text(String(state.quota.plan || "—").toUpperCase())}</span>
-            </header>
-            <div class="aidc-entitlement-grid">
-              <div><span>Applications</span><strong>${state.quota.limit === null ? state.quota.count + " · limit unavailable" : state.quota.count + " / " + state.quota.limit}</strong><small>${state.quota.limit === null ? "Waiting for Ace ID" : state.quota.remaining + " remaining"}</small></div>
-              <div><span>Monthly active users</span><strong>${state.quota.mau === null ? "—" : Number(state.quota.mau).toLocaleString()}</strong><small>Served from Ace ID</small></div>
-            </div>
-            ${state.quota.limit !== null ? html`<div class="aidc-quota-track" aria-label="Application quota usage"><span style=${`width:${state.quota.limit ? Math.min((state.quota.count / state.quota.limit) * 100, 100) : 0}%`}></span></div>` : ""}
-          </section>
 
-          <section class="aidc-card aidc-pricing-callout" aria-labelledby="aidc-pricing-callout-title">
-            <div>
-              <span class="aidc-eyebrow">Subscription</span>
-              <h2 id="aidc-pricing-callout-title">Plans live in Pricing</h2>
-              <p>Compare Base, Core, and Apex limits in one dedicated place. Entitlements remain enforced by Ace ID.</p>
-            </div>
-            <a class="aidc-button aidc-button-secondary" href="#/pricing">
-              View pricing
-              ${icon("arrow-right-01")}
-            </a>
-          </section>
 
           <section class="aidc-section">
 
@@ -4353,6 +4242,311 @@ await auth.signIn();</code></pre>
      USER LOOKUP
      ═══════════════════════════════════════ */
 
+
+  /* ═══════════════════════════════════════
+     CLIENT MANAGEMENT
+     ═══════════════════════════════════════ */
+
+  class AIDCClients extends AIDCElement {
+    static properties = {
+      query: { state: true },
+      statusFilter: { state: true }
+    };
+
+    constructor() {
+      super();
+      this.query = "";
+      this.statusFilter = "all";
+    }
+
+    get clients() {
+      const query = this.query.trim().toLowerCase();
+
+      return state.applications.filter(app => {
+        if (
+          this.statusFilter !== "all" &&
+          app.status !== this.statusFilter
+        ) {
+          return false;
+        }
+
+        if (!query) return true;
+
+        return [
+          app.name,
+          app.client_id,
+          app.application_type,
+          app.origin_url
+        ].some(value =>
+          String(value || "").toLowerCase().includes(query)
+        );
+      });
+    }
+
+    async toggleStatus(app) {
+      if (!app?.id) return;
+
+      const nextStatus =
+        app.status === "active"
+          ? "disabled"
+          : "active";
+
+      if (
+        !window.confirm(
+          `Are you sure you want to ${nextStatus === "active" ? "enable" : "disable"} this client?`
+        )
+      ) {
+        return;
+      }
+
+      try {
+        await applications.update(app.id, {
+          status: nextStatus
+        });
+        notify(
+          nextStatus === "active"
+            ? "Client enabled"
+            : "Client disabled"
+        );
+        haptic?.(8);
+      } catch {
+        // applications.update() reports the failure.
+      }
+    }
+
+    async copyClientId(app) {
+      if (!app?.client_id) return;
+
+      if (await copyToClipboard(app.client_id)) {
+        notify("Client ID copied");
+        haptic?.(6);
+      }
+    }
+
+    renderClient(app) {
+      const active = app.status === "active";
+      const type =
+        app.application_type === "native"
+          ? "Native"
+          : "Web";
+      const origin =
+        String(app.origin_url || "").trim();
+
+      return html`
+        <article class="aidc-client-card">
+          <div class="aidc-client-card-head">
+            <div class="aidc-client-card-title">
+              <span class="aidc-app-symbol">
+                ${app.logo_url
+                  ? html`<img class="aidc-app-logo" src=${app.logo_url} alt="" loading="lazy" decoding="async" />`
+                  : icon("app-window")}
+              </span>
+
+              <div>
+                <h2>${text(app.name || "Untitled client")}</h2>
+                <span>
+                  ${type} client · Created ${formatDate(app.created_at)}
+                </span>
+              </div>
+            </div>
+
+            <span class="aidc-status ${active ? "aidc-status-active" : "aidc-status-disabled"}">
+              <span class="aidc-status-dot"></span>
+              ${active ? "Active" : "Disabled"}
+            </span>
+          </div>
+
+          <div class="aidc-client-card-id">
+            <span>Client ID</span>
+            <code class="aidc-mono">
+              ${text(app.client_id || "Unavailable")}
+            </code>
+
+            <button
+              class="aidc-icon-button"
+              type="button"
+              ?disabled=${!app.client_id}
+              aria-label="Copy client ID"
+              title="Copy client ID"
+              @click=${() => this.copyClientId(app)}
+            >
+              ${icon("copy-01")}
+            </button>
+          </div>
+
+          <div class="aidc-client-card-meta">
+            <div>
+              <span>Origin</span>
+              <strong>
+                ${text(origin || "Not configured")}
+              </strong>
+            </div>
+
+            <div>
+              <span>Credentials</span>
+              <strong>Managed in client settings</strong>
+            </div>
+          </div>
+
+          <div class="aidc-client-card-actions">
+            <a
+              class="aidc-button aidc-button-primary"
+              href="#/applications/${app.id}"
+            >
+              ${icon("settings-01")}
+              Manage
+            </a>
+
+            <button
+              class="aidc-button aidc-button-secondary"
+              type="button"
+              @click=${() => this.toggleStatus(app)}
+            >
+              ${icon(active ? "pause" : "play")}
+              ${active ? "Disable" : "Enable"}
+            </button>
+
+            <button
+              class="aidc-danger-button"
+              type="button"
+              @click=${() => modals.openDelete(app)}
+            >
+              ${icon("delete-02")}
+              Delete
+            </button>
+          </div>
+        </article>
+      `;
+    }
+
+    render() {
+      const clients = this.clients;
+      const total = state.applications.length;
+      const active = state.applications.filter(
+        app => app.status === "active"
+      ).length;
+      const disabled = total - active;
+
+      return html`
+        <div class="aidc-page">
+          <header class="aidc-page-header">
+            <div>
+              <span class="aidc-eyebrow">Identity clients</span>
+              <h1>Client management</h1>
+              <p>
+                Manage OAuth and OpenID Connect clients
+                without opening each application one by one.
+              </p>
+            </div>
+
+            <button
+              class="aidc-button aidc-button-primary"
+              type="button"
+              @click=${modals.openCreate}
+            >
+              ${icon("plus-sign")}
+              Create client
+            </button>
+          </header>
+
+          <section
+            class="aidc-client-summary"
+            aria-label="Client summary"
+          >
+            <div>
+              <span>Total clients</span>
+              <strong>${total}</strong>
+            </div>
+            <div>
+              <span>Active</span>
+              <strong>${active}</strong>
+            </div>
+            <div>
+              <span>Disabled</span>
+              <strong>${disabled}</strong>
+            </div>
+          </section>
+
+          <section class="aidc-card aidc-client-toolbar">
+            <label class="aidc-feature-search">
+              <span class="sr-only">Search clients</span>
+              <input
+                class="aidc-feature-search-input"
+                type="search"
+                placeholder="Search by name, client ID, origin, or type"
+                .value=${this.query}
+                @input=${event => (this.query = event.target.value)}
+              />
+            </label>
+
+            <select
+              class="aidc-client-filter"
+              aria-label="Filter clients by status"
+              .value=${this.statusFilter}
+              @change=${event => (this.statusFilter = event.target.value)}
+            >
+              <option value="all">All clients</option>
+              <option value="active">Active</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </section>
+
+          ${state.applicationsError
+            ? html`
+                <div class="aidc-dialog-note">
+                  ${icon("alert-02")}
+                  <span>${text(state.applicationsError)}</span>
+                </div>
+              `
+            : ""}
+
+          ${clients.length
+            ? html`
+                <section
+                  class="aidc-client-management-grid"
+                  aria-label="OAuth clients"
+                >
+                  ${clients.map(app => this.renderClient(app))}
+                </section>
+              `
+            : emptyState({
+                iconName: "app-window",
+                title:
+                  total
+                    ? "No clients match"
+                    : "No clients yet",
+                description:
+                  total
+                    ? "Try a different search or status filter."
+                    : "Create your first OAuth or OpenID Connect client.",
+                action: total
+                  ? html`
+                      <button
+                        class="aidc-button aidc-button-secondary"
+                        type="button"
+                        @click=${() => {
+                          this.query = "";
+                          this.statusFilter = "all";
+                        }}
+                      >
+                        Clear filters
+                      </button>
+                    `
+                  : html`
+                      <button
+                        class="aidc-button aidc-button-primary"
+                        type="button"
+                        @click=${modals.openCreate}
+                      >
+                        Create client
+                      </button>
+                    `
+              })}
+        </div>
+      `;
+    }
+  }
+
   class AIDCUsers extends AIDCElement {
     constructor() {
       super();
@@ -5148,15 +5342,6 @@ await auth.signIn();</code></pre>
 
               </label>
 
-              <div class="aidc-dialog-note">
-                ${icon("information-circle")}
-
-                <span>
-                  ${state.quota.verified ? "Verified" : "Unverified"} account ·
-                  ${state.quota.remaining} of ${state.quota.limit} project slots remaining.
-                </span>
-              </div>
-
               ${
                 this.error
                   ? html`
@@ -5666,7 +5851,6 @@ await auth.signIn();</code></pre>
             </a>
 
             <nav class="aidc-landing-nav-links" aria-label="AIDC">
-              <a href="#landing-pricing">Pricing</a>
               <a href="/cookies">Cookies</a>
             </nav>
 
@@ -5854,44 +6038,6 @@ await auth.signIn();</code></pre>
             </aside>
           </main>
 
-          <section id="landing-pricing" class="aidc-landing-pricing" aria-labelledby="landing-pricing-title">
-            <div class="aidc-landing-section-heading">
-              <span class="aidc-landing-eyebrow">Pricing</span>
-              <h2 id="landing-pricing-title">Plans without fake numbers.</h2>
-              <p>Subscription ownership stays in Ace ID. AIDC displays the plan catalog only when Ace ID provides it.</p>
-            </div>
-
-            <div class="aidc-landing-pricing-grid">
-              ${state.subscription.plans.length
-                ? state.subscription.plans.map(plan => {
-                    const name = String(plan.name || plan.label || plan.id || "Plan");
-                    const amount = Number(plan.amount ?? plan.price ?? NaN);
-                    const applications = Number(plan.applications ?? plan.limits?.applications ?? NaN);
-                    const mau = Number(plan.mau ?? plan.limits?.mau ?? NaN);
-                    return html`
-                      <article class="aidc-landing-price-card">
-                        <span class="aidc-landing-price-kicker">${text(name)}</span>
-                        <strong class="aidc-landing-price">${Number.isFinite(amount) ? "₹" + Math.round(amount / 100).toLocaleString("en-IN") : "Ace ID"}</strong>
-                        <span class="aidc-landing-price-period">${Number.isFinite(amount) && amount > 0 ? "per month" : "managed in Ace ID"}</span>
-                        <ul>
-                          ${Number.isFinite(applications) ? html`<li>${applications.toLocaleString("en-IN")} applications</li>` : ""}
-                          ${Number.isFinite(mau) ? html`<li>${mau.toLocaleString("en-IN")} monthly active users</li>` : ""}
-                          <li>Server-side entitlement enforcement</li>
-                        </ul>
-                        <span class="aidc-plan-status">Managed in Ace ID</span>
-                      </article>
-                    `;
-                  })
-                : html`
-                    <article class="aidc-landing-price-card aidc-landing-price-card-wide">
-                      <span class="aidc-landing-price-kicker">Ace ID</span>
-                      <strong class="aidc-landing-price">Subscription authority</strong>
-                      <p>Pricing, billing, upgrades, cancellations, offers, and entitlements are managed by Ace ID. AIDC never fabricates a checkout flow.</p>
-                    </article>
-                  `}
-            </div>
-          </section>
-
           ${this.cookieBannerVisible
             ? html`
                 <aside class="aidc-cookie-banner" role="status" aria-label="Cookie notice">
@@ -5925,18 +6071,14 @@ await auth.signIn();</code></pre>
       const route =
         router.parse();
 
-      if (route.path === "/pricing") {
-        return html`<aidc-pricing></aidc-pricing>`;
-      }
-
-      if (route.path === "/users") {
-        return html`<aidc-users></aidc-users>`;
-      }
-
       if (route.path === "/") {
         return html`
           <aidc-overview></aidc-overview>
         `;
+      }
+
+      if (route.path === "/clients") {
+        return html`<aidc-clients></aidc-clients>`;
       }
 
       if (route.path === "/analytics") {
@@ -6108,9 +6250,9 @@ await auth.signIn();</code></pre>
                 ${icon("chart-02")}
                 <span>Analytics</span>
               </a>
-              <a class="aidc-mobile-nav-item ${router.parse().path === "/pricing" ? "active" : ""}" href="#/pricing" aria-label="Pricing">
-                ${icon("credit-card")}
-                <span>Pricing</span>
+              <a class="aidc-mobile-nav-item ${router.parse().path === "/clients" ? "active" : ""}" href="#/clients" aria-label="Clients">
+                ${icon("app-window")}
+                <span>Clients</span>
               </a>
             </nav>
 
@@ -6252,11 +6394,6 @@ await auth.signIn();</code></pre>
   );
 
   customElements.define(
-    "aidc-pricing",
-    AIDCPricing
-  );
-
-  customElements.define(
     "aidc-applications",
     AIDCApplications
   );
@@ -6306,6 +6443,7 @@ await auth.signIn();</code></pre>
     AIDCIntegrationPlayground
   );
 
+  customElements.define("aidc-clients", AIDCClients);
   customElements.define("aidc-users", AIDCUsers);
   customElements.define("aidc-sessions", AIDCSessions);
   customElements.define("aidc-uptime", AIDCUptime);

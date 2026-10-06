@@ -1927,57 +1927,6 @@ app.get(
 
 /*
  * ═══════════════════════════════════════════
- * Subscription / entitlement proxy
- * ═══════════════════════════════════════════
- */
-
-async function callAceIdSubscription(pathname, developerId, options = {}) {
-  if (!AIDC_ENTITLEMENTS_SHARED_SECRET) throw new Error("entitlements_not_configured");
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-  try {
-    const response = await fetch(ISSUER + pathname, {
-      ...options,
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-        "X-Ace-ID-User-ID": String(developerId),
-        "X-Ace-ID-Entitlements-Secret": AIDC_ENTITLEMENTS_SHARED_SECRET
-      },
-      signal: controller.signal
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(payload?.error || ("Ace ID returned " + response.status));
-      error.status = response.status;
-      error.data = payload;
-      throw error;
-    }
-    return payload;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-app.get("/api/subscription", requireAuth, async (req, res) => {
-  try { return res.json(await callAceIdSubscription("/api/subscription", req.developer.id)); }
-  catch (error) {
-    console.error("GET /api/subscription:", error);
-    return res.status(error?.status === 401 ? 401 : 503).json({ error: "Entitlement service unavailable" });
-  }
-});
-
-app.get("/api/subscription/plans", requireAuth, async (req, res) => {
-  try { return res.json(await callAceIdSubscription("/api/subscription/plans", req.developer.id)); }
-  catch (error) {
-    console.error("GET /api/subscription/plans:", error);
-    return res.status(error?.status === 401 ? 401 : 503).json({ error: "Subscription plans unavailable" });
-  }
-});
-
-/*
- * ═══════════════════════════════════════════
  * Applications
  * ═══════════════════════════════════════════
  */
@@ -1988,65 +1937,32 @@ app.get(
   requireAuth,
   async (req, res) => {
     try {
-      const [userResult, applicationsResult] = await Promise.all([
-        pool.query(
-          'SELECT email_verified FROM public.aceid_users WHERE id = $1',
-          [req.developer.id]
-        ),
-        pool.query(
-          `
-          SELECT
-            public.applications.id,
-            public.applications.name,
-            public.applications.description,
-            public.applications.client_id,
-            COALESCE(aceid.application_type, public.applications.application_type, 'web') AS application_type,
-            public.applications.origin_url,
-            public.applications.status,
-            public.applications.created_at,
-            public.applications.updated_at,
-            branding.logo_url
-          FROM public.applications
-          LEFT JOIN public.application_branding AS branding
-            ON branding.application_id = public.applications.id
-          LEFT JOIN public.aceid_clients AS aceid
-            ON aceid.client_id = public.applications.client_id
-          WHERE public.applications.owner_id = $1
-          ORDER BY public.applications.created_at DESC
-          `,
-          [req.developer.id]
-        )
-      ]);
-
-      const count = applicationsResult.rows.length;
-      let entitlements = null;
-      let entitlementError = null;
-
-      try {
-        entitlements = await getAceIdEntitlements(req.developer.id);
-      } catch (error) {
-        entitlementError = error?.message || "entitlement_service_unavailable";
-        console.error("GET /api/applications entitlement lookup:", error);
-      }
-
-      const limit = entitlements?.applications;
+      const applicationsResult = await pool.query(
+        `
+        SELECT
+          public.applications.id,
+          public.applications.name,
+          public.applications.description,
+          public.applications.client_id,
+          COALESCE(aceid.application_type, public.applications.application_type, 'web') AS application_type,
+          public.applications.origin_url,
+          public.applications.status,
+          public.applications.created_at,
+          public.applications.updated_at,
+          branding.logo_url
+        FROM public.applications
+        LEFT JOIN public.application_branding AS branding
+          ON branding.application_id = public.applications.id
+        LEFT JOIN public.aceid_clients AS aceid
+          ON aceid.client_id = public.applications.client_id
+        WHERE public.applications.owner_id = $1
+        ORDER BY public.applications.created_at DESC
+        `,
+        [req.developer.id]
+      );
 
       res.json({
-        applications: applicationsResult.rows,
-        quota: entitlements && Number.isFinite(limit)
-          ? {
-              verified: true,
-              plan: entitlements.plan,
-              name: entitlements.name,
-              status: entitlements.status,
-              mau: entitlements.mau,
-              count,
-              limit,
-              remaining: Math.max(limit - count, 0)
-            }
-          : null,
-        entitlements,
-        entitlementError
+        applications: applicationsResult.rows
       });
     } catch (error) {
       console.error("GET /api/applications:", error);
