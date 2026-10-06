@@ -105,6 +105,36 @@ test("logout remains available when discovery is unavailable", () => {
   assert.match(logout, /logout_url/);
 });
 
+test("applications are public OAuth clients without credential management", () => {
+  assert.match(server, /true AS public_client/);
+  assert.match(server, /Public clients do not use client credentials/);
+  assert.match(server, /status\(410\)/);
+  assert.doesNotMatch(ui, /<aidc-credentials/);
+  assert.doesNotMatch(ui, /"Credentials"/);
+  assert.doesNotMatch(api, /credentials:\s*\{/);
+});
+
+test("create application returns DNS verification details", () => {
+  assert.match(server, /const verification = getOriginVerification/);
+  assert.match(server, /verification,\s*quota:/);
+  assert.match(ui, /DNS verification/);
+  assert.match(ui, /record_name/);
+  assert.match(ui, /record_value/);
+});
+
+test("create application uses snackbar errors and no template selector", () => {
+  assert.doesNotMatch(ui, /Start from template/);
+  assert.doesNotMatch(ui, /applicationTemplates/);
+  assert.match(ui, /notify\("Application name is required\.", "error"\)/);
+  assert.match(ui, /notify\(originValidation\.error, "error"\)/);
+});
+
+test("application and client views share one branding icon source", () => {
+  assert.match(ui, /function applicationLogo\(application\)/);
+  assert.match(ui, /applicationLogo\(app\)/);
+  assert.match(app, /logo_url: updatedBranding\.logo_url \|\| null/);
+});
+
 test("branding logos require HTTPS", () => {
   assert.match(
     server,
@@ -175,8 +205,8 @@ test("analytics ignores malformed login timestamps", () => {
 });
 
 test("frontend bundles have explicit cache-busted versions", () => {
-  assert.match(app, /\.\/ui\.js\?v=20261006-7/);
-  assert.match(index, /\/app\.js\?v=20261006-7/);
+  assert.match(app, /\.\/ui\.js\?v=20261006-8/);
+  assert.match(index, /\/app\.js\?v=20261006-8/);
   assert.match(index, /\/style\.css\?v=20261006-10/);
 });
 
@@ -212,10 +242,12 @@ test("frontend uses the first-party boot fallback", () => {
 test("application health checks reuse authenticated configuration endpoints", () => {
   assert.match(app, /const applicationHealth = \{/);
   assert.match(app, /api\.redirectUris\.list\(applicationId\)/);
-  assert.match(app, /api\.credentials\.list\(applicationId\)/);
+  assert.match(app, /api\.redirectUris\.list\(applicationId\)/);
   assert.match(app, /api\.scopes\.list\(applicationId\)/);
   assert.match(app, /Promise\.allSettled/);
-  assert.match(app, /activeCredentials/);
+  assert.match(app, /public-client/);
+  assert.match(app, /Public OAuth client/);
+  assert.doesNotMatch(app, /api\.credentials\./);
 });
 
 test("redirect URI diagnostics reuse the same validation rules", () => {
@@ -317,12 +349,13 @@ test("mobile overlays stay above navigation and branding color selection stays i
 });
 
 
-test("frontend public bridge defines all boot-critical helpers and templates", () => {
-  assert.match(app, /const APPLICATION_TEMPLATES = Object\.freeze\(/);
+test("frontend public bridge defines boot-critical helpers without templates or secrets", () => {
+  assert.doesNotMatch(app, /APPLICATION_TEMPLATES/);
+  assert.doesNotMatch(app, /applicationTemplates/);
+  assert.doesNotMatch(app, /const credentials =/);
   assert.match(app, /function contrastTextColor\(/);
   assert.match(app, /function markDirty\(/);
   assert.match(app, /function clearDirty\(/);
-  assert.match(app, /applicationTemplates: APPLICATION_TEMPLATES/);
   assert.match(app, /contrastTextColor,/);
   assert.match(app, /markDirty,/);
   assert.match(app, /clearDirty,/);
