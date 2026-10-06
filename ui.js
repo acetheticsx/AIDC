@@ -176,6 +176,8 @@ export function registerAIDCComponents(AIDC) {
         route.path === "/applications" ||
         route.path === "/applications/:id";
 
+      const pricingActive = route.path === "/pricing";
+
       return html`
         <aside class="aidc-sidebar">
 
@@ -247,7 +249,16 @@ export function registerAIDCComponents(AIDC) {
               <span>Analytics</span>
             </a>
 
-            <a class="aidc-nav-item" href="#/users"><span>Users</span></a>
+            <a
+              class="aidc-nav-item ${pricingActive ? "active" : ""}"
+              href="#/pricing"
+              @click=${() => this.closeMobile()}
+            >
+              ${icon("credit-card")}
+              <span>Pricing</span>
+            </a>
+
+                        <a class="aidc-nav-item" href="#/users"><span>Users</span></a>
 
           </nav>
 
@@ -565,6 +576,86 @@ export function registerAIDCComponents(AIDC) {
   }
 
   /* ═══════════════════════════════════════
+     PRICING
+     ═══════════════════════════════════════ */
+
+  class AIDCPricing extends AIDCElement {
+    render() {
+      const plans = state.subscription.plans.length
+        ? state.subscription.plans
+        : [
+            { id: "base", name: "Base", amount: 0, applications: 8, mau: 5000 },
+            { id: "core", name: "Core", amount: 29900, applications: 15, mau: 20000 },
+            { id: "apex", name: "Apex", amount: 54900, applications: 25, mau: 50000 }
+          ];
+
+      return html`
+        <div class="aidc-page aidc-pricing-page">
+          <header class="aidc-page-header">
+            <div>
+              <span class="aidc-eyebrow">AIDC</span>
+              <h1>Pricing</h1>
+              <p>Choose the entitlement level that matches your identity workload.</p>
+            </div>
+          </header>
+
+          <section class="aidc-pricing-grid aidc-plan-grid" aria-label="AIDC pricing plans">
+            ${plans.map(plan => {
+              const id = String(plan.id || "").toLowerCase();
+              const current = id === String(state.quota.plan || "").toLowerCase();
+              const amount = Number(plan.amount || 0);
+              const checking = state.subscription.checkoutPlan === id;
+
+              return html`
+                <article class="aidc-plan-card aidc-pricing-card ${current ? "is-current" : ""}">
+                  <div class="aidc-plan-card-head">
+                    <div>
+                      <span class="aidc-eyebrow">${text(plan.name)}</span>
+                      <h2>${text(plan.name)}</h2>
+                    </div>
+                    ${current ? html`<span class="aidc-plan-current">Current</span>` : ""}
+                  </div>
+
+                  <div>
+                    <strong class="aidc-plan-price">${amount ? "₹" + Math.round(amount / 100).toLocaleString("en-IN") : "Free"}</strong>
+                    ${amount ? html`<span class="aidc-pricing-period">/ month</span>` : ""}
+                  </div>
+
+                  <ul class="aidc-pricing-features">
+                    <li>${Number(plan.applications || 0).toLocaleString("en-IN")} applications</li>
+                    <li>${Number(plan.mau || 0).toLocaleString("en-IN")} monthly active users</li>
+                    <li>Server-side entitlement enforcement</li>
+                  </ul>
+
+                  ${current
+                    ? html`<span class="aidc-plan-status">Active entitlement</span>`
+                    : id === "base"
+                      ? html`<span class="aidc-plan-status">Included</span>`
+                      : html`
+                          <button
+                            class="aidc-button aidc-button-primary"
+                            type="button"
+                            ?disabled=${Boolean(state.subscription.checkoutPlan)}
+                            aria-busy=${checking}
+                            @click=${() => subscription.upgrade(id)}
+                          >
+                            ${checking ? "Opening checkout…" : "Upgrade to " + text(plan.name)}
+                          </button>
+                        `}
+                </article>
+              `;
+            })}
+          </section>
+
+          <p class="aidc-pricing-note">
+            Paid checkout is handled securely through the subscription service. AIDC does not trust the browser to enforce plan limits.
+          </p>
+        </div>
+      `;
+    }
+  }
+
+  /* ═══════════════════════════════════════
      OVERVIEW
      ═══════════════════════════════════════ */
 
@@ -579,31 +670,6 @@ export function registerAIDCComponents(AIDC) {
             app.status === "active"
         ).length;
 
-      const planCards = (state.subscription.plans.length ? state.subscription.plans : [
-        { id: "base", name: "Base", amount: 0, applications: 8, mau: 5000 },
-        { id: "core", name: "Core", amount: 29900, applications: 15, mau: 20000 },
-        { id: "apex", name: "Apex", amount: 54900, applications: 25, mau: 50000 }
-      ]).map(plan => {
-        const current = String(plan.id) === String(state.quota.plan);
-        const amount = Number(plan.amount || 0);
-        return html`
-          <article class="aidc-plan-card ${current ? "is-current" : ""}">
-            <div class="aidc-plan-card-head">
-              <div>
-                <span class="aidc-eyebrow">${text(plan.name)}</span>
-                <h3>${current ? "Current plan" : text(plan.name)}</h3>
-              </div>
-              ${current ? html`<span class="aidc-plan-current">Current</span>` : ""}
-            </div>
-            <strong class="aidc-plan-price">${amount ? "₹" + Math.round(amount / 100).toLocaleString("en-IN") : "Free"}</strong>
-            <div class="aidc-plan-limits">
-              <span>${Number(plan.applications || 0).toLocaleString("en-IN")} applications</span>
-              <span>${Number(plan.mau || 0).toLocaleString("en-IN")} monthly active users</span>
-            </div>
-            ${amount && !current ? html`<button class="aidc-button aidc-button-primary" type="button" @click=${() => subscription.upgrade(plan.id)}>Upgrade to ${text(plan.name)}</button>` : html`<span class="aidc-plan-status">${current ? "Active entitlement" : "Available"}</span>`}
-          </article>
-        `
-      });
       return html`
         <div class="aidc-page">
 
@@ -670,17 +736,16 @@ export function registerAIDCComponents(AIDC) {
             <div class="aidc-quota-track" aria-label="Application quota usage"><span style=${`width:${state.quota.limit ? Math.min((state.quota.count / state.quota.limit) * 100, 100) : 0}%`}></span></div>
           </section>
 
-          <section class="aidc-card aidc-subscription-card" aria-labelledby="aidc-subscription-title">
-            <header class="aidc-card-section-header">
-              <div>
-                <span class="aidc-eyebrow">Subscription</span>
-                <h2 id="aidc-subscription-title">Plans</h2>
-                <p>Entitlements are enforced by Ace ID. Billing runs through Razorpay.</p>
-              </div>
-            </header>
-            <div class="aidc-plan-grid">
-              ${planCards}
+          <section class="aidc-card aidc-pricing-callout" aria-labelledby="aidc-pricing-callout-title">
+            <div>
+              <span class="aidc-eyebrow">Subscription</span>
+              <h2 id="aidc-pricing-callout-title">Plans live in Pricing</h2>
+              <p>Compare Base, Core, and Apex limits in one dedicated place. Entitlements remain enforced by Ace ID.</p>
             </div>
+            <a class="aidc-button aidc-button-secondary" href="#/pricing">
+              View pricing
+              ${icon("arrow-right-01")}
+            </a>
           </section>
 
           <section class="aidc-section">
@@ -5309,6 +5374,9 @@ await auth.signIn();</code></pre>
       },
       cookiePolicyOpen: {
         state: true
+      },
+      cookieBannerVisible: {
+        state: true
       }
     };
 
@@ -5322,6 +5390,7 @@ await auth.signIn();</code></pre>
       this.accountMenuOpen = false;
       this.aboutOpen = false;
       this.cookiePolicyOpen = false;
+      this.cookieBannerVisible = true;
       this._shortcutPrefix = false;
       this._shortcutTimer = null;
 
@@ -5337,6 +5406,7 @@ await auth.signIn();</code></pre>
       this.theme =
         localStorage.getItem("aidc-theme") ||
         (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      this.cookieBannerVisible = localStorage.getItem("aidc-cookie-banner-dismissed") !== "1";
       this.applyTheme();
 
       this._themeChange = event => {
@@ -5534,6 +5604,12 @@ await auth.signIn();</code></pre>
       haptic?.(4);
     }
 
+    dismissCookieBanner() {
+      this.cookieBannerVisible = false;
+      localStorage.setItem("aidc-cookie-banner-dismissed", "1");
+      haptic?.(4);
+    }
+
     openAbout() {
       this.aboutOpen = true;
       haptic?.(8);
@@ -5582,6 +5658,11 @@ await auth.signIn();</code></pre>
                 <strong>AIDC</strong>
               </span>
             </a>
+
+            <nav class="aidc-landing-nav-links" aria-label="AIDC">
+              <a href="#landing-pricing">Pricing</a>
+              <a href="/cookies">Cookies</a>
+            </nav>
 
             <div class="aidc-landing-nav-actions">
               ${signedIn
@@ -5767,6 +5848,55 @@ await auth.signIn();</code></pre>
             </aside>
           </main>
 
+          <section id="landing-pricing" class="aidc-landing-pricing" aria-labelledby="landing-pricing-title">
+            <div class="aidc-landing-section-heading">
+              <span class="aidc-landing-eyebrow">Pricing</span>
+              <h2 id="landing-pricing-title">Simple plans. Enforced entitlements.</h2>
+              <p>Start free, then scale application and monthly active-user limits as your workload grows.</p>
+            </div>
+
+            <div class="aidc-landing-pricing-grid">
+              ${[
+                { id: "base", name: "Base", price: "Free", applications: "8", mau: "5,000", action: "Start with Base" },
+                { id: "core", name: "Core", price: "₹299", applications: "15", mau: "20,000", action: "Upgrade to Core" },
+                { id: "apex", name: "Apex", price: "₹549", applications: "25", mau: "50,000", action: "Upgrade to Apex" }
+              ].map(plan => html`
+                <article class="aidc-landing-price-card ${plan.id === "core" ? "is-featured" : ""}">
+                  <span class="aidc-landing-price-kicker">${plan.name}</span>
+                  <strong class="aidc-landing-price">${plan.price}</strong>
+                  <span class="aidc-landing-price-period">${plan.id === "base" ? "forever" : "per month"}</span>
+                  <ul>
+                    <li>${plan.applications} applications</li>
+                    <li>${plan.mau} monthly active users</li>
+                    <li>Server-side entitlement enforcement</li>
+                  </ul>
+                  <button
+                    class="aidc-landing-price-button"
+                    type="button"
+                    @click=${() => plan.id === "base" ? this.enterConsole() : signedIn ? subscription.upgrade(plan.id) : this.enterConsole()}
+                  >
+                    ${plan.action}
+                  </button>
+                </article>
+              `)}
+            </div>
+          </section>
+
+          ${this.cookieBannerVisible
+            ? html`
+                <aside class="aidc-cookie-banner" role="status" aria-label="Cookie notice">
+                  <div>
+                    <strong>Cookie notice</strong>
+                    <p>AIDC uses essential cookies and browser storage for authentication, security, and preferences. No advertising cookies are used.</p>
+                  </div>
+                  <div class="aidc-cookie-banner-actions">
+                    <button class="aidc-cookie-link" type="button" @click=${this.openCookiePolicy}>Cookie policy</button>
+                    <button class="aidc-button aidc-button-primary" type="button" @click=${this.dismissCookieBanner}>Got it</button>
+                  </div>
+                </aside>
+              `
+            : ""}
+
           <footer class="aidc-landing-footer">
             <span>Built for the Ace Base developer ecosystem.</span>
             <button class="aidc-cookie-link" type="button" @click=${this.openCookiePolicy}>Cookie policy</button>
@@ -5784,6 +5914,10 @@ await auth.signIn();</code></pre>
     renderPage() {
       const route =
         router.parse();
+
+      if (route.path === "/pricing") {
+        return html`<aidc-pricing></aidc-pricing>`;
+      }
 
       if (route.path === "/users") {
         return html`<aidc-users></aidc-users>`;
@@ -5964,6 +6098,10 @@ await auth.signIn();</code></pre>
                 ${icon("chart-02")}
                 <span>Analytics</span>
               </a>
+              <a class="aidc-mobile-nav-item ${router.parse().path === "/pricing" ? "active" : ""}" href="#/pricing" aria-label="Pricing">
+                ${icon("credit-card")}
+                <span>Pricing</span>
+              </a>
             </nav>
 
             <div class="aidc-account-fab-wrap">
@@ -6101,6 +6239,11 @@ await auth.signIn();</code></pre>
   customElements.define(
     "aidc-overview",
     AIDCOverview
+  );
+
+  customElements.define(
+    "aidc-pricing",
+    AIDCPricing
   );
 
   customElements.define(

@@ -1,4 +1,4 @@
-import { registerAIDCComponents } from "./ui.js?v=20261006-2";
+import { registerAIDCComponents } from "./ui.js?v=20261006-3";
 import { api } from "./api.js?v=20261004-3";
 
 /* ─────────────────────────────────────────────
@@ -82,6 +82,7 @@ const state = {
   },
   subscription: {
     loading: false,
+    checkoutPlan: null,
     plans: [],
     current: null,
     entitlements: null,
@@ -699,15 +700,24 @@ const subscription = {
   async upgrade(planId) {
     const idValue = String(planId || "").trim().toLowerCase();
     if (!["core", "apex"].includes(idValue)) throw new Error("Invalid paid plan.");
+    if (state.subscription.checkoutPlan) return null;
+
+    state.subscription.checkoutPlan = idValue;
+    emitState();
     haptic(8);
+
     try {
       const data = await api.subscription.checkout(idValue);
-      if (!data?.shortUrl) throw new Error("Checkout URL was not returned.");
+      const shortUrl = String(data?.shortUrl || "").trim();
+      if (!shortUrl) throw new Error("Checkout URL was not returned.");
       window.location.assign(data.shortUrl);
       return data;
     } catch (error) {
       handleError(error, "Unable to start checkout");
       throw error;
+    } finally {
+      state.subscription.checkoutPlan = null;
+      emitState();
     }
   },
 
