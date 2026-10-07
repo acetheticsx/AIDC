@@ -224,11 +224,11 @@ test("application health has no stale confidential-client runtime reference", ()
 });
 
 test("clients are exposed as a separate owner-scoped public resource", () => {
-  assert.match(server, /app\\.get\\(\\s*"\\/api\\/clients"/);
-  assert.match(server, /FROM public\\.applications AS a[\\s\\S]*WHERE a\\.owner_id = \\$1/);
+  assert.ok(server.includes('app.get(\n  "/api/clients"'));
+  assert.match(server, /FROM public\.applications AS a[\s\S]*WHERE a\.owner_id = \$1/);
   assert.match(server, /true AS public_client/);
-  assert.match(api, /clients:\\s*\\{[\\s\\S]*list\\(\\)[\\s\\S]*\\/clients/);
-  assert.match(ui, /state\\.clients/);
+  assert.match(api, /clients:\s*\{[\s\S]*list\(\)[\s\S]*\/clients/);
+  assert.match(ui, /state\.clients/);
   assert.match(ui, /Public client/);
 });
 
@@ -236,7 +236,7 @@ test("domain verification remains reachable after creation", () => {
   assert.match(ui, /Domain verification/);
   assert.match(ui, /Check verification status and view the TXT record when pending/);
   assert.match(ui, /url-configs/);
-  assert.match(server, /getOriginVerification\\(/);
+  assert.match(server, /getOriginVerification\(/);
   assert.match(server, /record_name/);
   assert.match(server, /record_value/);
 });
