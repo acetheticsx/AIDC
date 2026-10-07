@@ -180,10 +180,13 @@ test("frontend bundles have explicit cache-busted versions", () => {
   assert.match(index, /\/style\.css\?v=20261006-10/);
 });
 
-test("frontend source hardens the reported total redeclaration", () => {
-  assert.match(ui, /const totalChecks = health\?\.total \|\| 0/);
+test("frontend source hardens application overview render errors", () => {
+  assert.match(ui, /const totalChecks = health?\.total \|\| 0/);
+  assert.match(ui, /: totalChecks\s*\?/);
+  assert.doesNotMatch(ui, /: total\s*\?/);
+  assert.match(ui, /this\.clientType === "native"/);
+  assert.doesNotMatch(ui, /this\.applicationType === "native"/);
   assert.match(ui, /const applicationCount = state\.applications\.length/);
-  assert.doesNotMatch(ui, /const total = health\?\.total/);
 });
 
 test("application creation validates and normalizes origin inputs before submission", () => {
@@ -315,19 +318,20 @@ test("origin verification uses a scoped TXT challenge without controlling lifecy
   assert.doesNotMatch(server, /ORIGIN_DOMAIN_UNVERIFIED/);
 });
 
-test("Origin URL save binds the application update parameters correctly", () => {
+test("Origin URL and domain verification are separate surfaces", () => {
   assert.match(server, /WHERE id = \$11\s+AND owner_id = \$12/);
-  assert.match(ui, /View DNS records/);
-  assert.match(ui, /role="dialog"/);
-  assert.match(ui, /aria-labelledby="aidc-record-sheet-title"/);
-  assert.match(style, /aidc-record-sheet-layer/);
+  assert.match(ui, /"url-configs"/);
+  assert.match(ui, /"domain-verification"/);
+  assert.match(ui, /class AIDCOriginVerification/);
+  assert.match(ui, /AIDC\.api\.originVerification\.get/);
+  assert.match(ui, /record_name/);
+  assert.match(ui, /record_value/);
 });
 
-test("DNS records sheet remains usable while applications stay always-on", () => {
-  assert.match(ui, /this\._recordsTrigger/);
-  assert.match(ui, /handleRecordsKeydown/);
-  assert.match(ui, /event\.key === "Escape"/);
-  assert.match(ui, /event\.key !== "Tab"/);
+test("domain verification remains independently accessible while applications stay always-on", () => {
+  assert.match(ui, /class AIDCOriginVerification/);
+  assert.match(ui, /Verify TXT record/);
+  assert.match(ui, /Applications remain available while verification is pending/);
   assert.match(server, /verifyOriginDns/);
   assert.doesNotMatch(server, /forcedStatus = "disabled"/);
 });

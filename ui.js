@@ -1513,6 +1513,12 @@ export function registerAIDCComponents(AIDC) {
             )}
 
             ${this.tab(
+              "domain-verification",
+              "Domain verification",
+              "dns-01"
+            )}
+
+            ${this.tab(
               "scopes",
               "Scopes",
               "shield-01"
@@ -1586,6 +1592,11 @@ export function registerAIDCComponents(AIDC) {
         case "redirect-uris":
           return html`
             <aidc-url-configs .application=${app}></aidc-url-configs>
+          `;
+
+        case "domain-verification":
+          return html`
+            <aidc-origin-verification .application=${app}></aidc-origin-verification>
           `;
 
         case "scopes":
@@ -1724,8 +1735,8 @@ export function registerAIDCComponents(AIDC) {
               <p>
                 ${this.healthLoading
                   ? "Checking application configuration…"
-                  : total
-                    ? `${passed}/${total} checks passing`
+                  : totalChecks
+                    ? `${passed}/${totalChecks} checks passing`
                     : "Health data unavailable"}
               </p>
             </div>
@@ -1945,7 +1956,7 @@ export function registerAIDCComponents(AIDC) {
               <div class="aidc-detail-field">
 
                 <span>
-                  Origin URL ${this.applicationType === "native" ? "(optional)" : ""}
+                  Origin URL ${this.clientType === "native" ? "(optional)" : ""}
                 </span>
 
                 <code class="aidc-mono">
@@ -2627,7 +2638,9 @@ export function registerAIDCComponents(AIDC) {
                 </button>
               </div>
             </div>
-          ${this.renderVerification()}
+          <a class="aidc-text-button" href="#/applications/${app.id}/domain-verification">
+            ${icon("dns-01")} Domain verification ${icon("arrow-right-01")}
+          </a>
           </section>
 
           <aidc-redirect-uris
@@ -2637,6 +2650,36 @@ export function registerAIDCComponents(AIDC) {
       `;
     }
   }
+  /* DOMAIN VERIFICATION */
+  class AIDCOriginVerification extends AIDCElement {
+    static properties = { application: { attribute: false }, verification: { state: true }, loading: { state: true }, verifying: { state: true } };
+    constructor() { super(); this.application = null; this.verification = null; this.loading = false; this.verifying = false; }
+    updated(changed) { if (!changed.has("application")) return; this.verification = null; if (this.application?.id) this.load(this.application.id); }
+    async load(applicationId) {
+      if (!applicationId || this.loading) return;
+      this.loading = true;
+      try { const data = await AIDC.api.originVerification.get(applicationId); if (this.application?.id === applicationId) this.verification = data?.verification || null; }
+      catch (error) { this.verification = null; notify(error?.message || "Unable to load domain verification.", "error"); }
+      finally { this.loading = false; }
+    }
+    async verify() {
+      if (!this.application?.id || this.verifying) return;
+      this.verifying = true;
+      try { const data = await AIDC.api.originVerification.verify(this.application.id); this.verification = data?.verification || this.verification; if (this.verification?.verified) { notify("Origin domain verified"); haptic?.(10); } else notify(this.verification?.reason || "TXT record is not verified yet.", "error"); }
+      catch (error) { this.verification = error?.details?.verification || error?.data?.verification || this.verification; notify(error?.message || "TXT record is not verified yet.", "error"); }
+      finally { this.verifying = false; }
+    }
+    async copy(value, label) { if (value && await copyToClipboard(value)) notify(`${label} copied`); }
+    render() {
+      const app = this.application, v = this.verification;
+      if (!app) return "";
+      if (!app.origin_url) return html`<section class="aidc-card"><header class="aidc-card-section-header"><h2>Domain verification</h2><p>Verify control of the configured Origin domain.</p></header><div class="aidc-dialog-note">${icon("information-circle")}<span>Set an Origin URL in URL Configs first. Applications remain available while verification is pending.</span></div></section>`;
+      if (this.loading && !v) return html`<section class="aidc-card" aria-busy="true"><header class="aidc-card-section-header"><h2>Domain verification</h2><p>Loading the current DNS verification status…</p></header><div class="aidc-loading-card"><span class="aidc-skeleton"></span><span class="aidc-skeleton"></span></div></section>`;
+      if (!v?.required) return html`<section class="aidc-card"><header class="aidc-card-section-header"><div><h2>Domain verification</h2><p>Current verification status for ${text(app.origin_url)}.</p></div><span class="aidc-origin-verification-badge is-verified">Verified</span></header><div class="aidc-dialog-note">${icon("checkmark-circle-02")}<span>${text(v?.reason || "This Origin does not require DNS verification.")}</span></div></section>`;
+      return html`<section class="aidc-card aidc-origin-verification"><header class="aidc-card-section-header"><div><h2>Domain verification</h2><p>Verify control of ${text(app.origin_url)}. This check never controls application availability.</p></div><span class="aidc-origin-verification-badge ${v.verified ? "is-verified" : ""}">${v.verified ? "Verified" : "Pending"}</span></header><div class="aidc-dns-record"><div class="aidc-dns-row"><span>Name</span><code>${text(v.record_name)}</code><button class="aidc-icon-button" type="button" aria-label="Copy TXT record name" @click=${() => this.copy(v.record_name, "TXT name")}>${icon("copy-01")}</button></div><div class="aidc-dns-row"><span>Type</span><code>${text(v.record_type || "TXT")}</code></div><div class="aidc-dns-row"><span>Value</span><code>${text(v.record_value)}</code><button class="aidc-icon-button" type="button" aria-label="Copy TXT record value" @click=${() => this.copy(v.record_value, "TXT value")}>${icon("copy-01")}</button></div></div><div class="aidc-dialog-note">${icon(v.verified ? "checkmark-circle-02" : "information-circle")}<span>${text(v.reason || (v.verified ? "TXT record verified." : "Add the TXT record, then verify it."))}</span></div>${v.records?.length ? html`<div class="aidc-dns-records-found"><span>Records found</span><div>${v.records.map(record => html`<code>${text(record)}</code>`)}</div></div>` : ""}<div class="aidc-dialog-actions"><button class="aidc-button aidc-button-primary ${this.verifying ? "is-loading" : ""}" type="button" ?disabled=${this.verifying || v.verified} @click=${this.verify}>${icon(v.verified ? "checkmark-circle-02" : "refresh")} ${this.verifying ? "Checking DNS…" : v.verified ? "Domain verified" : "Verify TXT record"}</button></div></section>`;
+    }
+  }
+
   /* ═══════════════════════════════════════
      REDIRECT URIS
      ═══════════════════════════════════════ */
