@@ -2131,7 +2131,13 @@ app.post(
 
     // Resolve the remote entitlement before acquiring a database transaction.
     // The Ace ID call can take up to 5s and must never hold a PostgreSQL lock.
-    const entitlements = await getAceIdEntitlements(req.developer.id);
+    let entitlements;
+    try {
+      entitlements = await getAceIdEntitlements(req.developer.id);
+    } catch (error) {
+      console.error("POST /api/applications entitlement lookup failed:", error);
+      return res.status(503).json({ error: "Subscription entitlement is currently unavailable. Please retry shortly.", code: "ENTITLEMENT_UNAVAILABLE" });
+    }
     if (entitlements.status !== "active" || !Number.isFinite(entitlements.applications)) {
       return res.status(503).json({
         error: "Ace ID entitlement does not currently permit application creation.",
@@ -3623,46 +3629,67 @@ function resolveEntitlementLimit(payload, key) {
   return value === null ? null : Math.floor(value);
 }
 
+const LOCAL_PLAN_LIMITS = Object.freeze({
+  base: Object.freeze({ applications: 8, mau: 5000 }),
+  core: Object.freeze({ applications: 15, mau: 20000 }),
+  apex: Object.freeze({ applications: 25, mau: 50000 })
+});
+
+async function getLocalAceIdEntitlements(userId) {
+  const result = await pool.query(`
+    SELECT plan_id, status, billing_period_end, grant_expires_at, provider, source
+    FROM public.aceid_subscriptions
+    WHERE user_id = $1 AND status = 'active'
+      AND (grant_expires_at IS NULL OR grant_expires_at > NOW())
+      AND (billing_period_end IS NULL OR billing_period_end > NOW())
+    ORDER BY updated_at DESC LIMIT 1
+  `, [userId]);
+  const row = result.rows[0];
+  if (!row) throw new Error("active_entitlement_not_found");
+  const plan = String(row.plan_id || "").trim().toLowerCase();
+  const limits = LOCAL_PLAN_LIMITS[plan];
+  if (!limits) throw new Error("unsupported_entitlement_plan");
+  return {
+    plan, name: plan.charAt(0).toUpperCase() + plan.slice(1), status: "active",
+    applications: limits.applications, mau: limits.mau, limits, features: {},
+    subscription: { provider: row.provider || null, source: row.source || null, billing_period_end: row.billing_period_end || null, grant_expires_at: row.grant_expires_at || null },
+    manageUrl: null, verified: true, source: "aceid_database_fallback"
+  };
+}
+
 async function getAceIdEntitlements(developerId) {
   const userId = String(developerId || "").trim();
   if (!userId) throw new Error("entitlement_user_required");
-  if (!AIDC_ENTITLEMENTS_SHARED_SECRET) throw new Error("entitlements_not_configured");
-
+  if (!AIDC_ENTITLEMENTS_SHARED_SECRET) {
+    console.warn("AIDC entitlement API secret is unavailable; using Ace ID database fallback.");
+    return getLocalAceIdEntitlements(userId);
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
     const response = await fetch(ISSUER + "/api/subscription", {
-      headers: {
-        Accept: "application/json",
-        "X-Ace-ID-User-ID": userId,
-        "X-Ace-ID-Entitlements-Secret": AIDC_ENTITLEMENTS_SHARED_SECRET
-      },
+      headers: { Accept: "application/json", "X-Ace-ID-User-ID": userId, "X-Ace-ID-Entitlements-Secret": AIDC_ENTITLEMENTS_SHARED_SECRET },
       signal: controller.signal
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload?.error || ("entitlement_service_" + response.status));
-
     const plan = String(payload?.plan || "").trim().toLowerCase();
     if (!plan) throw new Error("entitlement_plan_missing");
-
     const applicationsLimit = resolveEntitlementLimit(payload, "applications");
     const mauLimit = resolveEntitlementLimit(payload, "mau");
-
     return {
-      plan,
-      name: String(payload?.name || plan),
-      status: String(payload?.status || "inactive"),
-      applications: applicationsLimit,
-      mau: mauLimit,
+      plan, name: String(payload?.name || plan), status: String(payload?.status || "inactive"),
+      applications: applicationsLimit, mau: mauLimit,
       limits: payload?.limits && typeof payload.limits === "object" ? payload.limits : {},
       features: payload?.features && typeof payload.features === "object" ? payload.features : {},
       subscription: payload?.subscription || null,
       manageUrl: typeof payload?.manage_url === "string" ? payload.manage_url : null,
-      verified: true
+      verified: true, source: "aceid_api"
     };
-  } finally {
-    clearTimeout(timeout);
-  }
+  } catch (error) {
+    console.warn("Ace ID entitlement API unavailable; using Ace ID database fallback:", error?.message || error);
+    return getLocalAceIdEntitlements(userId);
+  } finally { clearTimeout(timeout); }
 }
 
 app.get("/api/quota", requireAuth, async (req, res) => {
