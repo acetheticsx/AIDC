@@ -151,6 +151,16 @@ const databaseSslCa =
     ? process.env.DATABASE_SSL_CA
     : undefined;
 
+const DATABASE_POOL_MAX = Number.parseInt(
+  process.env.DATABASE_POOL_MAX || "10",
+  10
+);
+
+if (!Number.isInteger(DATABASE_POOL_MAX) || DATABASE_POOL_MAX < 1 || DATABASE_POOL_MAX > 50) {
+  console.error("Invalid DATABASE_POOL_MAX. Use an integer from 1 to 50.");
+  process.exit(1);
+}
+
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: {
@@ -162,7 +172,7 @@ const pool = new Pool({
       ? { ca: databaseSslCa }
       : {})
   },
-  max: 10,
+  max: DATABASE_POOL_MAX,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 10_000
 });
@@ -2020,6 +2030,17 @@ app.post(
       return res.status(400).json({ error: originValidation.error });
     }
 
+    // Resolve the remote entitlement before acquiring a database transaction.
+    // The Ace ID call can take up to 5s and must never hold a PostgreSQL lock.
+    const entitlements = await getAceIdEntitlements(req.developer.id);
+    if (entitlements.status !== "active" || !Number.isFinite(entitlements.applications)) {
+      return res.status(503).json({
+        error: "Ace ID entitlement does not currently permit application creation.",
+        code: "ENTITLEMENT_UNAVAILABLE"
+      });
+    }
+    const limit = entitlements.applications;
+
     const client = await pool.connect();
 
     try {
@@ -2034,16 +2055,6 @@ app.post(
         await client.query("ROLLBACK");
         return res.status(403).json({ error: "Ace ID not found" });
       }
-
-      const entitlements = await getAceIdEntitlements(req.developer.id);
-      if (entitlements.status !== "active" || !Number.isFinite(entitlements.applications)) {
-        await client.query("ROLLBACK");
-        return res.status(503).json({
-          error: "Ace ID entitlement does not currently permit application creation.",
-          code: "ENTITLEMENT_UNAVAILABLE"
-        });
-      }
-      const limit = entitlements.applications;
 
       const countResult = await client.query(
         'SELECT COUNT(*)::integer AS count FROM public.applications WHERE owner_id = $1',
@@ -3557,11 +3568,13 @@ async function getAceIdEntitlements(developerId) {
 
 app.get("/api/quota", requireAuth, async (req, res) => {
   try {
-    const entitlements = await getAceIdEntitlements(req.developer.id);
-    const countResult = await pool.query(
-      "SELECT COUNT(*)::integer AS count FROM public.applications WHERE owner_id = $1",
-      [req.developer.id]
-    );
+    const [entitlements, countResult] = await Promise.all([
+      getAceIdEntitlements(req.developer.id),
+      pool.query(
+        "SELECT COUNT(*)::integer AS count FROM public.applications WHERE owner_id = $1",
+        [req.developer.id]
+      )
+    ]);
     const count = Number(countResult.rows[0]?.count) || 0;
     const limit = Number.isFinite(entitlements.applications) ? entitlements.applications : null;
     res.json({
@@ -3749,8 +3762,12 @@ async function recordAllApplicationUptime() {
     const result = await pool.query(
       "SELECT id FROM public.applications WHERE status = 'active' ORDER BY created_at ASC"
     );
-    for (const row of result.rows) {
-      await recordApplicationUptime(row.id);
+    // Bound concurrency so a large application set cannot turn the periodic
+    // sweep into an unbounded database/network fan-out.
+    const concurrency = Math.min(5, Math.max(result.rows.length, 1));
+    for (let start = 0; start < result.rows.length; start += concurrency) {
+      const batch = result.rows.slice(start, start + concurrency);
+      await Promise.all(batch.map(row => recordApplicationUptime(row.id)));
     }
   } catch (error) {
     console.error("Application uptime sweep failed:", error);

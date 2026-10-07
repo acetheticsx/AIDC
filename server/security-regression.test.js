@@ -74,6 +74,40 @@ test("shutdown is idempotent and has a force-exit safety timer", () => {
   assert.match(server, /Forced shutdown after timeout/);
 });
 
+test("database pool size is explicitly bounded and configurable", () => {
+  assert.match(server, /const DATABASE_POOL_MAX = Number\.parseInt\(/);
+  assert.match(server, /DATABASE_POOL_MAX < 1 \|\| DATABASE_POOL_MAX > 50/);
+  assert.match(server, /max: DATABASE_POOL_MAX/);
+});
+
+test("application creation resolves remote entitlements before opening a transaction", () => {
+  const start = server.indexOf('app.post(\n  "\/api\/applications"');
+  const end = server.indexOf('app.get(\n  "\/api\/applications\/:id"', start);
+  const route = start >= 0 && end > start ? server.slice(start, end) : "";
+  const entitlementOffset = route.indexOf('const entitlements = await getAceIdEntitlements(req.developer.id)');
+  const beginOffset = route.indexOf('await client.query("BEGIN")');
+  assert.ok(entitlementOffset >= 0, "application creation must resolve entitlements");
+  assert.ok(beginOffset >= 0, "application creation must use a transaction");
+  assert.ok(entitlementOffset < beginOffset, "remote entitlement lookup must not hold a DB transaction");
+});
+
+test("quota reads entitlement and application count concurrently", () => {
+  const start = server.indexOf('app.get("\/api\/quota"');
+  const end = server.indexOf('async function getOwnedApplication', start);
+  const route = start >= 0 && end > start ? server.slice(start, end) : "";
+  assert.match(route, /Promise\.all\(\[/);
+  assert.match(route, /getAceIdEntitlements\(req\.developer\.id\)/);
+  assert.match(route, /SELECT COUNT\(\*\)::integer AS count/);
+});
+
+test("periodic uptime sweeps use bounded concurrency", () => {
+  const start = server.indexOf('async function recordAllApplicationUptime');
+  const end = server.indexOf('app.get("\/api\/applications\/:id\/uptime"', start);
+  const route = start >= 0 && end > start ? server.slice(start, end) : "";
+  assert.match(route, /Math\.min\(5/);
+  assert.match(route, /Promise\.all\(batch\.map/);
+});
+
 test("database TLS verifies certificates", () => {
   assert.match(
     server,
