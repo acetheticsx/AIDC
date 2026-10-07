@@ -1,4 +1,4 @@
-import { registerAIDCComponents } from "./ui.js?v=20261006-8";
+import { registerAIDCComponents } from "./ui.js?v=20261007-9";
 import { api } from "./api.js?v=20261004-3";
 
 /* ─────────────────────────────────────────────
@@ -44,6 +44,8 @@ const state = {
 
   applications: [],
   applicationsError: null,
+  clients: [],
+  clientsError: null,
 
   analytics: {
     days: 7,
@@ -103,6 +105,7 @@ let redirectUriRequestId = 0;
 let scopeRequestId = 0;
 
 let applicationsLoadPromise = null;
+let clientsLoadPromise = null;
 
 /*
  * Set once the auth-required redirect has been
@@ -315,7 +318,7 @@ const auth = {
     emitState();
 
     try {
-      await applications.load();
+      await Promise.all([applications.load(), clients.load()]);
     } finally {
       lastRouteKey = "";
       handleRouteChange();
@@ -592,6 +595,36 @@ const applications = {
         application => application.id === id
       ) || null
     );
+  }
+};
+
+/* ─────────────────────────────────────────────
+   Clients
+───────────────────────────────────────────── */
+
+const clients = {
+  async load() {
+    if (clientsLoadPromise) {
+      return clientsLoadPromise;
+    }
+
+    clientsLoadPromise = (async () => {
+      try {
+        const data = await api.clients.list();
+        state.clients = Array.isArray(data?.clients) ? data.clients : [];
+        state.clientsError = null;
+        return state.clients;
+      } catch (error) {
+        handleError(error, "Failed to load clients");
+        state.clientsError = error?.message || "Failed to load clients";
+        return [];
+      } finally {
+        clientsLoadPromise = null;
+        emitState();
+      }
+    })();
+
+    return clientsLoadPromise;
   }
 };
 
@@ -1189,7 +1222,6 @@ const applicationHealth = {
       total: checks.length,
       healthy: passed === checks.length,
       redirectUris,
-      credentials,
       scopes
     };
   }
@@ -1513,7 +1545,7 @@ function clearDirty() {
 ───────────────────────────────────────────── */
 
 async function reload() {
-  await applications.load();
+  await Promise.all([applications.load(), clients.load()]);
 
   lastRouteKey = "";
   handleRouteChange();
@@ -1526,11 +1558,10 @@ const AIDC = {
   auth,
 
   applications,
+  clients,
   redirectUris,
 
   scopes,
-
-  credentials,
 
   branding,
 
@@ -1676,7 +1707,7 @@ auth.bootstrap().then(user => {
    */
   state.ui.consoleOpen = true;
 
-  applications.load().finally(() => {
+  Promise.all([applications.load(), clients.load()]).finally(() => {
     lastRouteKey = "";
     handleRouteChange();
   });

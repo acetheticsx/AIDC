@@ -1667,21 +1667,6 @@ export function registerAIDCComponents(AIDC) {
     }
 
     updated(changed) {
-      if (changed.has("recordsOpen")) {
-        if (this.recordsOpen) {
-          requestAnimationFrame(() => {
-            const dialog = this.querySelector(".aidc-record-sheet");
-            const close = dialog?.querySelector(".aidc-record-sheet-head .aidc-icon-button");
-            (close || dialog)?.focus();
-          });
-        } else {
-          requestAnimationFrame(() => {
-            this._recordsTrigger?.focus?.();
-            this._recordsTrigger = null;
-          });
-        }
-      }
-
       if (changed.has("application")) {
         this.clientType = this.application?.application_type || "web";
 
@@ -2044,6 +2029,14 @@ export function registerAIDCComponents(AIDC) {
                 "link-01",
                 "URL Configs",
                 "Configure origin and callback URLs."
+              )}
+
+              ${this.configItem(
+                app.id,
+                "url-configs",
+                "dns-01",
+                "Domain verification",
+                "Check verification status and view the TXT record when pending."
               )}
 
               ${this.configItem(
@@ -3887,7 +3880,7 @@ await auth.signIn();</code></pre>
     get clients() {
       const query = this.query.trim().toLowerCase();
 
-      return state.applications.filter(app => {
+      return state.clients.filter(app => {
 if (!query) return true;
 
         return [
@@ -3978,15 +3971,13 @@ if (!query) return true;
               Manage
             </a>
 
-
-            <button
-              class="aidc-danger-button"
-              type="button"
-              @click=${() => modals.openDelete(app)}
+            <a
+              class="aidc-button aidc-button-secondary"
+              href="#/applications/${app.id}/url-configs"
             >
-              ${icon("delete-02")}
-              Delete
-            </button>
+              ${icon("dns-01")}
+              Domain verification
+            </a>
           </div>
         </article>
       `;
@@ -3994,7 +3985,7 @@ if (!query) return true;
 
     render() {
       const clients = this.clients;
-      const applicationCount = state.applications.length;
+      const clientCount = state.clients.length;
 
       return html`
         <div class="aidc-page">
@@ -4014,7 +4005,7 @@ if (!query) return true;
               @click=${modals.openCreate}
             >
               ${icon("plus-sign")}
-              Create client
+              Create application
             </button>
           </header>
 
@@ -4024,7 +4015,7 @@ if (!query) return true;
           >
             <div>
               <span>Total clients</span>
-              <strong>${applicationCount}</strong>
+              <strong>${clientCount}</strong>
             </div>
             <div><span>Availability</span><strong>Always on</strong></div>
           </section>
@@ -4043,11 +4034,11 @@ if (!query) return true;
 
           </section>
 
-          ${state.applicationsError
+          ${state.clientsError
             ? html`
                 <div class="aidc-dialog-note">
                   ${icon("alert-02")}
-                  <span>${text(state.applicationsError)}</span>
+                  <span>${text(state.clientsError)}</span>
                 </div>
               `
             : ""}

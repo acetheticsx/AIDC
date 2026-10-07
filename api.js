@@ -178,6 +178,12 @@ export const api = {
     }
   },
 
+  clients: {
+    list() {
+      return request("/clients");
+    }
+  },
+
   originVerification: {
     get(applicationId) {
       return request(`/applications/${id(applicationId)}/origin-verification`);

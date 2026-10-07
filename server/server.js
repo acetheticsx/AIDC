@@ -1954,6 +1954,44 @@ app.get(
   }
 );
 
+app.get(
+  "/api/clients",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `
+        SELECT
+          a.id,
+          a.name,
+          a.description,
+          a.client_id,
+          COALESCE(c.application_type, a.application_type, 'web') AS application_type,
+          a.origin_url,
+          'active' AS status,
+          a.created_at,
+          a.updated_at,
+          branding.logo_url,
+          true AS public_client
+        FROM public.applications AS a
+        LEFT JOIN public.aceid_clients AS c
+          ON c.client_id = a.client_id
+        LEFT JOIN public.application_branding AS branding
+          ON branding.application_id = a.id
+        WHERE a.owner_id = $1
+        ORDER BY a.created_at DESC
+        `,
+        [req.developer.id]
+      );
+
+      res.json({ clients: result.rows });
+    } catch (error) {
+      console.error("GET /api/clients:", error);
+      res.status(500).json({ error: "Failed to fetch clients" });
+    }
+  }
+);
+
 app.post(
   "/api/applications",
   requireAuth,
