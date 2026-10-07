@@ -181,7 +181,7 @@ test("frontend bundles have explicit cache-busted versions", () => {
 });
 
 test("frontend source hardens application overview render errors", () => {
-  assert.match(ui, /const totalChecks = health?\.total \|\| 0/);
+  assert.match(ui, /const totalChecks = health\?\.total \|\| 0/);
   assert.match(ui, /: totalChecks\s*\?/);
   assert.doesNotMatch(ui, /: total\s*\?/);
   assert.match(ui, /this\.clientType === "native"/);
