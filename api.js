@@ -289,6 +289,10 @@ export const api = {
     }
   },
 
+  quota: {
+    get() { return request("/quota"); }
+  },
+
   playground: {
     config() {
       return request("/playground/config");

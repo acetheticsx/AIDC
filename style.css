@@ -3609,7 +3609,7 @@ body:has(
 .aidc-config-list{display:grid;gap:8px}
 .aidc-config-button{width:100%;min-height:58px;justify-content:flex-start;padding:10px 12px;text-align:left;text-decoration:none}
 .aidc-config-button>.aidc-icon:last-child{margin-left:auto}
-.aidc-scope-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:2px}
+.aidc-scope-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:2px}
 .aidc-scope-grid .aidc-config-item{position:relative;display:flex;flex-direction:column;align-items:stretch;min-height:142px;gap:12px;padding:14px;border:1px solid var(--aidc-border);border-radius:12px;background:var(--aidc-surface);transition:border-color var(--aidc-fast),background var(--aidc-fast),transform var(--aidc-fast),box-shadow var(--aidc-fast)}
 .aidc-scope-grid .aidc-config-item:last-child{border-bottom:1px solid var(--aidc-border)}
 .aidc-scope-grid .aidc-config-item:hover{border-color:#c5c5c1;background:var(--aidc-surface-soft);transform:translateY(-1px)}
@@ -8541,8 +8541,29 @@ html::before{
 .aidc-pricing-empty{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:18px;padding:24px}
 .aidc-bento-icon{display:grid;place-items:center;width:48px;height:48px;border:1px solid var(--aidc-border);border-radius:14px;background:var(--aidc-surface-soft)}
 .aidc-landing-price-card-wide{grid-column:1/-1;min-height:160px;justify-content:center}
-@media (max-width:900px){.aidc-metric-segment:nth-child(1),.aidc-metric-segment:nth-child(2),.aidc-metric-segment:nth-child(3){grid-column:span 6}.aidc-application-bento .aidc-application-row{grid-column:span 6}}
-@media (max-width:640px){.aidc-metric-segments{grid-template-columns:1fr;gap:10px}.aidc-metric-segment:nth-child(1),.aidc-metric-segment:nth-child(2),.aidc-metric-segment:nth-child(3){grid-column:1}.aidc-application-bento{grid-template-columns:1fr}.aidc-application-bento .aidc-application-row{grid-column:1;min-height:0}.aidc-pricing-empty{grid-template-columns:1fr}.aidc-landing-price-card-wide{grid-column:1}}
+@media (max-width:900px){.aidc-metric-segment:nth-child(1),.aidc-metric-segment:nth-child(2){grid-column:span 6}.aidc-application-bento .aidc-application-row{grid-column:span 6}}
+@media (max-width:640px){.aidc-metric-segments{grid-template-columns:1fr;gap:10px}.aidc-metric-segment:nth-child(1),.aidc-metric-segment:nth-child(2){grid-column:1}.aidc-application-bento{grid-template-columns:1fr}.aidc-application-bento .aidc-application-row{grid-column:1;min-height:0}.aidc-pricing-empty{grid-template-columns:1fr}.aidc-landing-price-card-wide{grid-column:1}}
+
+/* Overview Bento */
+.aidc-overview-bento{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px;min-width:0;margin:0 0 42px}
+.aidc-bento-card{grid-column:span 6;display:flex;align-items:center;justify-content:space-between;min-width:0;min-height:154px;gap:18px;padding:22px;border:1px solid var(--aidc-border);border-radius:22px;background:var(--aidc-surface);box-shadow:var(--aidc-shadow-card)}
+.aidc-bento-card-primary{background:var(--aidc-surface-soft)}
+.aidc-bento-copy{display:flex;min-width:0;flex-direction:column}
+.aidc-bento-copy>span{color:var(--aidc-muted);font-size:11px;font-weight:650}
+.aidc-bento-copy strong{margin-top:7px;color:var(--aidc-text);font-size:34px;line-height:1;letter-spacing:-.045em}
+.aidc-bento-copy small{max-width:360px;margin-top:9px;color:var(--aidc-muted);font-size:11px;line-height:1.5}
+.aidc-bento-title-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.aidc-subscription-badge{display:inline-flex;align-items:center;max-width:100%;padding:4px 8px;overflow:hidden;border:1px solid var(--aidc-border);border-radius:999px;background:var(--aidc-surface-soft);color:var(--aidc-text-secondary);font-size:9px;font-weight:700;line-height:1.2;text-overflow:ellipsis;white-space:nowrap}
+.aidc-bento-icon{display:grid;place-items:center;width:48px;height:48px;flex:0 0 48px;border:1px solid var(--aidc-border);border-radius:14px;background:var(--aidc-surface-soft);color:var(--aidc-text-secondary)}
+.aidc-description-editor{width:100%;min-width:0}
+.aidc-description-editor textarea{display:block;width:100%;min-width:0;min-height:110px;margin-top:7px;padding:11px 12px;border:1px solid var(--aidc-border);border-radius:10px;outline:0;resize:vertical;background:var(--aidc-surface);color:var(--aidc-text);font:inherit;line-height:1.5}
+.aidc-inline-actions{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-top:8px}
+.aidc-inline-actions small{min-width:0;color:var(--aidc-muted);font-size:10px;line-height:1.45}
+.aidc-branding-preview-description{max-width:290px;overflow-wrap:anywhere;word-break:break-word;color:var(--aidc-text-secondary);font-size:12px}
+.aidc-toast-stack{position:fixed;right:max(10px,env(safe-area-inset-right));bottom:max(10px,calc(10px + env(safe-area-inset-bottom)));z-index:1000;display:grid;gap:8px;width:min(390px,calc(100vw - 20px));pointer-events:none}
+.aidc-toast-stack .aidc-toast{position:relative;right:auto;bottom:auto;width:100%;pointer-events:auto}
+.aidc-toast-message{min-width:0;overflow-wrap:anywhere;word-break:break-word}
+@media (max-width:760px){.aidc-overview-bento{grid-template-columns:1fr;margin-bottom:30px}.aidc-bento-card{grid-column:1;min-height:132px;padding:18px;border-radius:18px}.aidc-inline-actions{align-items:stretch;flex-direction:column}.aidc-inline-actions .aidc-button{width:100%}}
 
 /* Client management */
 .aidc-client-summary {

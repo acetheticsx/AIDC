@@ -175,9 +175,9 @@ test("analytics ignores malformed login timestamps", () => {
 });
 
 test("frontend bundles have explicit cache-busted versions", () => {
-  assert.match(app, /\.\/ui\.js\?v=20261006-8/);
-  assert.match(index, /\/app\.js\?v=20261006-7/);
-  assert.match(index, /\/style\.css\?v=20261006-10/);
+  assert.match(app, /\.\/ui\.js\?v=20261007-1/);
+  assert.match(index, /\/app\.js\?v=20261007-1/);
+  assert.match(index, /\/style\.css\?v=20261007-1/);
 });
 
 test("frontend source hardens the reported total redeclaration", () => {
@@ -387,10 +387,11 @@ test("applications are always-on and have no enable/disable lifecycle control", 
   assert.match(app, /key: "always-on"/);
 });
 
-test("integration health checks live Ace ID discovery", () => {
+test("integration health checks live Ace ID discovery without exposing a playground section", () => {
   assert.match(app, /api\.playground\.config\(\)/);
   assert.match(app, /key: "oidc"/);
-  assert.match(ui, /Run OAuth test/);
+  assert.doesNotMatch(ui, /Run OAuth test/);
+  assert.doesNotMatch(ui, /aidc-integration-playground/);
 });
 
 
@@ -463,4 +464,44 @@ test("client management navigation uses a people icon and empty state is safe", 
   assert.match(ui, /title:\s*this\.query\.trim\(\)/);
   assert.doesNotMatch(ui, /title:\s*total\s*\?/);
   assert.match(style, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)/);
+});
+
+test("toast rendering uses Lit templates and real click bindings", () => {
+  assert.ok(ui.includes("return html`"));
+  assert.ok(ui.includes("aidc-toast-stack"));
+  assert.ok(ui.includes("@click=${() => this.close(notice.id)}"));
+  assert.ok(!ui.includes("$click="));
+});
+
+test("application overview does not reference an undefined health total", () => {
+  assert.ok(ui.includes("const totalChecks = health?.total || 0"));
+  assert.ok(ui.includes("totalChecks"));
+});
+
+test("application descriptions are editable and quota is sourced from entitlements", () => {
+  assert.ok(ui.includes("saveDescription"));
+  assert.ok(ui.includes("Save description"));
+  assert.ok(ui.includes("state.quota?.remaining"));
+  assert.ok(api.includes("quota:"));
+  assert.ok(server.includes('app.get("/api/quota"'));
+  assert.ok(server.includes("getAceIdEntitlements(req.developer.id)"));
+});
+
+test("application creation refuses to leave an unregistered Ace ID client", () => {
+  assert.ok(server.includes("FROM public.aceid_clients"));
+  assert.ok(server.includes("CLIENT_REGISTRATION_FAILED"));
+  assert.ok(server.includes("No application was saved"));
+});
+
+test("playground is not exposed as an application settings section", () => {
+  assert.ok(!ui.includes('case "playground":'));
+  assert.ok(!ui.includes("aidc-integration-playground"));
+});
+
+test("overview uses Bento layout and consent metadata is safely wrapped", () => {
+  assert.ok(ui.includes("aidc-overview-bento"));
+  assert.ok(ui.includes("Authorization request"));
+  assert.ok(ui.includes("getApplication(AIDC, this.applicationId)?.description"));
+  assert.ok(style.includes(".aidc-overview-bento"));
+  assert.ok(style.includes("overflow-wrap:anywhere"));
 });

@@ -2103,6 +2103,25 @@ app.post(
         ]
       );
 
+      const registeredClient = await client.query(
+        `
+        SELECT client_id
+        FROM public.aceid_clients
+        WHERE client_id = $1
+          AND owner_id = $2
+        LIMIT 1
+        `,
+        [result.rows[0].client_id, req.developer.id]
+      );
+
+      if (!registeredClient.rows.length) {
+        await client.query("ROLLBACK");
+        return res.status(502).json({
+          error: "Ace ID client registration was not created. No application was saved.",
+          code: "CLIENT_REGISTRATION_FAILED"
+        });
+      }
+
       await client.query(
         `
         UPDATE public.aceid_clients
@@ -2112,10 +2131,7 @@ app.post(
         WHERE client_id = $1
           AND owner_id = $2
         `,
-        [
-          result.rows[0].client_id,
-          req.developer.id
-        ]
+        [result.rows[0].client_id, req.developer.id]
       );
 
       await client.query("COMMIT");
@@ -3538,6 +3554,32 @@ async function getAceIdEntitlements(developerId) {
     clearTimeout(timeout);
   }
 }
+
+app.get("/api/quota", requireAuth, async (req, res) => {
+  try {
+    const entitlements = await getAceIdEntitlements(req.developer.id);
+    const countResult = await pool.query(
+      "SELECT COUNT(*)::integer AS count FROM public.applications WHERE owner_id = $1",
+      [req.developer.id]
+    );
+    const count = Number(countResult.rows[0]?.count) || 0;
+    const limit = Number.isFinite(entitlements.applications) ? entitlements.applications : null;
+    res.json({
+      quota: {
+        plan: entitlements.plan,
+        name: entitlements.name,
+        status: entitlements.status,
+        count,
+        limit,
+        remaining: Number.isFinite(limit) ? Math.max(limit - count, 0) : null
+      },
+      entitlements
+    });
+  } catch (error) {
+    console.error("GET /api/quota:", error);
+    res.status(503).json({ error: "Subscription quota is currently unavailable.", code: "ENTITLEMENT_UNAVAILABLE" });
+  }
+});
 
 async function getOwnedApplication(client, applicationId, developerId) {
   return client.query(
