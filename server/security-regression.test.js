@@ -175,7 +175,7 @@ test("analytics ignores malformed login timestamps", () => {
 });
 
 test("frontend bundles have explicit cache-busted versions", () => {
-  assert.match(app, /\.\/ui\.js\?v=20261006-7/);
+  assert.match(app, /\.\/ui\.js\?v=20261006-8/);
   assert.match(index, /\/app\.js\?v=20261006-7/);
   assert.match(index, /\/style\.css\?v=20261006-10/);
 });
@@ -317,12 +317,10 @@ test("mobile overlays stay above navigation and branding color selection stays i
 });
 
 
-test("frontend public bridge defines all boot-critical helpers and templates", () => {
-  assert.match(app, /const APPLICATION_TEMPLATES = Object\.freeze\(/);
+test("frontend public bridge defines all boot-critical helpers", () => {
   assert.match(app, /function contrastTextColor\(/);
   assert.match(app, /function markDirty\(/);
   assert.match(app, /function clearDirty\(/);
-  assert.match(app, /applicationTemplates: APPLICATION_TEMPLATES/);
   assert.match(app, /contrastTextColor,/);
   assert.match(app, /markDirty,/);
   assert.match(app, /clearDirty,/);
@@ -432,4 +430,24 @@ test("subscription and billing are not implemented locally in AIDC", () => {
   assert.doesNotMatch(api, /checkout\(planId\)/);
   assert.doesNotMatch(app, /subscription\.upgrade/);
   assert.doesNotMatch(ui, /Opening checkout/);
+});
+
+
+test("new applications are public OIDC clients", () => {
+  assert.match(server, /client_secret = NULL/);
+  assert.match(server, /token_endpoint_auth_method = 'none'/);
+  assert.match(server, /public: true/);
+});
+
+test("create application UI removes templates and uses snackbar errors", () => {
+  assert.doesNotMatch(ui, /Start from template/);
+  assert.doesNotMatch(ui, /applyTemplate\(/);
+  assert.match(ui, /notify\("Application name is required\.", "error"\)/);
+  assert.match(ui, /api\.originVerification\.get\(application\.id\)/);
+  assert.match(ui, /DNS verification/);
+});
+
+test("clients use the same application icon fallback", () => {
+  assert.match(ui, /class AIDCClients/);
+  assert.match(ui, /app\.logo_url[\s\S]*icon\("app-window"\)/);
 });

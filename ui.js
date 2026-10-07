@@ -4398,15 +4398,6 @@ if (!query) return true;
 
           </section>
 
-          ${state.applicationsError
-            ? html`
-                <div class="aidc-dialog-note">
-                  ${icon("alert-02")}
-                  <span>${text(state.applicationsError)}</span>
-                </div>
-              `
-            : ""}
-
           ${clients.length
             ? html`
                 <section
@@ -4932,10 +4923,10 @@ if (!query) return true;
         state: true
       },
 
-      error: {
+      verification: {
         state: true
       },
-      template: {
+      createdApplication: {
         state: true
       }
     };
@@ -4947,9 +4938,9 @@ if (!query) return true;
       this.description = "";
       this.originUrl = "";
       this.applicationType = "web";
-      this.template = "blank";
       this.submitting = false;
-      this.error = "";
+      this.verification = null;
+      this.createdApplication = null;
 
       this._wasOpen = false;
     }
@@ -4958,26 +4949,19 @@ if (!query) return true;
       const open = state.ui.createModal;
 
       if (open && !this._wasOpen) {
+        this.verification = null;
+        this.createdApplication = null;
+        this.name = "";
+        this.description = "";
+        this.originUrl = "";
+        this.applicationType = "web";
+
         requestAnimationFrame(() => {
-          this.querySelector(
-            "#aidc-create-name"
-          )?.focus();
+          this.querySelector("#aidc-create-name")?.focus();
         });
       }
 
       this._wasOpen = open;
-    }
-
-    applyTemplate(key) {
-      const template = AIDC.utils.applicationTemplates?.[key];
-      if (!template) return;
-      this.template = key;
-      this.name = template.name;
-      this.description = template.description;
-      this.originUrl = template.origin_url;
-      this.applicationType = template.application_type;
-      this.error = "";
-      AIDC.utils.markDirty("Unsaved application draft");
     }
 
     handleEscape() {
@@ -5039,33 +5023,26 @@ if (!query) return true;
         this.originUrl.trim();
 
       if (!name) {
-        this.error =
-          "Application name is required.";
-
+        notify("Application name is required.", "error");
         return;
       }
 
       if (name.length > 120) {
-        this.error =
-          "Application name must be 120 characters or fewer.";
-
+        notify("Application name must be 120 characters or fewer.", "error");
         return;
       }
 
       if (description.length > 2000) {
-        this.error =
-          "Description must be 2000 characters or fewer.";
-
+        notify("Description must be 2000 characters or fewer.", "error");
         return;
       }
 
       const originValidation = this.validateOrigin(originUrl);
       if (!originValidation.valid) {
-        this.error = originValidation.error;
+        notify(originValidation.error, "error");
         return;
       }
 
-      this.error = "";
       this.submitting = true;
 
       try {
@@ -5082,24 +5059,30 @@ if (!query) return true;
         this.description = "";
         this.originUrl = "";
         this.applicationType = "web";
-      this.template = "blank";
-      AIDC.utils.clearDirty();
+        AIDC.utils.clearDirty();
 
-        modals.closeCreate();
+        this.createdApplication = application;
 
-        notify(
-          `${application.name} created`
-        );
+        try {
+          this.verification =
+            await api.originVerification.get(application.id);
+        } catch (verificationError) {
+          this.verification = null;
+          notify(
+            verificationError?.message ||
+              "Application created, but DNS verification details could not be loaded.",
+            "error"
+          );
+        }
 
-        router.navigate(
-          `/applications/${application.id}`
-        );
-
+        notify("Application created");
         haptic?.(10);
       } catch (error) {
-        this.error =
-          error.message ||
-          "Unable to create application.";
+        notify(
+          error?.message ||
+            "Unable to create application.",
+          "error"
+        );
       } finally {
         this.submitting = false;
       }
@@ -5168,31 +5151,44 @@ if (!query) return true;
 
             </header>
 
+            ${this.createdApplication
+              ? html`
+                  <section class="aidc-dialog-note" aria-live="polite">
+                    ${icon("checkmark-circle-02")}
+                    <div><strong>Application created</strong><span>${text(this.createdApplication.name)} is ready. DNS verification is optional and does not disable the application.</span></div>
+                  </section>
+                  ${this.verification?.required
+                    ? html`
+                        <section class="aidc-card aidc-origin-verification-card">
+                          <header class="aidc-card-section-header">
+                            <div><h3>DNS verification</h3><p>Add this TXT record to your domain.</p></div>
+                            <span class="aidc-status aidc-status-active"><span class="aidc-status-dot"></span>${this.verification.verified ? "Verified" : "Pending"}</span>
+                          </header>
+                          <div class="aidc-dialog-note">
+                            <div><strong>Record name</strong><code class="aidc-mono">${text(this.verification.record_name)}</code></div>
+                            <button class="aidc-icon-button" type="button" title="Copy DNS record name" aria-label="Copy DNS record name" @click=${async () => { if (await copyToClipboard(this.verification.record_name)) notify("DNS record name copied"); else notify("Unable to copy DNS record name.", "error"); }}>${icon("copy-01")}</button>
+                          </div>
+                          <div class="aidc-dialog-note">
+                            <div><strong>TXT value</strong><code class="aidc-mono">${text(this.verification.record_value)}</code></div>
+                            <button class="aidc-icon-button" type="button" title="Copy DNS TXT value" aria-label="Copy DNS TXT value" @click=${async () => { if (await copyToClipboard(this.verification.record_value)) notify("DNS TXT value copied"); else notify("Unable to copy DNS TXT value.", "error"); }}>${icon("copy-01")}</button>
+                          </div>
+                          <small>${text(this.verification.reason || "Add the TXT record, then verify it from application settings.")}</small>
+                        </section>
+                      `
+                    : this.verification
+                      ? html`<section class="aidc-dialog-note">${icon("information-circle")}<span>${text(this.verification.reason || "DNS verification is not required for this Origin.")}</span></section>`
+                      : ""
+                  }
+                  <div class="aidc-dialog-actions">
+                    <button type="button" class="aidc-button aidc-button-secondary" @click=${modals.closeCreate}>Close</button>
+                    <button type="button" class="aidc-button aidc-button-primary" @click=${() => router.navigate("/applications/" + this.createdApplication.id)}>${icon("settings-01")} Open application</button>
+                  </div>
+                `
+              : html`
             <form
               class="aidc-dialog-form"
               @submit=${this.submit}
             >
-              <label class="aidc-field">
-                <span>Start from template</span>
-                <select
-                  .value=${this.template}
-                  @change=${event => {
-                    const key = event.target.value;
-                    if (key === "blank") {
-                      this.template = "blank";
-                      return;
-                    }
-                    this.applyTemplate(key);
-                  }}
-                  ?disabled=${this.submitting}
-                >
-                  <option value="blank">Blank application</option>
-                  <option value="web">Web application</option>
-                  <option value="native">Native application</option>
-                </select>
-              </label>
-
-
               <label class="aidc-field">
 
                 <span>
@@ -5211,7 +5207,6 @@ if (!query) return true;
                     this.name =
                       event.target.value;
 
-                    this.error = "";
                     AIDC.utils.markDirty("Unsaved application draft");
                   }}
                   ?disabled=${this.submitting}
@@ -5245,7 +5240,6 @@ if (!query) return true;
                   .value=${this.applicationType}
                   @change=${event => {
                     this.applicationType = event.target.value;
-                    this.error = "";
                   }}
                   ?disabled=${this.submitting}
                 >
@@ -5275,8 +5269,6 @@ if (!query) return true;
                     this.originUrl =
                       event.target.value;
                     AIDC.utils.markDirty("Unsaved application draft");
-
-                    this.error = "";
                   }}
                   ?disabled=${this.submitting}
                 />
@@ -5300,22 +5292,6 @@ if (!query) return true;
                   : ""}
 
               </label>
-
-              ${
-                this.error
-                  ? html`
-                      <div
-                        class="aidc-dialog-note"
-                      >
-                        ${icon("alert-02")}
-
-                        <span>
-                          ${this.error}
-                        </span>
-                      </div>
-                    `
-                  : ""
-              }
 
               <div
                 class="aidc-dialog-actions"
@@ -5358,6 +5334,7 @@ if (!query) return true;
               </div>
 
             </form>
+                `}
 
           </section>
 
