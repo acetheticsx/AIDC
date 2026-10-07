@@ -555,6 +555,14 @@ test("application creation refuses to leave an unregistered Ace ID client", () =
   assert.ok(server.includes("No application was saved"));
 });
 
+test("entitlement outages fall back to authoritative Ace ID subscription state", () => {
+  assert.ok(server.includes("LOCAL_PLAN_LIMITS"));
+  assert.ok(server.includes("public.aceid_subscriptions"));
+  assert.ok(server.includes("aceid_database_fallback"));
+  assert.ok(server.includes("Ace ID entitlement API unavailable; using Ace ID database fallback"));
+  assert.ok(server.includes("ENTITLEMENT_UNAVAILABLE"));
+});
+
 test("playground is not exposed as an application settings section", () => {
   assert.ok(!ui.includes('case "playground":'));
   assert.ok(!ui.includes("aidc-integration-playground"));
