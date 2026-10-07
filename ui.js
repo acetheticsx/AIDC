@@ -2628,7 +2628,7 @@ export function registerAIDCComponents(AIDC) {
             </header>
 
             <div class="aidc-dialog-form">
-              <section class="aidc-dialog-note" aria-label="Project framework detection">\n                ${icon("folder-02")}\n                <div>\n                  <strong>Project framework</strong>\n                  <span>Optional. Choose one project folder to detect its framework locally. AIDC does not scan the rest of the device or upload project files.</span>\n                  ${this.detectedFramework ? html`<small>Detected: <strong>${text(this.detectedFramework.framework || "Unknown")}</strong>${this.detectedFramework.language ? " · " + text(this.detectedFramework.language) : ""}</small>` : ""}\n                  <button type="button" class="aidc-button aidc-button-secondary"\n                    ?disabled=${this.submitting || this.detectingFramework}\n                    @click=${this.detectProjectFramework}>\n                    ${icon("folder-open")}\n                    ${this.detectingFramework ? "Detecting…" : "Choose project folder"}\n                  </button>\n                </div>\n              </section>\n              <label class="aidc-field">
+              <label class="aidc-field">
                 <span>Origin URL</span>
                 <input
                   type="url"
@@ -4850,7 +4850,23 @@ if (!query) return true;
       }
     }
 
-    async detectProjectFramework() {\n      if (this.detectingFramework || this.submitting) return;\n      this.detectingFramework = true;\n      try {\n        const result = await AIDC.project.detectFramework();\n        this.detectedFramework = result;\n        this.applicationType = result.applicationType === "native" ? "native" : "web";\n        notify("Detected " + (result.framework || "project type not confidently detected") + ". Only the selected project folder was inspected.");\n        haptic?.(6);\n      } catch (error) {\n        if (error?.name !== "AbortError") notify(error?.message || "Unable to detect the project framework.", "error");\n      } finally {\n        this.detectingFramework = false;\n      }\n    }\n\n    async submit(event) {
+    async detectProjectFramework() {
+      if (this.detectingFramework || this.submitting) return;
+      this.detectingFramework = true;
+      try {
+        const result = await AIDC.project.detectFramework();
+        this.detectedFramework = result;
+        this.applicationType = result.applicationType === "native" ? "native" : "web";
+        notify("Detected " + (result.framework || "project type not confidently detected") + ". Only the selected project folder was inspected.");
+        haptic?.(6);
+      } catch (error) {
+        if (error?.name !== "AbortError") notify(error?.message || "Unable to detect the project framework.", "error");
+      } finally {
+        this.detectingFramework = false;
+      }
+    }
+
+    async submit(event) {
       event.preventDefault();
 
       const name =
@@ -5072,6 +5088,20 @@ if (!query) return true;
 
               </label>
 
+              <section class="aidc-dialog-note" aria-label="Project framework detection">
+                ${icon("folder-02")}
+                <div>
+                  <strong>Project framework</strong>
+                  <span>Optional. Choose one project folder to detect its framework locally. AIDC does not scan the rest of the device or upload project files.</span>
+                  ${this.detectedFramework ? html`<small>Detected: <strong>${text(this.detectedFramework.framework || "Unknown")}</strong>${this.detectedFramework.language ? " · " + text(this.detectedFramework.language) : ""}</small>` : ""}
+                  <button type="button" class="aidc-button aidc-button-secondary"
+                    ?disabled=${this.submitting || this.detectingFramework}
+                    @click=${this.detectProjectFramework}>
+                    ${icon("folder-open")}
+                    ${this.detectingFramework ? "Detecting…" : "Choose project folder"}
+                  </button>
+                </div>
+              </section>
               <label class="aidc-field">
                 <span>Client type</span>
 
