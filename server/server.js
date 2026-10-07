@@ -190,11 +190,14 @@ const discoveryState = {
   doc: null,
   jwks: null,
   lastError: null,
-  lastAttemptAt: 0
+  lastAttemptAt: 0,
+  inFlight: null
 };
 
 const DISCOVERY_RETRY_MS = 30_000;
 const DISCOVERY_TIMEOUT_MS = 10_000;
+const TOKEN_EXCHANGE_TIMEOUT_MS = 10_000;
+const JWKS_TIMEOUT_MS = 5_000;
 
 async function tryLoadDiscovery() {
   discoveryState.lastAttemptAt = Date.now();
@@ -282,7 +285,12 @@ async function tryLoadDiscovery() {
 
     discoveryState.doc = doc;
     discoveryState.jwks = createRemoteJWKSet(
-      new URL(doc.jwks_uri)
+      new URL(doc.jwks_uri),
+      {
+        timeoutDuration: JWKS_TIMEOUT_MS,
+        cooldownDuration: 30_000,
+        cacheMaxAge: 10 * 60_000
+      }
     );
     discoveryState.status = "ready";
     discoveryState.lastError = null;
@@ -290,6 +298,8 @@ async function tryLoadDiscovery() {
     console.log(
       `OIDC discovery ready. issuer=${doc.issuer}`
     );
+
+    return true;
   } catch (error) {
     discoveryState.status = "failed";
     discoveryState.lastError = error.message;
@@ -298,13 +308,44 @@ async function tryLoadDiscovery() {
       "OIDC discovery failed:",
       error.message
     );
+
+    return false;
   }
 }
 
-await tryLoadDiscovery();
+function startDiscoveryAttempt() {
+  if (discoveryState.inFlight) {
+    return discoveryState.inFlight;
+  }
+
+  const attempt = tryLoadDiscovery();
+
+  discoveryState.inFlight = attempt.finally(() => {
+    if (discoveryState.inFlight === attempt) {
+      discoveryState.inFlight = null;
+    }
+  });
+
+  return discoveryState.inFlight;
+}
+
+async function waitForDiscovery() {
+  if (discoveryState.status === "ready" && discoveryState.doc) {
+    return true;
+  }
+
+  return Boolean(await startDiscoveryAttempt());
+}
+
+/*
+ * Discovery is intentionally not a startup dependency.
+ * The first attempt begins in the background while the
+ * HTTP server becomes available immediately.
+ */
+void startDiscoveryAttempt();
 
 setInterval(
-  tryLoadDiscovery,
+  startDiscoveryAttempt,
   DISCOVERY_RETRY_MS
 ).unref();
 
@@ -1518,9 +1559,13 @@ async function requireAuth(req, res, next) {
  * can show a clean "Ace ID is unavailable" message
  * instead of a stack trace.
  */
-function requireDiscovery(req, res, next) {
-  if (discoveryState.status === "ready") {
-    return next();
+async function requireDiscovery(req, res, next) {
+  try {
+    if (await waitForDiscovery()) {
+      return next();
+    }
+  } catch (error) {
+    console.error("OIDC discovery wait failed:", error);
   }
 
   res.status(503).json({
@@ -1601,17 +1646,25 @@ app.get(
       OAUTH_VERIFIER_COOKIE
     );
 
-    const clearOauthCookies = [
-      clearCookie(OAUTH_STATE_COOKIE, "/auth"),
-      clearCookie(OAUTH_VERIFIER_COOKIE, "/auth")
-    ];
+    function clearOauthCookiesResponse(response) {
+      response.clearCookie(OAUTH_STATE_COOKIE, {
+        path: "/auth",
+        sameSite: "lax",
+        secure: IS_PRODUCTION
+      });
+      response.clearCookie(OAUTH_VERIFIER_COOKIE, {
+        path: "/auth",
+        sameSite: "lax",
+        secure: IS_PRODUCTION
+      });
+    }
 
     /*
      * Do not reflect oauthError back to the browser.
      * Map known codes to fixed, safe strings.
      */
     if (oauthError) {
-      res.set("Set-Cookie", clearOauthCookies);
+      clearOauthCookiesResponse(res);
 
       const message =
         OAUTH_ERROR_MESSAGES[oauthError] ||
@@ -1624,7 +1677,7 @@ app.get(
     }
 
     if (!code || typeof code !== "string") {
-      res.set("Set-Cookie", clearOauthCookies);
+      clearOauthCookiesResponse(res);
 
       return res
         .status(400)
@@ -1637,7 +1690,7 @@ app.get(
       !state ||
       !safeEqual(expectedState, state)
     ) {
-      res.set("Set-Cookie", clearOauthCookies);
+      clearOauthCookiesResponse(res);
 
       return res
         .status(400)
@@ -1646,7 +1699,7 @@ app.get(
     }
 
     if (!codeVerifier) {
-      res.set("Set-Cookie", clearOauthCookies);
+      clearOauthCookiesResponse(res);
 
       return res
         .status(400)
@@ -1666,18 +1719,47 @@ app.get(
         code_verifier: codeVerifier
       });
 
-      const tokenResponse = await fetch(
-        discoveryState.doc.token_endpoint,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/x-www-form-urlencoded",
-            Authorization: `Basic ${basic}`
-          },
-          body
-        }
+      const tokenController = new AbortController();
+      const tokenTimeout = setTimeout(
+        () => tokenController.abort(),
+        TOKEN_EXCHANGE_TIMEOUT_MS
       );
+
+      let tokenResponse;
+
+      try {
+        tokenResponse = await fetch(
+          discoveryState.doc.token_endpoint,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/x-www-form-urlencoded",
+              Authorization: `Basic ${basic}`
+            },
+            body,
+            signal: tokenController.signal
+          }
+        );
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          console.error(
+            "Token exchange timed out:",
+            TOKEN_EXCHANGE_TIMEOUT_MS
+          );
+
+          clearOauthCookiesResponse(res);
+
+          return res
+            .status(504)
+            .type("text")
+            .send("Token exchange timed out");
+        }
+
+        throw error;
+      } finally {
+        clearTimeout(tokenTimeout);
+      }
 
       if (!tokenResponse.ok) {
         const text = await tokenResponse.text();
@@ -1687,7 +1769,7 @@ app.get(
           tokenResponse.status
         );
 
-        res.set("Set-Cookie", clearOauthCookies);
+        clearOauthCookiesResponse(res);
 
         return res
           .status(502)
@@ -1698,7 +1780,7 @@ app.get(
       const tokens = await tokenResponse.json();
 
       if (!tokens.id_token) {
-        res.set("Set-Cookie", clearOauthCookies);
+        clearOauthCookiesResponse(res);
 
         return res
           .status(502)
@@ -1706,14 +1788,31 @@ app.get(
           .send("No ID token returned");
       }
 
-      const { payload } = await jwtVerify(
-        tokens.id_token,
-        discoveryState.jwks,
-        {
-          issuer: ISSUER,
-          audience: CLIENT_ID
+      let payload;
+
+      try {
+        ({ payload } = await jwtVerify(
+          tokens.id_token,
+          discoveryState.jwks,
+          {
+            issuer: ISSUER,
+            audience: CLIENT_ID
+          }
+        ));
+      } catch (error) {
+        if (error?.code === "ERR_JWKS_TIMEOUT") {
+          console.error("JWKS verification timed out.");
+
+          clearOauthCookiesResponse(res);
+
+          return res
+            .status(503)
+            .type("text")
+            .send("Identity verification is temporarily unavailable");
         }
-      );
+
+        throw error;
+      }
 
       /*
        * Validate the subject before it goes into a
@@ -1726,7 +1825,7 @@ app.get(
         typeof payload.sub !== "string" ||
         !isValidUuid(payload.sub)
       ) {
-        res.set("Set-Cookie", clearOauthCookies);
+        clearOauthCookiesResponse(res);
 
         console.error(
           "ID token sub is not a UUID:",
@@ -1753,7 +1852,7 @@ app.get(
       );
 
       if (!identity.rows.length) {
-        res.set("Set-Cookie", clearOauthCookies);
+        clearOauthCookiesResponse(res);
 
         return res
           .status(403)
@@ -1801,7 +1900,7 @@ app.get(
     } catch (error) {
       console.error("Callback failed:", error);
 
-      res.set("Set-Cookie", clearOauthCookies);
+      clearOauthCookiesResponse(res);
 
       res
         .status(500)

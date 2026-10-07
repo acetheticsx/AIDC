@@ -26,6 +26,7 @@ const state = {
    */
   user: null,
   authReady: false,
+  authDegraded: false,
 
   applications: [],
   applicationsError: null,
@@ -98,6 +99,7 @@ let applicationsLoadPromise = null;
  * not fire it repeatedly.
  */
 let authRedirecting = false;
+let authBootstrapPromise = null;
 
 /* ─────────────────────────────────────────────
    Haptics
@@ -230,61 +232,82 @@ const auth = {
    * On 401, redirects to /auth/login and never resolves.
    */
   async bootstrap() {
-    let lastError = null;
-
-    /*
-     * Give the API one short recovery attempt for a
-     * cold start or transient network failure. A 401
-     * is never retried because it is an explicit
-     * authentication result, not a transport failure.
-     */
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const data = await api.auth.me();
-
-        state.user = data?.user || null;
-        state.authReady = true;
-
-        emitState();
-
-        return state.user;
-      } catch (error) {
-        lastError = error;
-
-        if (error?.status === 401) {
-          state.user = null;
-          state.authReady = true;
-          emitState();
-          return null;
-        }
-
-        const retryable =
-          error?.status === 408 ||
-          error?.status >= 500 ||
-          !error?.status;
-
-        if (!retryable || attempt === 1) {
-          break;
-        }
-
-        await new Promise(resolve => {
-          window.setTimeout(resolve, 350);
-        });
-      }
+    if (authBootstrapPromise) {
+      return authBootstrapPromise;
     }
 
-    state.user = null;
-    state.authReady = true;
+    authBootstrapPromise = (async () => {
+      let lastError = null;
 
-    notify(
-      lastError?.message ||
-        "Unable to verify session. You can still sign in.",
-      "error"
-    );
+      /*
+       * Give the API one short recovery attempt for a
+       * cold start or transient network failure. A 401
+       * is never retried because it is an explicit
+       * authentication result, not a transport failure.
+       */
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const data = await api.auth.me();
 
-    emitState();
+          state.user = data?.user || null;
+          state.authReady = true;
+          state.authDegraded = false;
 
-    return null;
+          emitState();
+
+          return state.user;
+        } catch (error) {
+          lastError = error;
+
+          if (error?.status === 401) {
+            state.user = null;
+            state.authReady = true;
+            state.authDegraded = false;
+            emitState();
+            return null;
+          }
+
+          const retryable =
+            error?.status === 408 ||
+            error?.status >= 500 ||
+            !error?.status;
+
+          if (!retryable || attempt === 1) {
+            break;
+          }
+
+          await new Promise(resolve => {
+            window.setTimeout(resolve, 350);
+          });
+        }
+      }
+
+      /*
+       * A transport/dependency failure is not proof that
+       * the session is invalid. Keep the app out of the
+       * login redirect path and expose a degraded state
+       * that can be retried explicitly.
+       */
+      state.user = null;
+      state.authReady = true;
+      state.authDegraded = true;
+
+      notify(
+        lastError?.message ||
+          "Unable to verify session right now. Try again.",
+        "error"
+      );
+
+      emitState();
+
+      return null;
+    })();
+
+    try {
+      return await authBootstrapPromise;
+    } finally {
+      authBootstrapPromise = null;
+    }
   },
 
   async enterConsole() {
@@ -293,6 +316,17 @@ const auth = {
     }
 
     haptic(8);
+
+    if (state.authDegraded) {
+      state.authReady = false;
+      emitState();
+
+      const user = await this.bootstrap();
+
+      if (!user) {
+        return false;
+      }
+    }
 
     if (!state.user) {
       window.location.assign(LOGIN_PATH);
@@ -321,6 +355,7 @@ const auth = {
        */
       state.user = null;
       state.authReady = true;
+      state.authDegraded = false;
       state.ui.consoleOpen = false;
 
       emitState();
