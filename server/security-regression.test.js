@@ -505,3 +505,6 @@ test("overview uses Bento layout and consent metadata is safely wrapped", () => 
   assert.ok(style.includes(".aidc-overview-bento"));
   assert.ok(style.includes("overflow-wrap:anywhere"));
 });
+
+
+test("project framework detection is folder-scoped", () => {\n  assert.match(app, /detectFramework/);\n  assert.match(ui, /Choose project folder/);\n  assert.match(ui, /does not scan the rest of the device/);\n});\n\ntest("project detector uses bounded selected-folder traversal", () => {\n  assert.match(projectDetector, /showDirectoryPicker/);\n  assert.match(projectDetector, /MAX_DEPTH = 5/);\n  assert.match(projectDetector, /MAX_ENTRIES = 2500/);\n  assert.match(projectDetector, /MAX_TOTAL_MANIFEST_BYTES = 1024 \\* 1024/);\n  assert.match(projectDetector, /IGNORED_DIRECTORIES/);\n  assert.doesNotMatch(projectDetector, /navigator\\.storage/);\n});\n

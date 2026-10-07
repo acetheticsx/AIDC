@@ -1,4 +1,4 @@
-import { registerAIDCComponents } from "./ui.js?v=20261007-1";
+import { registerAIDCComponents } from "./ui.js?v=20261007-2";
 import { api } from "./api.js?v=20261007-1";
 
 /* ─────────────────────────────────────────────
@@ -1641,7 +1641,7 @@ async function reload() {
   handleRouteChange();
 }
 
-const AIDC = {
+const AIDC = {\n  project: {\n    detectFramework() {\n      return import("./project-detector.js?v=20261007-1").then(module => module.pickProjectFramework());\n    }\n  },
   state,
   api,
 
