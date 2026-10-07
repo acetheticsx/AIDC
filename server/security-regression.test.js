@@ -85,6 +85,25 @@ test("database TLS verifies certificates", () => {
   );
 });
 
+test("OIDC discovery is not a startup dependency and auth can await one attempt", () => {
+  assert.doesNotMatch(server, /await tryLoadDiscovery\(\)/);
+  assert.match(server, /void startDiscoveryAttempt\(\)/);
+  assert.match(server, /inFlight: null/);
+  assert.match(server, /function startDiscoveryAttempt\(\)/);
+  assert.match(server, /if \(discoveryState\.inFlight\)/);
+  assert.match(server, /async function waitForDiscovery\(\)/);
+  assert.match(server, /return Boolean\(await startDiscoveryAttempt\(\)\)/);
+});
+
+test("OAuth token exchange and JWKS verification have bounded upstream waits", () => {
+  assert.match(server, /TOKEN_EXCHANGE_TIMEOUT_MS = 10_000/);
+  assert.match(server, /tokenController\.abort\(\)/);
+  assert.match(server, /status\(504\)/);
+  assert.match(server, /timeoutDuration: JWKS_TIMEOUT_MS/);
+  assert.match(server, /cacheMaxAge: 10 \* 60_000/);
+  assert.match(server, /error\?\.code === "ERR_JWKS_TIMEOUT"/);
+});
+
 test("OIDC callback requires a local Ace ID identity", () => {
   assert.match(
     server,
@@ -385,6 +404,15 @@ test("applications are always-on and have no enable/disable lifecycle control", 
   assert.doesNotMatch(ui, /Application disabled/);
   assert.match(ui, /Always on/);
   assert.match(app, /key: "always-on"/);
+});
+
+test("auto-login deduplicates bootstrap and distinguishes transient failures from 401", () => {
+  assert.match(app, /let authBootstrapPromise = null/);
+  assert.match(app, /if \(authBootstrapPromise\)/);
+  assert.match(app, /state\.authDegraded = true/);
+  assert.match(app, /state\.authDegraded = false/);
+  assert.match(app, /if \(state\.authDegraded\)/);
+  assert.match(app, /const user = await this\.bootstrap\(\)/);
 });
 
 test("integration health checks live Ace ID discovery without exposing a playground section", () => {
