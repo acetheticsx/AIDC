@@ -31,7 +31,8 @@ test("session activity writes are throttled", () => {
 
 test("public health responses do not expose discovery internals", () => {
   const start = server.indexOf('app.get("/api/health"');
-  const end = server.indexOf('app.get(\n  "/api/playground/config"', start);
+  const end = server.indexOf('app.get(
+  "/api/playground/config"', start);
   const route = start >= 0 && end > start ? server.slice(start, end) : "";
   assert.ok(route.length > 0, "health route should exist");
   assert.match(route, /dependencies/);
@@ -98,7 +99,8 @@ test("OIDC callback requires a local Ace ID identity", () => {
 
 test("logout remains available when discovery is unavailable", () => {
   const logout = server.match(
-    /app\.post\(\s*["']\/auth\/logout["'][\s\S]*?\n\s*\}\);/
+    /app\.post\(\s*["']\/auth\/logout["'][\s\S]*?
+\s*\}\);/
   )?.[0] ?? "";
   assert.ok(logout.length > 0, "logout route should exist");
   assert.doesNotMatch(logout, /requireDiscovery\s*\(/);
@@ -148,10 +150,12 @@ test("rate limits protect authentication and API traffic", () => {
 
 test("redirect URI listing does not validate an undefined request body value", () => {
   const start = server.indexOf(
-    'app.get(\n  "/api/applications/:id/redirect-uris"'
+    'app.get(
+  "/api/applications/:id/redirect-uris"'
   );
   const end = server.indexOf(
-    'app.post(\n  "/api/applications/:id/redirect-uris"',
+    'app.post(
+  "/api/applications/:id/redirect-uris"',
     start
   );
   const route =
@@ -507,4 +511,17 @@ test("overview uses Bento layout and consent metadata is safely wrapped", () => 
 });
 
 
-test("project framework detection is folder-scoped", () => {\n  assert.match(app, /detectFramework/);\n  assert.match(ui, /Choose project folder/);\n  assert.match(ui, /does not scan the rest of the device/);\n});\n\ntest("project detector uses bounded selected-folder traversal", () => {\n  assert.match(projectDetector, /showDirectoryPicker/);\n  assert.match(projectDetector, /MAX_DEPTH = 5/);\n  assert.match(projectDetector, /MAX_ENTRIES = 2500/);\n  assert.match(projectDetector, /MAX_TOTAL_MANIFEST_BYTES = 1024 \\* 1024/);\n  assert.match(projectDetector, /IGNORED_DIRECTORIES/);\n  assert.doesNotMatch(projectDetector, /navigator\\.storage/);\n});\n
+test("project framework detection is folder-scoped", () => {
+  assert.match(app, /detectFramework/);
+  assert.match(ui, /Choose project folder/);
+  assert.match(ui, /does not scan the rest of the device/);
+});
+
+test("project detector uses bounded selected-folder traversal", () => {
+  assert.match(projectDetector, /showDirectoryPicker/);
+  assert.match(projectDetector, /MAX_DEPTH = 5/);
+  assert.match(projectDetector, /MAX_ENTRIES = 2500/);
+  assert.match(projectDetector, /MAX_TOTAL_MANIFEST_BYTES = 1024 \\* 1024/);
+  assert.match(projectDetector, /IGNORED_DIRECTORIES/);
+  assert.doesNotMatch(projectDetector, /navigator\\.storage/);
+});
