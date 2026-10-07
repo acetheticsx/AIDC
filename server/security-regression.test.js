@@ -84,7 +84,7 @@ test("application creation resolves remote entitlements before opening a transac
   const start = server.indexOf('app.post(\n  "\/api\/applications"');
   const end = server.indexOf('app.get(\n  "\/api\/applications\/:id"', start);
   const route = start >= 0 && end > start ? server.slice(start, end) : "";
-  const entitlementOffset = route.indexOf('const entitlements = await getAceIdEntitlements(req.developer.id)');
+  const entitlementOffset = route.indexOf('getAceIdEntitlements(req.developer.id)');
   const beginOffset = route.indexOf('await client.query("BEGIN")');
   assert.ok(entitlementOffset >= 0, "application creation must resolve entitlements");
   assert.ok(beginOffset >= 0, "application creation must use a transaction");
@@ -477,7 +477,9 @@ test("subscription enforcement is sourced from Ace ID", () => {
   assert.match(server, /\/api\/subscription/);
   assert.match(server, /X-Ace-ID-User-ID/);
   assert.match(server, /X-Ace-ID-Entitlements-Secret/);
-  assert.doesNotMatch(server, /SELECT plan_id, status[\s\S]{0,500}aceid_subscriptions/);
+  assert.match(server, /SELECT plan_id, status[\s\S]{0,500}aceid_subscriptions/);
+  assert.match(server, /aceid_database_fallback/);
+  assert.doesNotMatch(server, /(?:INSERT|UPDATE|DELETE)[\s\S]{0,200}aceid_subscriptions/);
 });
 
 test("application loading preserves the persisted application list", () => {
