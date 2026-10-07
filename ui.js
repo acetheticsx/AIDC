@@ -4016,7 +4016,7 @@ if (!query) return true;
 
             <a
               class="aidc-button aidc-button-secondary"
-              href="#/applications/${app.id}/url-configs"
+              href="#/applications/${app.id}/domain-verification"
             >
               ${icon("dns-01")}
               Domain verification
@@ -4972,16 +4972,7 @@ if (!query) return true;
 
               </label>
 
-              ${
-                this.error
-                  ? html`
-                      <div
-                        class="aidc-dialog-note"
-                      >
-                        ${icon("alert-02")}
-
-                        <span>
-                          <div
+              <div
                 class="aidc-dialog-actions"
               >
 
@@ -6042,6 +6033,11 @@ if (!query) return true;
   );
 
   customElements.define(
+    "aidc-origin-verification",
+    AIDCOriginVerification
+  );
+
+  customElements.define(
     "aidc-redirect-uris",
     AIDCRedirectUris
   );
@@ -6049,11 +6045,6 @@ if (!query) return true;
   customElements.define(
     "aidc-scopes",
     AIDCScopes
-  );
-
-  customElements.define(
-    "aidc-credentials",
-    AIDCCredentials
   );
 
   customElements.define(

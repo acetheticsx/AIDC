@@ -1,4 +1,4 @@
-import { registerAIDCComponents } from "./ui.js?v=20261007-9";
+import { registerAIDCComponents } from "./ui.js?v=20261007-10";
 import { api } from "./api.js?v=20261004-3";
 
 /* ─────────────────────────────────────────────

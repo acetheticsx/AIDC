@@ -175,8 +175,8 @@ test("analytics ignores malformed login timestamps", () => {
 });
 
 test("frontend bundles have explicit cache-busted versions", () => {
-  assert.match(app, /\.\/ui\.js\?v=20261007-9/);
-  assert.match(index, /\/app\.js\?v=20261007-9/);
+  assert.match(app, /\.\/ui\.js\?v=20261007-10/);
+  assert.match(index, /\/app\.js\?v=20261007-10/);
   assert.match(index, /\/style\.css\?v=20261006-10/);
 });
 
@@ -470,6 +470,26 @@ test("public-client create flow has no template picker and reports errors via sn
   assert.match(ui, /createdApplication/);
   assert.match(ui, /dnsVerification/);
   assert.match(ui, /record_value/);
+});
+
+
+test("removed credential component is not registered and domain verification is registered", () => {
+  assert.doesNotMatch(ui, /AIDCCredentials/);
+  assert.match(ui, /"aidc-origin-verification"/);
+  assert.match(ui, /AIDCOriginVerification/);
+});
+
+test("client management links to the dedicated domain verification surface", () => {
+  assert.match(ui, /href="#\/applications\/\$\{app\.id\}\/domain-verification"/);
+  assert.match(ui, /class AIDCOriginVerification/);
+});
+
+test("create dialog does not retain an inline error surface after snackbar migration", () => {
+  const createStart = ui.indexOf("class AIDCCreateDialog");
+  const createEnd = ui.indexOf("class AIDCDeleteModal", createStart);
+  const createDialog = ui.slice(createStart, createEnd);
+  assert.doesNotMatch(createDialog, /this\.error/);
+  assert.match(createDialog, /notify\("Application name is required\.", "error"\)/);
 });
 
 test("public-client UI has no confidential credential management surface", () => {
