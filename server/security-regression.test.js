@@ -9,7 +9,7 @@ const server = await fs.readFile(path.join(here, "server.js"), "utf8");
 const index = await fs.readFile(path.join(here, "..", "index.html"), "utf8");
 const api = await fs.readFile(path.join(here, "..", "api.js"), "utf8");
 const app = await fs.readFile(path.join(here, "..", "app.js"), "utf8");
-const ui = await fs.readFile(path.join(here, "..", "ui.js"), "utf8");
+const ui = await fs.readFile(path.join(here, "..", "ui.js"), "utf8");\nconst projectDetector = await fs.readFile(path.join(here, "..", "project-detector.js"), "utf8");
 const helpers = await fs.readFile(path.join(here, "..", "helpers.js"), "utf8");
 const style = await fs.readFile(path.join(here, "..", "style.css"), "utf8");
 const robots = await fs.readFile(path.join(here, "..", "robots.txt"), "utf8");
@@ -31,8 +31,7 @@ test("session activity writes are throttled", () => {
 
 test("public health responses do not expose discovery internals", () => {
   const start = server.indexOf('app.get("/api/health"');
-  const end = server.indexOf('app.get(
-  "/api/playground/config"', start);
+  const end = server.indexOf('app.get(\n  "/api/playground/config"', start);
   const route = start >= 0 && end > start ? server.slice(start, end) : "";
   assert.ok(route.length > 0, "health route should exist");
   assert.match(route, /dependencies/);
@@ -99,8 +98,7 @@ test("OIDC callback requires a local Ace ID identity", () => {
 
 test("logout remains available when discovery is unavailable", () => {
   const logout = server.match(
-    /app\.post\(\s*["']\/auth\/logout["'][\s\S]*?
-\s*\}\);/
+    /app\.post\(\s*["']\/auth\/logout["'][\s\S]*?\n\s*\}\);/
   )?.[0] ?? "";
   assert.ok(logout.length > 0, "logout route should exist");
   assert.doesNotMatch(logout, /requireDiscovery\s*\(/);
@@ -150,12 +148,10 @@ test("rate limits protect authentication and API traffic", () => {
 
 test("redirect URI listing does not validate an undefined request body value", () => {
   const start = server.indexOf(
-    'app.get(
-  "/api/applications/:id/redirect-uris"'
+    'app.get(\n  "/api/applications/:id/redirect-uris"'
   );
   const end = server.indexOf(
-    'app.post(
-  "/api/applications/:id/redirect-uris"',
+    'app.post(\n  "/api/applications/:id/redirect-uris"',
     start
   );
   const route =
