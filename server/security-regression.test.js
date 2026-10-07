@@ -451,3 +451,16 @@ test("clients use the same application icon fallback", () => {
   assert.match(ui, /class AIDCClients/);
   assert.match(ui, /app\.logo_url[\s\S]*icon\("app-window"\)/);
 });
+
+test("overview metrics contain only rendered metrics", () => {
+  assert.doesNotMatch(ui, /layers-01/);
+  assert.match(style, /\.aidc-metric-segment:nth-child\(2\):last-child\{grid-column:span 6\}/);
+});
+
+test("client management navigation uses a people icon and empty state is safe", () => {
+  assert.match(ui, /href="#\/clients"/);
+  assert.match(ui, /user-group/);
+  assert.match(ui, /title:\s*this\.query\.trim\(\)/);
+  assert.doesNotMatch(ui, /title:\s*total\s*\?/);
+  assert.match(style, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)/);
+});

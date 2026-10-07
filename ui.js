@@ -252,7 +252,7 @@ export function registerAIDCComponents(AIDC) {
               href="#/clients"
               @click=${() => this.closeMobile()}
             >
-              ${icon("app-window")}
+              ${icon("user-group")}
               <span>Clients</span>
             </a>
 
@@ -633,12 +633,6 @@ export function registerAIDCComponents(AIDC) {
                 <strong>${activeCount}</strong>
               </div>
               ${icon("checkmark-circle-02")}
-            </div>
-
-            <div class="aidc-metric-segment">
-              <div>
-              </div>
-              ${icon("layers-01")}
             </div>
 
           </section>
@@ -4410,11 +4404,11 @@ if (!query) return true;
             : emptyState({
                 iconName: "app-window",
                 title:
-                  total
+                  this.query.trim()
                     ? "No clients match"
                     : "No clients yet",
                 description:
-                  total
+                  this.query.trim()
                     ? "Try a different search or status filter."
                     : "Create your first OAuth or OpenID Connect client.",
                 action: applicationCount
@@ -6187,7 +6181,7 @@ if (!query) return true;
                 <span>Analytics</span>
               </a>
               <a class="aidc-mobile-nav-item ${router.parse().path === "/clients" ? "active" : ""}" href="#/clients" aria-label="Clients">
-                ${icon("app-window")}
+                ${icon("user-group")}
                 <span>Clients</span>
               </a>
             </nav>

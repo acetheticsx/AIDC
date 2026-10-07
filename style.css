@@ -8534,7 +8534,7 @@ html::before{
 .aidc-metric-segments{grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;border:0;overflow:visible;background:transparent}
 .aidc-metric-segment{grid-column:span 4;border:1px solid var(--aidc-border);border-radius:18px;background:var(--aidc-surface);box-shadow:var(--aidc-shadow-card)}
 .aidc-metric-segment:nth-child(1){grid-column:span 6}
-.aidc-metric-segment:nth-child(2),.aidc-metric-segment:nth-child(3){grid-column:span 3}
+.aidc-metric-segment:nth-child(2){grid-column:span 3}.aidc-metric-segment:nth-child(2):last-child{grid-column:span 6}
 .aidc-application-bento{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px;min-width:0}
 .aidc-application-bento .aidc-application-row{grid-column:span 6;min-height:148px;padding:18px;border:1px solid var(--aidc-border);border-radius:18px;background:var(--aidc-surface);box-shadow:var(--aidc-shadow-card);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
 .aidc-application-bento .aidc-application-row:hover{transform:translateY(-2px);box-shadow:var(--aidc-shadow-dialog);border-color:var(--aidc-text-secondary)}
@@ -8547,7 +8547,7 @@ html::before{
 /* Client management */
 .aidc-client-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin: 18px 0;
 }
