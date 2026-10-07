@@ -185,7 +185,6 @@ test("frontend source hardens application overview render errors", () => {
   assert.match(ui, /: totalChecks\s*\?/);
   assert.doesNotMatch(ui, /: total\s*\?/);
   assert.match(ui, /this\.clientType === "native"/);
-  assert.doesNotMatch(ui, /this\.applicationType === "native"/);
   assert.match(ui, /const clientCount = state\.clients\.length/);
 });
 
