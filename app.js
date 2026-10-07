@@ -1,5 +1,5 @@
-import { registerAIDCComponents } from "./ui.js?v=20261006-8";
-import { api } from "./api.js?v=20261004-3";
+import { registerAIDCComponents } from "./ui.js?v=20261007-1";
+import { api } from "./api.js?v=20261007-1";
 
 /* ─────────────────────────────────────────────
    Constants
@@ -56,6 +56,9 @@ const state = {
     error: null
   },
   loading: false,
+  quota: null,
+  entitlements: null,
+  quotaLoading: false,
 
   redirectUris: {
     items: [],
@@ -300,7 +303,7 @@ const auth = {
     emitState();
 
     try {
-      await applications.load();
+      await Promise.allSettled([applications.load(), quota.load()]);
     } finally {
       lastRouteKey = "";
       handleRouteChange();
@@ -429,6 +432,7 @@ const applications = {
 
 
       emitState();
+      await quota.load();
 
       return application;
     } catch (error) {
@@ -1132,6 +1136,27 @@ const analytics = {
       state.analytics = { ...state.analytics, loading: false, error: error?.message || "Failed to load analytics" };
       emitState();
       return [];
+    }
+  }
+};
+
+const quota = {
+  async load() {
+    state.quotaLoading = true;
+    emitState();
+    try {
+      const data = await api.quota.get();
+      state.quota = data?.quota || null;
+      state.entitlements = data?.entitlements || null;
+      return state.quota;
+    } catch (error) {
+      console.error("Failed to load subscription quota:", error);
+      state.quota = null;
+      state.entitlements = null;
+      return null;
+    } finally {
+      state.quotaLoading = false;
+      emitState();
     }
   }
 };
