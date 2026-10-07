@@ -1636,17 +1636,25 @@ app.get(
       OAUTH_VERIFIER_COOKIE
     );
 
-    const clearOauthCookies = [
-      clearCookie(OAUTH_STATE_COOKIE, "/auth"),
-      clearCookie(OAUTH_VERIFIER_COOKIE, "/auth")
-    ];
+    function clearOauthCookiesResponse(response) {
+      response.clearCookie(OAUTH_STATE_COOKIE, {
+        path: "/auth",
+        sameSite: "lax",
+        secure: IS_PRODUCTION
+      });
+      response.clearCookie(OAUTH_VERIFIER_COOKIE, {
+        path: "/auth",
+        sameSite: "lax",
+        secure: IS_PRODUCTION
+      });
+    }
 
     /*
      * Do not reflect oauthError back to the browser.
      * Map known codes to fixed, safe strings.
      */
     if (oauthError) {
-      res.set("Set-Cookie", clearOauthCookies);
+      clearOauthCookiesResponse(res);
 
       const message =
         OAUTH_ERROR_MESSAGES[oauthError] ||
@@ -1659,7 +1667,7 @@ app.get(
     }
 
     if (!code || typeof code !== "string") {
-      res.set("Set-Cookie", clearOauthCookies);
+      clearOauthCookiesResponse(res);
 
       return res
         .status(400)
@@ -1672,7 +1680,7 @@ app.get(
       !state ||
       !safeEqual(expectedState, state)
     ) {
-      res.set("Set-Cookie", clearOauthCookies);
+      clearOauthCookiesResponse(res);
 
       return res
         .status(400)
@@ -1681,7 +1689,7 @@ app.get(
     }
 
     if (!codeVerifier) {
-      res.set("Set-Cookie", clearOauthCookies);
+      clearOauthCookiesResponse(res);
 
       return res
         .status(400)
@@ -1730,7 +1738,7 @@ app.get(
             TOKEN_EXCHANGE_TIMEOUT_MS
           );
 
-          res.set("Set-Cookie", clearOauthCookies);
+          clearOauthCookiesResponse(res);
 
           return res
             .status(504)
@@ -1751,7 +1759,7 @@ app.get(
           tokenResponse.status
         );
 
-        res.set("Set-Cookie", clearOauthCookies);
+        clearOauthCookiesResponse(res);
 
         return res
           .status(502)
@@ -1762,7 +1770,7 @@ app.get(
       const tokens = await tokenResponse.json();
 
       if (!tokens.id_token) {
-        res.set("Set-Cookie", clearOauthCookies);
+        clearOauthCookiesResponse(res);
 
         return res
           .status(502)
@@ -1785,7 +1793,7 @@ app.get(
         if (error?.code === "ERR_JWKS_TIMEOUT") {
           console.error("JWKS verification timed out.");
 
-          res.set("Set-Cookie", clearOauthCookies);
+          clearOauthCookiesResponse(res);
 
           return res
             .status(503)
@@ -1807,7 +1815,7 @@ app.get(
         typeof payload.sub !== "string" ||
         !isValidUuid(payload.sub)
       ) {
-        res.set("Set-Cookie", clearOauthCookies);
+        clearOauthCookiesResponse(res);
 
         console.error(
           "ID token sub is not a UUID:",
@@ -1834,7 +1842,7 @@ app.get(
       );
 
       if (!identity.rows.length) {
-        res.set("Set-Cookie", clearOauthCookies);
+        clearOauthCookiesResponse(res);
 
         return res
           .status(403)
@@ -1882,7 +1890,7 @@ app.get(
     } catch (error) {
       console.error("Callback failed:", error);
 
-      res.set("Set-Cookie", clearOauthCookies);
+      clearOauthCookiesResponse(res);
 
       res
         .status(500)
