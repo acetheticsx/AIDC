@@ -562,6 +562,7 @@ test("entitlement outages fall back to authoritative Ace ID subscription state",
   assert.ok(server.includes("public.aceid_subscriptions"));
   assert.ok(server.includes("aceid_database_fallback"));
   assert.ok(server.includes("Ace ID entitlement API unavailable; using Ace ID database fallback"));
+  assert.ok(server.includes("Ace ID entitlement API returned an unusable entitlement; using Ace ID database fallback."));
   assert.ok(server.includes("ENTITLEMENT_UNAVAILABLE"));
 });
 
