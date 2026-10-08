@@ -3677,7 +3677,7 @@ async function getAceIdEntitlements(developerId) {
     if (!plan) throw new Error("entitlement_plan_missing");
     const applicationsLimit = resolveEntitlementLimit(payload, "applications");
     const mauLimit = resolveEntitlementLimit(payload, "mau");
-    return {
+    const apiEntitlements = {
       plan, name: String(payload?.name || plan), status: String(payload?.status || "inactive"),
       applications: applicationsLimit, mau: mauLimit,
       limits: payload?.limits && typeof payload.limits === "object" ? payload.limits : {},
@@ -3686,6 +3686,16 @@ async function getAceIdEntitlements(developerId) {
       manageUrl: typeof payload?.manage_url === "string" ? payload.manage_url : null,
       verified: true, source: "aceid_api"
     };
+
+    // A successful HTTP response is not necessarily a usable entitlement.
+    // Owner grants may be visible in the shared DB before the subscription API
+    // reflects them. Never turn stale/incomplete API data into a false 503.
+    if (apiEntitlements.status !== "active" || !Number.isFinite(apiEntitlements.applications)) {
+      console.warn("Ace ID entitlement API returned an unusable entitlement; using Ace ID database fallback.");
+      return getLocalAceIdEntitlements(userId);
+    }
+
+    return apiEntitlements;
   } catch (error) {
     console.warn("Ace ID entitlement API unavailable; using Ace ID database fallback:", error?.message || error);
     return getLocalAceIdEntitlements(userId);
