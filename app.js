@@ -1,5 +1,5 @@
-import { registerAIDCComponents } from "./ui.js?v=20261007-1";
-import { api } from "./api.js?v=20261007-1";
+import { registerAIDCComponents } from "./ui.js?v=20261008-1";
+import { api } from "./api.js?v=20261008-1";
 
 /* ─────────────────────────────────────────────
    Constants

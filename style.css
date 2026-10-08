@@ -8100,6 +8100,34 @@ html::before{
   border:1px solid var(--aidc-border);
   cursor:pointer;
 }
+
+/* CSP-safe branding color tokens. Do not use inline style attributes here. */
+.aidc-color-option.aidc-color-token-111111,.aidc-color-swatch.aidc-color-token-111111 { background-color:#111111 !important; }
+.aidc-color-option.aidc-color-token-ffffff,.aidc-color-swatch.aidc-color-token-ffffff { background-color:#ffffff !important; }
+.aidc-color-option.aidc-color-token-dc2626,.aidc-color-swatch.aidc-color-token-dc2626 { background-color:#dc2626 !important; }
+.aidc-color-option.aidc-color-token-ea580c,.aidc-color-swatch.aidc-color-token-ea580c { background-color:#ea580c !important; }
+.aidc-color-option.aidc-color-token-ca8a04,.aidc-color-swatch.aidc-color-token-ca8a04 { background-color:#ca8a04 !important; }
+.aidc-color-option.aidc-color-token-16a34a,.aidc-color-swatch.aidc-color-token-16a34a { background-color:#16a34a !important; }
+.aidc-color-option.aidc-color-token-0891b2,.aidc-color-swatch.aidc-color-token-0891b2 { background-color:#0891b2 !important; }
+.aidc-color-option.aidc-color-token-2563eb,.aidc-color-swatch.aidc-color-token-2563eb { background-color:#2563eb !important; }
+.aidc-color-option.aidc-color-token-7c3aed,.aidc-color-swatch.aidc-color-token-7c3aed { background-color:#7c3aed !important; }
+.aidc-color-option.aidc-color-token-db2777,.aidc-color-swatch.aidc-color-token-db2777 { background-color:#db2777 !important; }
+.aidc-color-option.aidc-color-token-475569,.aidc-color-swatch.aidc-color-token-475569 { background-color:#475569 !important; }
+.aidc-color-option.aidc-color-token-64748b,.aidc-color-swatch.aidc-color-token-64748b { background-color:#64748b !important; }
+
+.aidc-branding-preview.aidc-preview-accent-111111 { --aidc-preview-accent:#111111; --aidc-preview-accent-contrast:#ffffff; }
+.aidc-branding-preview.aidc-preview-accent-ffffff { --aidc-preview-accent:#ffffff; --aidc-preview-accent-contrast:#111111; }
+.aidc-branding-preview.aidc-preview-accent-dc2626 { --aidc-preview-accent:#dc2626; --aidc-preview-accent-contrast:#ffffff; }
+.aidc-branding-preview.aidc-preview-accent-ea580c { --aidc-preview-accent:#ea580c; --aidc-preview-accent-contrast:#ffffff; }
+.aidc-branding-preview.aidc-preview-accent-ca8a04 { --aidc-preview-accent:#ca8a04; --aidc-preview-accent-contrast:#111111; }
+.aidc-branding-preview.aidc-preview-accent-16a34a { --aidc-preview-accent:#16a34a; --aidc-preview-accent-contrast:#ffffff; }
+.aidc-branding-preview.aidc-preview-accent-0891b2 { --aidc-preview-accent:#0891b2; --aidc-preview-accent-contrast:#ffffff; }
+.aidc-branding-preview.aidc-preview-accent-2563eb { --aidc-preview-accent:#2563eb; --aidc-preview-accent-contrast:#ffffff; }
+.aidc-branding-preview.aidc-preview-accent-7c3aed { --aidc-preview-accent:#7c3aed; --aidc-preview-accent-contrast:#ffffff; }
+.aidc-branding-preview.aidc-preview-accent-db2777 { --aidc-preview-accent:#db2777; --aidc-preview-accent-contrast:#ffffff; }
+.aidc-branding-preview.aidc-preview-accent-475569 { --aidc-preview-accent:#475569; --aidc-preview-accent-contrast:#ffffff; }
+.aidc-branding-preview.aidc-preview-accent-64748b { --aidc-preview-accent:#64748b; --aidc-preview-accent-contrast:#ffffff; }
+
 .aidc-color-option[aria-pressed="true"]{
   outline:2px solid var(--aidc-text);
   outline-offset:2px;
@@ -8143,7 +8171,6 @@ html::before{
 .aidc-account-fab-option { border-radius: 10px; }
 .aidc-toast { border-radius: 14px; }
 .aidc-color-swatch {
-  background-color: var(--aidc-color-swatch, var(--aidc-surface)) !important;
   filter: none !important;
 }
 .aidc-branding-preview-logo {

@@ -230,9 +230,9 @@ test("analytics ignores malformed login timestamps", () => {
 });
 
 test("frontend bundles have explicit cache-busted versions", () => {
-  assert.match(app, /\.\/ui\.js\?v=20261007-1/);
-  assert.match(index, /\/app\.js\?v=20261007-1/);
-  assert.match(index, /\/style\.css\?v=20261007-1/);
+  assert.match(app, /\.\/ui\.js\?v=20261008-1/);
+  assert.match(index, /\/app\.js\?v=20261008-1/);
+  assert.match(index, /\/style\.css\?v=20261008-1/);
 });
 
 test("frontend source hardens the reported total redeclaration", () => {
@@ -361,6 +361,29 @@ test("DNS records sheet remains usable while applications stay always-on", () =>
   assert.match(ui, /event\.key !== "Tab"/);
   assert.match(server, /verifyOriginDns/);
   assert.doesNotMatch(server, /forcedStatus = "disabled"/);
+});
+
+test("application PATCH cannot reference an undefined lifecycle status", () => {
+  const routeStart = server.indexOf('app.patch(\n  "/api/applications/:id"');
+  const routeEnd = server.indexOf('app.get(\n  "/api/applications/:id/origin-verification"');
+  const route = server.slice(routeStart, routeEnd);
+  assert.ok(routeStart >= 0 && routeEnd > routeStart, "application PATCH route should exist");
+  assert.doesNotMatch(route, /status === undefined/);
+  assert.match(route, /No fields to update/);
+});
+
+test("Origin URL save unwraps the application PATCH response", () => {
+  assert.match(ui, /response\?\.application \|\| response/);
+  assert.match(ui, /Application update returned no application/);
+});
+
+test("branding picker uses CSP-safe color classes instead of inline styles", () => {
+  assert.doesNotMatch(ui, /class="aidc-color-option"[^>]*style=/);
+  assert.doesNotMatch(ui, /class="aidc-color-swatch"[^>]*style=/);
+  assert.doesNotMatch(ui, /aidc-branding-preview" style=/);
+  assert.match(ui, /AIDC_BRANDING_COLORS/);
+  assert.match(style, /aidc-color-token-ca8a04/);
+  assert.match(style, /aidc-preview-accent-ca8a04/);
 });
 
 test("mobile overlays stay above navigation and branding color selection stays in-app", () => {

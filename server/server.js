@@ -2441,8 +2441,7 @@ app.patch(
       name === undefined &&
       description === undefined &&
       application_type === undefined &&
-      origin_url === undefined &&
-      status === undefined
+      origin_url === undefined
     ) {
       return res.status(400).json({ error: "No fields to update" });
     }
