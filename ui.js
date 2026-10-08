@@ -3012,6 +3012,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                                   <code class="aidc-mono">${item.uri}</code>
                                   <button
                                     class="aidc-icon-button"
+                                    type="button"
                                     title="Copy URI"
                                     aria-label="Copy redirect URI"
                                     @click=${() => this.copyUri(item.uri)}
