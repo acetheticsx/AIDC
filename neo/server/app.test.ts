@@ -25,12 +25,18 @@ describe("Neo API foundation", () => {
     await app.close();
   });
 
-  it("keeps Ace ID env names out of client configuration", async () => {
-    const app = buildApp();
-    const response = await app.inject({ method: "GET", url: "/api/neo/status" });
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
-    expect(JSON.stringify(body)).not.toContain("ACE_ID_CLIENT_SECRET");
-    await app.close();
+  it("keeps the public status response free of secret configuration", async () => {
+    const previous = process.env.ACE_ID_ISSUER;
+    process.env.ACE_ID_ISSUER = "https://identity.example.test";
+    try {
+      const app = buildApp();
+      const response = await app.inject({ method: "GET", url: "/api/neo/status" });
+      expect(response.statusCode).toBe(200);
+      expect(JSON.stringify(response.json())).not.toContain("ACE_ID_CLIENT_SECRET");
+      await app.close();
+    } finally {
+      if (previous === undefined) delete process.env.ACE_ID_ISSUER;
+      else process.env.ACE_ID_ISSUER = previous;
+    }
   });
 });

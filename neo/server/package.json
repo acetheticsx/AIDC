@@ -10,7 +10,7 @@
     "build": "tsc -b && vite build",
     "build:server": "tsc -p tsconfig.server.json",
     "check": "tsc -b --pretty false",
-    "start": "node dist-server/server/index.js",
+    "start": "node dist-server/index.js",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },
@@ -34,9 +34,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "concurrently": "^9.2.1",
     "typescript": "^5.9.2",
-    "vite": "^7.1.7",
     "vitest": "^3.2.4",
-    "tsx": "^4.19.2",
-    "vitest": "^3.2.4"
+    "tsx": "^4.19.2"
   }
 }
