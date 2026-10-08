@@ -665,7 +665,7 @@ test("auth redirect is guarded against repeated navigation", () => {
 });
 
 test("copy controls are explicit buttons and use a mobile-safe fallback", () => {
-  assert.match(ui, /type="button"[\s\S]{0,120}title="Copy client ID"/);
-  assert.match(ui, /type="button"[\s\S]{0,120}title="Copy URI"/);
+  assert.match(ui, /class="aidc-icon-button"\s+type="button"\s+title="Copy client ID"/);
+  assert.match(ui, /class="aidc-icon-button"\s+type="button"\s+title="Copy URI"/);
   assert.match(app, /setSelectionRange\(0, textarea\.value\.length\)/);
 });
