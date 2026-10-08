@@ -619,8 +619,9 @@ test("notification bursts are deduplicated", () => {
   assert.match(app, /NOTICE_DEDUPE_MS = 1500/);
 });
 
-test("Deplexo uses the version 1 configuration format", () => {
-  assert.match(deplexo, /version: 1/);
-  assert.match(deplexo, /build:\s+framework: auto/);
-  assert.match(deplexo, /run:\s+command: node server\/server\.js/);
+test("Deplexo uses the known-good Node runtime configuration", () => {
+  assert.match(deplexo, /^framework: node/m);
+  assert.match(deplexo, /install: cd server && npm ci/);
+  assert.match(deplexo, /start: node server\/server\.js/);
+  assert.match(deplexo, /port: 3000/);
 });
