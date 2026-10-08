@@ -12,7 +12,7 @@
   "dependencies": {
     "express": "^5.1.0",
     "jose": "^6.2.12",
-    "pg": "^8.16.3",
+    "pg": "^8.23.1",
     "express-rate-limit": "8.7.0"
   },
   "overrides": {
