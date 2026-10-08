@@ -626,4 +626,3 @@ test("Deplexo uses the Node runtime configuration", () => {
   assert.match(deplexo, /start: node server\/server\.js/);
   assert.match(deplexo, /port: 3000/);
 });
-});
