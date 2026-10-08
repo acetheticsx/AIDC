@@ -32,7 +32,7 @@ test("session activity writes are throttled", () => {
 
 test("public health responses do not expose discovery internals", () => {
   const start = server.indexOf('app.get("/api/health"');
-  const end = server.indexOf('app.get(\n  "/api/playground/config"', start);
+  const end = server.indexOf('app.get(\n  "/api/integration/discovery"', start);
   const route = start >= 0 && end > start ? server.slice(start, end) : "";
   assert.ok(route.length > 0, "health route should exist");
   assert.match(route, /dependencies/);
