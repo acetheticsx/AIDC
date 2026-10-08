@@ -1,9 +1,9 @@
 import type { ApiError, Application, Quota, User } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
-const REQUEST_TIMEOUT_MS = 15000;
+const REQUEST_TIMEOUT_MS = 15_000;
 
-function csrfToken() {
+function csrfToken(): string | null {
   const match = document.cookie.match(/(?:^|; )aidc_csrf=([^;]*)/);
   return match ? decodeURIComponent(match[1]) : null;
 }
@@ -18,27 +18,35 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
     const csrf = csrfToken();
     if (csrf) headers.set("X-CSRF-Token", csrf);
   }
-  if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
 
   try {
     const response = await fetch(API_BASE + path, {
-      ...options, headers, credentials: "include", signal: controller.signal
+      ...options,
+      headers,
+      credentials: "include",
+      signal: controller.signal
     });
-    let data: unknown = null;
-    if ((response.headers.get("content-type") || "").includes("application/json")) {
-      data = await response.json();
-    }
+
+    const data = (await response.json().catch(() => null)) as unknown;
     if (!response.ok) {
-      const body = data as { error?: string; code?: string } | null;
-      const error = new Error(body?.error || "Request failed with status " + response.status + ".") as ApiError;
-      error.status = response.status; error.code = body?.code; error.data = data;
+      const payload = data as { error?: string; code?: string } | null;
+      const error = new Error(payload?.error || `Request failed with status ${response.status}`) as ApiError;
+      error.status = response.status;
+      error.code = payload?.code;
+      error.data = data;
       throw error;
     }
+
     return data as T;
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      const timeout = new Error("Request timed out after " + REQUEST_TIMEOUT_MS + "ms.") as ApiError;
-      timeout.status = 408; timeout.name = "TimeoutError"; throw timeout;
+      const timeout = new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms`) as ApiError;
+      timeout.status = 408;
+      throw timeout;
     }
     throw error;
   } finally {
@@ -47,8 +55,26 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 }
 
 export const api = {
-  auth: { me: () => request<{ user: User }>("/me") },
-  applications: { list: () => request<{ applications: Application[] }>("/applications") },
-  quota: { get: () => request<{ quota: Quota; entitlements?: unknown }>("/quota") },
-  health: { get: () => request<{ ok: boolean }>("/health") }
+  auth: {
+    me: () => request<{ user: User }>("/me")
+  },
+  applications: {
+    list: () => request<{ applications: Application[] }>("/applications"),
+    create: (input: {
+      name: string;
+      description: string;
+      origin_url?: string;
+      application_type?: string;
+    }) => request<{ application: Application; quota?: Quota }>("/applications", {
+      method: "POST",
+      body: JSON.stringify(input)
+    }),
+    get: (id: string) => request<{ application: Application }>(`/applications/${encodeURIComponent(id)}`)
+  },
+  quota: {
+    get: () => request<{ quota: Quota; entitlements?: unknown }>("/quota")
+  },
+  health: {
+    get: () => request<{ ok: boolean }>("/health")
+  }
 };

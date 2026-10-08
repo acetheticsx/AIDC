@@ -1,37 +1,60 @@
 # AIDC Neo
 
-A parallel migration workspace for the AIDC console.
+Neo is the incremental React + TypeScript + Fastify migration of AIDC.
 
-## Target stack
+## Identity and environment compatibility
 
-- React + TypeScript
-- Vite
-- Fastify
-- Zod
-- Drizzle ORM
-- PostgreSQL / Neon
-- Vitest
-- Playwright
+Neo intentionally uses the same production environment variable names and Ace ID credentials as the legacy console:
 
-## Migration rules
+- `ACE_ID_ISSUER`
+- `ACE_ID_CLIENT_ID`
+- `ACE_ID_CLIENT_SECRET`
+- `AIDC_PUBLIC_ORIGIN`
+- `AIDC_ENTITLEMENTS_SHARED_SECRET`
+- `DATABASE_URL`
+- `DATABASE_POOL_MAX`
+- `DATABASE_SSL_CA`
+- `DATABASE_SSL_REJECT_UNAUTHORIZED`
+- `AIDC_TRUST_PROXY_HOPS`
 
-1. main remains the production source of truth during migration.
-2. Ace ID/OIDC remains the identity provider.
-3. The existing PostgreSQL schema is preserved initially.
-4. Existing API behavior is treated as the compatibility contract.
-5. Features migrate in vertical slices, not as a single rewrite.
-6. Security behavior must be preserved or strengthened.
-7. Every migrated slice gets browser and regression coverage before legacy code is retired.
+Do not commit real values. For a beta deployment, copy the values from the existing Deplexo environment into the separate Neo/preview application. `AIDC_PUBLIC_ORIGIN` must match the beta URL because it is used to construct the OIDC callback.
 
-## Planned order
+The migration reuses the existing PostgreSQL schema, including `aceid_users`, `sessions`, `applications`, `aceid_clients`, and `aceid_subscriptions`.
 
-1. Foundation and build tooling
-2. API contract and typed client
-3. Authentication/session adapter
-4. Applications
-5. Branding
-6. Redirects, scopes, credentials
-7. Entitlements and quota
-8. Activity/authentication logs
-9. Settings/integrations
-10. Production cutover and legacy removal
+## Local preview
+
+```bash
+npm install
+npm run dev
+```
+
+Vite serves the client on port 5173 and proxies `/api` and `/auth` to the Fastify server on port 3000.
+
+For a production-like local preview:
+
+```bash
+npm run build
+npm start
+```
+
+## Beta deployment
+
+Deploy `neo` as a separate Deplexo web app with:
+
+- repository: `acetheticsx/AIDC`
+- build root: `neo`
+- framework: Dockerfile
+- Dockerfile: `Dockerfile`
+- port: `3000`
+
+Deploy the exact commit SHA from the `neo` branch so the preview is pinned to a known revision. Keep production on `main`.
+
+Use the same Ace ID client credentials and database credentials, but set `AIDC_PUBLIC_ORIGIN` to the beta app's public origin and register that callback URI in Ace ID before testing login.
+
+Do not enable automatic deployment for the beta app until the branch is stable. Promote by deploying the exact reviewed Neo commit.
+
+## Security
+
+Neo does not create fake clients. Application creation requires the corresponding `public.aceid_clients` row owned by the authenticated Ace ID user, and rolls back the application if registration is missing.
+
+Real credentials belong in Deplexo environment settings, never in Git.
