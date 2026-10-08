@@ -155,12 +155,25 @@ document.addEventListener(
 
 let noticeSequence = 0;
 const noticeTimers = new Map();
+const recentNoticeKeys = new Map();
+const NOTICE_DEDUPE_MS = 1500;
 
 function notify(message, type = "success") {
+  const normalizedMessage = String(message || "Something went wrong.");
+  const normalizedType = type === "error" ? "error" : "success";
+  const noticeKey = normalizedType + "|" + normalizedMessage;
+  const now = Date.now();
+  const previousAt = recentNoticeKeys.get(noticeKey) || 0;
+
+  if (now - previousAt < NOTICE_DEDUPE_MS) {
+    return;
+  }
+  recentNoticeKeys.set(noticeKey, now);
+
   const notice = {
     id: String(Date.now()) + "-" + String(++noticeSequence),
-    message: String(message || "Something went wrong."),
-    type: type === "error" ? "error" : "success"
+    message: normalizedMessage,
+    type: normalizedType
   };
 
   state.ui.notices = [notice, ...state.ui.notices].slice(0, 4);
@@ -1196,14 +1209,14 @@ const quota = {
   }
 };
 
-const playground = {
-  async config() {
+const integration = {
+  async discovery() {
     try {
-      const data = await api.playground.config();
+      const data = await api.integration.discovery();
       return data || null;
     } catch (error) {
-      handleError(error, "Failed to load integration playground");
-      throw error;
+      console.error("Failed to load Ace ID discovery:", error);
+      return null;
     }
   }
 };
@@ -1247,7 +1260,7 @@ const applicationHealth = {
         api.redirectUris.list(applicationId),
         api.credentials.list(applicationId),
         api.scopes.list(applicationId),
-        api.playground.config()
+        integration.discovery()
       ]);
 
     const redirectUris =
@@ -1697,7 +1710,7 @@ const AIDC = {
 
   analytics,
 
-  playground,
+  integration,
 
   router: {
     navigate,

@@ -15,6 +15,7 @@ const style = await fs.readFile(path.join(here, "..", "style.css"), "utf8");
 const robots = await fs.readFile(path.join(here, "..", "robots.txt"), "utf8");
 const sitemap = await fs.readFile(path.join(here, "..", "sitemap.xml"), "utf8");
 const llms = await fs.readFile(path.join(here, "..", "llms.txt"), "utf8");
+const deplexo = await fs.readFile(path.join(here, "..", "deplexo.yaml"), "utf8");
 
 
 test("authentication failures do not log upstream token response bodies", () => {
@@ -31,7 +32,7 @@ test("session activity writes are throttled", () => {
 
 test("public health responses do not expose discovery internals", () => {
   const start = server.indexOf('app.get("/api/health"');
-  const end = server.indexOf('app.get(\n  "/api/playground/config"', start);
+  const end = server.indexOf('app.get(\n  "/api/integration/discovery"', start);
   const route = start >= 0 && end > start ? server.slice(start, end) : "";
   assert.ok(route.length > 0, "health route should exist");
   assert.match(route, /dependencies/);
@@ -450,7 +451,7 @@ test("auto-login deduplicates bootstrap and distinguishes transient failures fro
 });
 
 test("integration health checks live Ace ID discovery without exposing a playground section", () => {
-  assert.match(app, /api\.playground\.config\(\)/);
+  assert.match(app, /integration\.discovery\(\)/);
   assert.match(app, /key: "oidc"/);
   assert.doesNotMatch(ui, /Run OAuth test/);
   assert.doesNotMatch(ui, /aidc-integration-playground/);
@@ -577,4 +578,49 @@ test("overview uses Bento layout and consent metadata is safely wrapped", () => 
   assert.ok(ui.includes("getApplication(AIDC, this.applicationId)?.description"));
   assert.ok(style.includes(".aidc-overview-bento"));
   assert.ok(style.includes("overflow-wrap:anywhere"));
+});
+
+
+test("application creation verifies the Ace ID client through owner_user_id", () => {
+  assert.match(server, /WHERE client_id = \$1\s+AND owner_user_id = \$2/);
+  assert.doesNotMatch(server, /SELECT client_id[\s\S]{0,180}aceid_clients[\s\S]{0,180}owner_id = \$2/);
+});
+
+test("application deletion revokes the public Ace ID client and cleans child records transactionally", () => {
+  assert.match(server, /DELETE FROM public\.application_branding/);
+  assert.match(server, /DELETE FROM public\.application_credentials/);
+  assert.match(server, /DELETE FROM public\.application_scopes/);
+  assert.match(server, /DELETE FROM public\.redirect_uris/);
+  assert.match(server, /DELETE FROM public\.application_activity/);
+  assert.match(server, /UPDATE public\.aceid_clients[\s\S]{0,1000}owner_user_id = NULL/);
+  assert.match(server, /CLIENT_REVOCATION_FAILED/);
+});
+
+test("entitlement lookups deduplicate concurrent requests and briefly cache results", () => {
+  assert.match(server, /ENTITLEMENT_CACHE_TTL_MS = 15_000/);
+  assert.match(server, /const entitlementCache = new Map/);
+  assert.match(server, /if \(cached\?\.promise\)/);
+});
+
+test("Cloudflare requests have a bounded upstream timeout", () => {
+  assert.match(server, /CLOUDFLARE_TIMEOUT_MS = 8_000/);
+  assert.match(server, /new AbortController\(\)/);
+});
+
+test("integration discovery is not exposed as a playground API", () => {
+  assert.doesNotMatch(server, /\/api\/playground\/config/);
+  assert.match(server, /\/api\/integration\/discovery/);
+  assert.doesNotMatch(api, /playground/);
+  assert.match(api, /integration:/);
+});
+
+test("notification bursts are deduplicated", () => {
+  assert.match(app, /recentNoticeKeys/);
+  assert.match(app, /NOTICE_DEDUPE_MS = 1500/);
+});
+
+test("Deplexo uses the version 1 configuration format", () => {
+  assert.match(deplexo, /version: 1/);
+  assert.match(deplexo, /build:\s+framework: auto/);
+  assert.match(deplexo, /run:\s+command: node server\/server\.js/);
 });

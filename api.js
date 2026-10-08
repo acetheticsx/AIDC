@@ -293,9 +293,9 @@ export const api = {
     get() { return request("/quota"); }
   },
 
-  playground: {
-    config() {
-      return request("/playground/config");
+  integration: {
+    discovery() {
+      return request("/integration/discovery");
     }
   },
 

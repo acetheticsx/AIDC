@@ -198,6 +198,7 @@ const DISCOVERY_RETRY_MS = 30_000;
 const DISCOVERY_TIMEOUT_MS = 10_000;
 const TOKEN_EXCHANGE_TIMEOUT_MS = 10_000;
 const JWKS_TIMEOUT_MS = 5_000;
+const CLOUDFLARE_TIMEOUT_MS = 8_000;
 
 async function tryLoadDiscovery() {
   discoveryState.lastAttemptAt = Date.now();
@@ -1076,38 +1077,46 @@ async function verifyOriginDnsWithPropagationRetry(originUrl, applicationId) {
 }
 
 async function cloudflareApiRequest(token, path, options = {}) {
-  const response = await fetch(
-    `https://api.cloudflare.com/client/v4${path}`,
-    {
-      ...options,
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        ...(options.headers || {})
-      }
-    }
-  );
-
-  let data = null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CLOUDFLARE_TIMEOUT_MS);
 
   try {
-    data = await response.json();
-  } catch {
-    /* Cloudflare should return JSON, but do not trust that assumption. */
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4${path}`,
+      {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          ...(options.headers || {})
+        }
+      }
+    );
+
+    let data = null;
+
+    try {
+      data = await response.json();
+    } catch {
+      /* Cloudflare should return JSON, but do not trust that assumption. */
+    }
+
+    if (!response.ok || data?.success === false) {
+      const message =
+        data?.errors?.[0]?.message ||
+        `Cloudflare API returned ${response.status}`;
+
+      const error = new Error(message);
+      error.status = response.status;
+      throw error;
+    }
+
+    return data;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  if (!response.ok || data?.success === false) {
-    const message =
-      data?.errors?.[0]?.message ||
-      `Cloudflare API returned ${response.status}`;
-
-    const error = new Error(message);
-    error.status = response.status;
-    throw error;
-  }
-
-  return data;
 }
 
 function cloudflareZoneCandidates(hostname) {
@@ -1988,34 +1997,44 @@ app.get("/api/me", requireAuth, async (req, res) => {
  * Health (public)
  * ═══════════════════════════════════════════
  */
-app.get("/api/health", async (req, res) => {
+app.get("/healthz", (req, res) => {
+  res.status(200).json({ ok: true, service: "AIDC API" });
+});
+
+app.get("/readyz", async (req, res) => {
   let database = "connected";
 
   try {
     await pool.query("SELECT 1");
   } catch (error) {
-    console.error("Health check failed:", error);
+    console.error("Readiness check failed:", error);
     database = "disconnected";
   }
 
-  const ok =
-    database === "connected" &&
-    discoveryState.status === "ready";
+  const identity = discoveryState.status === "ready" ? "connected" : "unavailable";
+  const ok = database === "connected" && identity === "connected";
 
   res.status(ok ? 200 : 503).json({
     ok,
     service: "AIDC API",
-    dependencies: {
-      database,
-      identity: discoveryState.status === "ready"
-        ? "connected"
-        : "unavailable"
-    }
+    dependencies: { database, identity }
   });
 });
 
+app.get("/api/health", async (req, res) => {
+  let database = "connected";
+  try {
+    await pool.query("SELECT 1");
+  } catch (error) {
+    database = "disconnected";
+  }
+  const identity = discoveryState.status === "ready" ? "connected" : "unavailable";
+  const ok = database === "connected" && identity === "connected";
+  res.status(ok ? 200 : 503).json({ ok, service: "AIDC API", dependencies: { database, identity } });
+});
+
 app.get(
-  "/api/playground/config",
+  "/api/integration/discovery",
   requireAuth,
   async (req, res) => {
     if (discoveryState.status !== "ready" || !discoveryState.doc) {
@@ -2224,7 +2243,7 @@ app.post(
         SELECT client_id
         FROM public.aceid_clients
         WHERE client_id = $1
-          AND owner_id = $2
+          AND owner_user_id = $2
         LIMIT 1
         `,
         [result.rows[0].client_id, req.developer.id]
@@ -2245,7 +2264,7 @@ app.post(
           client_secret = NULL,
           token_endpoint_auth_method = 'none'
         WHERE client_id = $1
-          AND owner_id = $2
+          AND owner_user_id = $2
         `,
         [result.rows[0].client_id, req.developer.id]
       );
@@ -2356,7 +2375,6 @@ app.patch(
 
     if (
       description !== undefined &&
-      description !== null &&
       typeof description !== "string"
     ) {
       return res.status(400).json({
@@ -2728,50 +2746,80 @@ app.delete(
     const { id } = req.params;
 
     if (!isValidUuid(id)) {
-      return res.status(400).json({
-        error: "Invalid application ID"
-      });
+      return res.status(400).json({ error: "Invalid application ID" });
     }
 
+    const client = await pool.connect();
     try {
-      const result = await pool.query(
+      await client.query("BEGIN");
+
+      const applicationResult = await client.query(
         `
-        DELETE FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
-        RETURNING
-          id,
-          name,
-          description,
-          client_id,
-          application_type,
-          origin_url,
-          status,
-          created_at,
-          updated_at
+        SELECT id, name, description, client_id, application_type, origin_url, status, created_at, updated_at
+        FROM public.applications
+        WHERE id = $1 AND owner_id = $2
+        FOR UPDATE
         `,
         [id, req.developer.id]
       );
 
-      if (result.rows.length === 0) {
-        return res.status(404).json({
-          error: "Application not found"
+      if (!applicationResult.rows.length) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Application not found" });
+      }
+
+      const application = applicationResult.rows[0];
+
+      await client.query("DELETE FROM public.application_branding WHERE application_id = $1", [id]);
+      await client.query("DELETE FROM public.application_credentials WHERE application_id = $1", [id]);
+      await client.query("DELETE FROM public.application_scopes WHERE application_id = $1", [id]);
+      await client.query("DELETE FROM public.redirect_uris WHERE application_id = $1", [id]);
+      await client.query("DELETE FROM public.application_activity WHERE application_id = $1", [id]);
+
+      const clientResult = await client.query(
+        `
+        UPDATE public.aceid_clients
+        SET
+          redirect_uris = ARRAY[]::text[],
+          post_logout_redirect_uris = ARRAY[]::text[],
+          grant_types = ARRAY[]::text[],
+          response_types = ARRAY[]::text[],
+          scopes = ARRAY[]::text[],
+          client_secret = NULL,
+          client_secret_hash = NULL,
+          token_endpoint_auth_method = 'none',
+          owner_user_id = NULL,
+          owner_id = NULL,
+          updated_at = now()
+        WHERE client_id = $1
+          AND owner_user_id = $2
+        RETURNING client_id
+        `,
+        [application.client_id, req.developer.id]
+      );
+
+      if (!clientResult.rows.length) {
+        await client.query("ROLLBACK");
+        return res.status(502).json({
+          error: "Ace ID client registration could not be revoked. No application was deleted.",
+          code: "CLIENT_REVOCATION_FAILED"
         });
       }
 
-      res.json({
-        deleted: true,
-        application: result.rows[0]
-      });
-    } catch (error) {
-      console.error(
-        "DELETE /api/applications/:id:",
-        error
+      await client.query(
+        "DELETE FROM public.applications WHERE id = $1 AND owner_id = $2",
+        [id, req.developer.id]
       );
 
-      res.status(500).json({
-        error: "Failed to delete application"
-      });
+      await client.query("COMMIT");
+
+      res.json({ deleted: true, application });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      console.error("DELETE /api/applications/:id:", error);
+      res.status(500).json({ error: "Failed to delete application" });
+    } finally {
+      client.release();
     }
   }
 );
@@ -3629,6 +3677,9 @@ function resolveEntitlementLimit(payload, key) {
   return value === null ? null : Math.floor(value);
 }
 
+const ENTITLEMENT_CACHE_TTL_MS = 15_000;
+const entitlementCache = new Map();
+
 const LOCAL_PLAN_LIMITS = Object.freeze({
   base: Object.freeze({ applications: 8, mau: 5000 }),
   core: Object.freeze({ applications: 15, mau: 20000 }),
@@ -3657,7 +3708,7 @@ async function getLocalAceIdEntitlements(userId) {
   };
 }
 
-async function getAceIdEntitlements(developerId) {
+async function fetchAceIdEntitlements(developerId) {
   const userId = String(developerId || "").trim();
   if (!userId) throw new Error("entitlement_user_required");
   if (!AIDC_ENTITLEMENTS_SHARED_SECRET) {
@@ -3700,6 +3751,40 @@ async function getAceIdEntitlements(developerId) {
     console.warn("Ace ID entitlement API unavailable; using Ace ID database fallback:", error?.message || error);
     return getLocalAceIdEntitlements(userId);
   } finally { clearTimeout(timeout); }
+}
+
+async function getAceIdEntitlements(developerId) {
+  const userId = String(developerId || "").trim();
+  if (!userId) throw new Error("entitlement_user_required");
+
+  const cached = entitlementCache.get(userId);
+  if (cached?.value && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+  if (cached?.promise) {
+    return cached.promise;
+  }
+
+  const promise = fetchAceIdEntitlements(userId)
+    .then(value => {
+      entitlementCache.set(userId, {
+        value,
+        expiresAt: Date.now() + ENTITLEMENT_CACHE_TTL_MS
+      });
+      return value;
+    })
+    .finally(() => {
+      const current = entitlementCache.get(userId);
+      if (current?.promise === promise) {
+        entitlementCache.set(userId, {
+          value: current.value || null,
+          expiresAt: current.expiresAt || 0
+        });
+      }
+    });
+
+  entitlementCache.set(userId, { promise, value: cached?.value || null, expiresAt: cached?.expiresAt || 0 });
+  return promise;
 }
 
 app.get("/api/quota", requireAuth, async (req, res) => {
