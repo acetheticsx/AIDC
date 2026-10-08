@@ -532,6 +532,7 @@ export function registerAIDCComponents(AIDC) {
 
             <button
               class="aidc-icon-button"
+              type="button"
               title="Copy client ID"
               aria-label="Copy client ID"
               @click=${async event => {
@@ -1920,6 +1921,7 @@ export function registerAIDCComponents(AIDC) {
 
                   <button
                     class="aidc-icon-button"
+                    type="button"
                     title="Copy client ID"
                     aria-label="Copy client ID"
                     @click=${this.copyClientId}

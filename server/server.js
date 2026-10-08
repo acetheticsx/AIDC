@@ -1942,16 +1942,8 @@ app.post(
 
     res.set("Set-Cookie", cookies);
 
-    const logoutUrl =
-      discoveryState.status === "ready"
-        ? `${discoveryState.doc.end_session_endpoint}` +
-          `?client_id=${encodeURIComponent(CLIENT_ID)}` +
-          `&post_logout_redirect_uri=${encodeURIComponent(
-            POST_LOGOUT_URL
-          )}`
-        : null;
-
-    res.json({ logout_url: logoutUrl });
+    res.set("Cache-Control", "no-store");
+    res.json({ success: true });
   }
 );
 
