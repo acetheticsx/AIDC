@@ -16,6 +16,7 @@ const robots = await fs.readFile(path.join(here, "..", "robots.txt"), "utf8");
 const sitemap = await fs.readFile(path.join(here, "..", "sitemap.xml"), "utf8");
 const llms = await fs.readFile(path.join(here, "..", "llms.txt"), "utf8");
 const deplexo = await fs.readFile(path.join(here, "..", "deplexo.yaml"), "utf8");
+const dockerfile = await fs.readFile(path.join(here, "..", "Dockerfile"), "utf8");
 
 
 test("authentication failures do not log upstream token response bodies", () => {
@@ -619,10 +620,14 @@ test("notification bursts are deduplicated", () => {
   assert.match(app, /NOTICE_DEDUPE_MS = 1500/);
 });
 
-test("Deplexo uses the Node runtime configuration", () => {
-  assert.match(deplexo, /^framework: node/m);
-  assert.match(deplexo, /install: cd server && npm ci/);
-  assert.match(deplexo, /build: echo "No build step required"/);
-  assert.match(deplexo, /start: node server\/server\.js/);
-  assert.match(deplexo, /port: 3000/);
+test("Deplexo uses the version 1 Docker build configuration", () => {
+  assert.match(deplexo, /^version: 1/m);
+  assert.match(deplexo, /^type: web/m);
+  assert.match(deplexo, /build:\s+framework: dockerfile/);
+  assert.match(deplexo, /dockerfile: Dockerfile/);
+  assert.match(deplexo, /run:\s+port: 3000/);
+  assert.match(dockerfile, /FROM node:22-alpine/);
+  assert.match(dockerfile, /COPY server\/package\*.json \.\/server\//);
+  assert.match(dockerfile, /RUN cd server && npm ci --omit=dev/);
+  assert.match(dockerfile, /CMD \[\"node\", \"server\/server\.js\"\]/);
 });

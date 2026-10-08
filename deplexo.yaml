@@ -1,5 +1,9 @@
-framework: node
-install: cd server && npm ci
-build: echo "No build step required"
-start: node server/server.js
-port: 3000
+version: 1
+type: web
+
+build:
+  framework: dockerfile
+  dockerfile: Dockerfile
+
+run:
+  port: 3000
