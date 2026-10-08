@@ -2300,15 +2300,21 @@ export function registerAIDCComponents(AIDC) {
       this.savingOrigin = true;
 
       try {
-        const updated =
+        const response =
           await applications.update(
             this.application.id,
             { origin_url: result.value }
           );
+        const updated =
+          response?.application || response;
+
+        if (!updated?.id) {
+          throw new Error("Application update returned no application.");
+        }
 
         this.application = updated;
         this.originUrl =
-          updated?.origin_url || "";
+          updated.origin_url || "";
 
         await this.loadVerification(
           this.application.id
@@ -3689,6 +3695,21 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
      BRANDING
      ═══════════════════════════════════════ */
 
+  const AIDC_BRANDING_COLORS = Object.freeze([
+    { value: "#111111", key: "111111" },
+    { value: "#ffffff", key: "ffffff" },
+    { value: "#dc2626", key: "dc2626" },
+    { value: "#ea580c", key: "ea580c" },
+    { value: "#ca8a04", key: "ca8a04" },
+    { value: "#16a34a", key: "16a34a" },
+    { value: "#0891b2", key: "0891b2" },
+    { value: "#2563eb", key: "2563eb" },
+    { value: "#7c3aed", key: "7c3aed" },
+    { value: "#db2777", key: "db2777" },
+    { value: "#475569", key: "475569" },
+    { value: "#64748b", key: "64748b" }
+  ]);
+
   class AIDCBranding extends AIDCElement {
     static properties = {
       applicationId: {
@@ -3804,6 +3825,19 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
       }
     }
 
+    colorTokenClass(value, prefix = "aidc-color-token") {
+      const normalized = String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace("#", "");
+      const known = AIDC_BRANDING_COLORS.some(
+        color => color.key === normalized
+      );
+      return known
+        ? `${prefix}-${normalized}`
+        : `${prefix}-custom`;
+    }
+
     async save() {
       if (this.saving) {
         return;
@@ -3868,6 +3902,11 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
         ? this.accentColor.trim()
         : "#111111";
       const previewText = AIDC.utils.contrastTextColor?.(previewColor) || "#111111";
+      const previewAccentClass = this.colorTokenClass(
+        previewColor,
+        "aidc-preview-accent"
+      );
+      const controlColorClass = this.colorTokenClass(previewColor);
 
       const currentBranding = {
         display_name: this.displayName.trim(),
@@ -3927,12 +3966,11 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                   <span>Accent color</span>
                   <div class="aidc-color-input">
                     <button
-                      class="aidc-color-swatch"
+                      class="aidc-color-swatch ${controlColorClass}"
                       type="button"
                       aria-label="Choose accent color"
                       aria-haspopup="dialog"
                       aria-expanded=${this.colorPickerOpen}
-                      style=${`background-color: ${previewColor}`}
                       @click=${() => (this.colorPickerOpen = !this.colorPickerOpen)}
                     ></button>
                     <input
@@ -3948,19 +3986,14 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                     ${this.colorPickerOpen ? html`
                       <div class="aidc-color-picker" role="dialog" aria-label="Select accent color">
                         <div class="aidc-color-picker-grid">
-                          ${[
-                            "#111111", "#ffffff", "#dc2626", "#ea580c",
-                            "#ca8a04", "#16a34a", "#0891b2", "#2563eb",
-                            "#7c3aed", "#db2777", "#475569", "#64748b"
-                          ].map(color => html`
+                          ${AIDC_BRANDING_COLORS.map(color => html`
                             <button
-                              class="aidc-color-option"
+                              class="aidc-color-option ${this.colorTokenClass(color.value)}"
                               type="button"
-                              aria-label=${`Set accent color ${color}`}
-                              aria-pressed=${this.accentColor.toLowerCase() === color}
-                              style=${`background-color: ${color}`}
+                              aria-label=${`Set accent color ${color.value}`}
+                              aria-pressed=${this.accentColor.toLowerCase() === color.value}
                               @click=${() => {
-                                this.accentColor = color;
+                                this.accentColor = color.value;
                                 this.colorPickerOpen = false;
                               }}
                             >
@@ -4039,7 +4072,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
               <p>A simplified preview of the identity users will see.</p>
             </header>
 
-            <div class="aidc-branding-preview" style=${`--aidc-preview-accent: ${previewColor}; --aidc-preview-accent-contrast: ${previewText}`}>
+            <div class="aidc-branding-preview ${previewAccentClass}">
               <div class="aidc-branding-preview-logo">
                 ${this.logoUrl
                   ? html`<img src=${this.logoUrl} alt="" loading="lazy" decoding="async" />`
