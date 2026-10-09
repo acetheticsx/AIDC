@@ -503,7 +503,7 @@ export function buildApp() {
   app.post("/api/applications/:id/redirect-uris", { preHandler: requireAuth }, async (request, reply) => {
     const id = (request.params as { id: string }).id;
     const body = (request.body || {}) as { uri?: unknown };
-    const owned = await getPool().query("SELECT id, application_type FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+    const owned = await getPool().query("SELECT id, client_id, application_type FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
     if (!owned.rows[0]) return reply.code(404).send({ error: "Application not found." });
     if (typeof body.uri !== "string" || body.uri.length > 2048) return reply.code(400).send({ error: "A valid redirect URI is required." });
     let parsed: URL;
@@ -511,23 +511,51 @@ export function buildApp() {
     if (parsed.hash || parsed.username || parsed.password || !["http:", "https:"].includes(parsed.protocol)) return reply.code(400).send({ error: "Redirect URI cannot contain credentials or fragments and must use HTTP(S)." });
     const native = owned.rows[0].application_type === "native";
     if (parsed.protocol === "http:" && !(native && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname))) return reply.code(400).send({ error: "HTTP redirects are only allowed for native loopback applications." });
+
+    const client = await getPool().connect();
     try {
-      const result = await getPool().query("INSERT INTO public.redirect_uris (application_id, uri) VALUES ($1, $2) RETURNING id, application_id, uri, created_at", [id, parsed.toString()]);
+      await client.query("BEGIN");
+      const registration = await client.query("SELECT client_id FROM public.aceid_clients WHERE client_id = $1 AND owner_user_id = $2 FOR UPDATE", [owned.rows[0].client_id, request.developer!.id]);
+      if (!registration.rows.length) { await client.query("ROLLBACK"); return reply.code(502).send({ error: "Ace ID client registration was not found. Redirect URI was not saved." }); }
+      const result = await client.query("INSERT INTO public.redirect_uris (application_id, uri) VALUES ($1, $2) RETURNING id, application_id, uri, created_at", [id, parsed.toString()]);
+      const synced = await client.query(`UPDATE public.aceid_clients
+        SET redirect_uris = CASE
+          WHEN $2 = ANY(COALESCE(redirect_uris, ARRAY[]::text[])) THEN COALESCE(redirect_uris, ARRAY[]::text[])
+          ELSE array_append(COALESCE(redirect_uris, ARRAY[]::text[]), $2)
+        END,
+        updated_at = now()
+        WHERE client_id = $1 AND owner_user_id = $3 RETURNING client_id`, [owned.rows[0].client_id, parsed.toString(), request.developer!.id]);
+      if (!synced.rows.length) { await client.query("ROLLBACK"); return reply.code(502).send({ error: "Ace ID redirect URI registration could not be updated. Nothing was saved." }); }
+      await client.query("COMMIT");
       return reply.code(201).send({ redirect_uri: result.rows[0] });
     } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
       if ((error as { code?: string }).code === "23505") return reply.code(409).send({ error: "This redirect URI is already registered." });
       request.log.error({ err: error }, "redirect URI creation failed");
       return reply.code(500).send({ error: "Failed to add redirect URI." });
-    }
+    } finally { client.release(); }
   });
 
   app.delete("/api/applications/:id/redirect-uris/:uriId", { preHandler: requireAuth }, async (request, reply) => {
     const params = request.params as { id: string; uriId: string };
-    const owned = await getPool().query("SELECT id FROM public.applications WHERE id = $1 AND owner_id = $2", [params.id, request.developer!.id]);
+    const owned = await getPool().query("SELECT id, client_id FROM public.applications WHERE id = $1 AND owner_id = $2", [params.id, request.developer!.id]);
     if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
-    const result = await getPool().query("DELETE FROM public.redirect_uris WHERE id = $1 AND application_id = $2 RETURNING id", [params.uriId, params.id]);
-    if (!result.rows.length) return reply.code(404).send({ error: "Redirect URI not found." });
-    return { deleted: true };
+    const client = await getPool().connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query("DELETE FROM public.redirect_uris WHERE id = $1 AND application_id = $2 RETURNING id, uri", [params.uriId, params.id]);
+      if (!result.rows.length) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "Redirect URI not found." }); }
+      const synced = await client.query(`UPDATE public.aceid_clients
+        SET redirect_uris = array_remove(COALESCE(redirect_uris, ARRAY[]::text[]), $2), updated_at = now()
+        WHERE client_id = $1 AND owner_user_id = $3 RETURNING client_id`, [owned.rows[0].client_id, result.rows[0].uri, request.developer!.id]);
+      if (!synced.rows.length) { await client.query("ROLLBACK"); return reply.code(502).send({ error: "Ace ID redirect URI registration could not be updated. Nothing was deleted." }); }
+      await client.query("COMMIT");
+      return { deleted: true };
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      request.log.error({ err: error }, "redirect URI deletion failed");
+      return reply.code(500).send({ error: "Failed to delete redirect URI." });
+    } finally { client.release(); }
   });
 
   app.get("/api/applications/:id/scopes", { preHandler: requireAuth }, async (request, reply) => {

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
 import { buildApp, normalizeTxtRecord, txtRecordMatchesChallenge, validateOrigin } from "./app.js";
+
+const appSource = fs.readFileSync(new URL("./app.ts", import.meta.url), "utf8");
 
 describe("Neo API foundation", () => {
   it("normalizes safe origins and rejects paths, credentials, insecure hosts, and IP-based HTTPS DNS challenges", () => {
@@ -21,6 +24,22 @@ describe("Neo API foundation", () => {
     expect(txtRecordMatchesChallenge("expiry=never token=challenge-token", expected)).toBe(true);
     expect(txtRecordMatchesChallenge("token=another-token expiry=never", expected)).toBe(false);
     expect(txtRecordMatchesChallenge("expiry=never", expected)).toBe(false);
+  });
+
+  it("synchronizes redirect URI add and delete with the Ace ID client transactionally", () => {
+    const addStart = appSource.indexOf('app.post("/api/applications/:id/redirect-uris"');
+    const deleteStart = appSource.indexOf('app.delete("/api/applications/:id/redirect-uris/:uriId"');
+    const scopesStart = appSource.indexOf('app.get("/api/applications/:id/scopes"', deleteStart);
+    const addRoute = addStart >= 0 && deleteStart > addStart ? appSource.slice(addStart, deleteStart) : "";
+    const deleteRoute = deleteStart >= 0 && scopesStart > deleteStart ? appSource.slice(deleteStart, scopesStart) : "";
+    expect(addRoute).toContain('UPDATE public.aceid_clients');
+    expect(addRoute).toContain('array_append');
+    expect(addRoute).toContain('await client.query("BEGIN")');
+    expect(addRoute).toContain('await client.query("COMMIT")');
+    expect(deleteRoute).toContain('UPDATE public.aceid_clients');
+    expect(deleteRoute).toContain('array_remove');
+    expect(deleteRoute).toContain('await client.query("BEGIN")');
+    expect(deleteRoute).toContain('await client.query("COMMIT")');
   });
 
   it("returns a liveness response", async () => {
