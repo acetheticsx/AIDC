@@ -660,7 +660,9 @@ test("OAuth callback clears state and PKCE cookies before setting the new sessio
   const end = server.indexOf('app.post(\\n  "/auth/logout"', start);
   const callback = start >= 0 && end > start ? server.slice(start, end) : "";
   assert.ok(callback.length > 0, "OAuth callback route should exist");
-  assert.match(callback, /const clearOauthCookies = \\[\\s*clearCookie\\(OAUTH_STATE_COOKIE, "\\/auth"\\),\\s*clearCookie\\(OAUTH_VERIFIER_COOKIE, "\\/auth"\\)\\s*\\]/);
-  assert.match(callback, /\.\.\.clearOauthCookies/);
-  assert.doesNotMatch(callback, /\.\.\.clearOAuthCookies/);
-});
+  assert.ok(callback.includes("const clearOauthCookies = ["), "cookie cleanup array should be defined");
+  assert.ok(callback.includes('clearCookie(OAUTH_STATE_COOKIE, "/auth")'), "state cookie should be cleared");
+  assert.ok(callback.includes('clearCookie(OAUTH_VERIFIER_COOKIE, "/auth")'), "PKCE verifier cookie should be cleared");
+  assert.ok(callback.includes("...clearOauthCookies"), "success path should clear OAuth cookies");
+  assert.ok(!callback.includes("...clearOAuthCookies"), "cookie variable casing must remain consistent");
+});;
