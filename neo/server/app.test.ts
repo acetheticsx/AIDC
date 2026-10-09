@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildApp, validateOrigin } from "./app.js";
+import { buildApp, normalizeTxtRecord, txtRecordMatchesChallenge, validateOrigin } from "./app.js";
 
 describe("Neo API foundation", () => {
   it("normalizes safe origins and rejects paths, credentials, insecure hosts, and IP-based HTTPS DNS challenges", () => {
     expect(validateOrigin(" https://Example.com/ ")).toBe("https://example.com");
+    expect(validateOrigin("https://Example.com./")).toBe("https://example.com");
     expect(validateOrigin("http://localhost:3000")).toBe("http://localhost:3000");
     expect(validateOrigin("http://127.0.0.1:3000")).toBe("http://127.0.0.1:3000");
     expect(validateOrigin("http://example.com")).toBeNull();
@@ -13,6 +14,15 @@ describe("Neo API foundation", () => {
     expect(validateOrigin("https://example.com/path")).toBeNull();
     expect(validateOrigin("https://example.com?next=/")).toBeNull();
   });
+  it("normalizes TXT records and matches challenge tokens without requiring optional fields", () => {
+    const expected = "token=challenge-token expiry=never";
+    expect(normalizeTxtRecord('"token=challenge-token   expiry=never"')).toBe(expected);
+    expect(txtRecordMatchesChallenge("token=challenge-token", expected)).toBe(true);
+    expect(txtRecordMatchesChallenge("expiry=never token=challenge-token", expected)).toBe(true);
+    expect(txtRecordMatchesChallenge("token=another-token expiry=never", expected)).toBe(false);
+    expect(txtRecordMatchesChallenge("expiry=never", expected)).toBe(false);
+  });
+
   it("returns a liveness response", async () => {
     const app = buildApp();
     const response = await app.inject({ method: "GET", url: "/healthz" });
