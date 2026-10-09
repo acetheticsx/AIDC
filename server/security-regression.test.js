@@ -220,6 +220,23 @@ test("redirect URI listing does not validate an undefined request body value", (
   assert.match(route, /SELECT[\s\S]*?FROM public\.redirect_uris/);
 });
 
+test("redirect URI mutations synchronize Ace ID registration atomically", () => {
+  const addStart = server.indexOf('app.post(\n  "/api/applications/:id/redirect-uris"');
+  const deleteStart = server.indexOf('app.delete(\n  "/api/applications/:id/redirect-uris/:uriId"');
+  const scopesStart = server.indexOf('/*\n * ═══════════════════════════════════════════\n * Scopes', deleteStart);
+  const addRoute = addStart >= 0 && deleteStart > addStart ? server.slice(addStart, deleteStart) : "";
+  const deleteRoute = deleteStart >= 0 && scopesStart > deleteStart ? server.slice(deleteStart, scopesStart) : "";
+  assert.ok(addRoute.length > 0 && deleteRoute.length > 0, "both redirect URI mutation routes should exist");
+  assert.match(addRoute, /await dbClient\.query\("BEGIN"\)/);
+  assert.match(addRoute, /UPDATE public\.aceid_clients/);
+  assert.match(addRoute, /array_append/);
+  assert.match(addRoute, /await dbClient\.query\("COMMIT"\)/);
+  assert.match(deleteRoute, /await dbClient\.query\("BEGIN"\)/);
+  assert.match(deleteRoute, /UPDATE public\.aceid_clients/);
+  assert.match(deleteRoute, /array_remove/);
+  assert.match(deleteRoute, /await dbClient\.query\("COMMIT"\)/);
+});
+
 test("analytics ignores malformed login timestamps", () => {
   assert.match(
     server,

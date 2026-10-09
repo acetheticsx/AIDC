@@ -2857,73 +2857,71 @@ app.post(
     const { uri } = req.body ?? {};
 
     if (!isValidUuid(id)) {
-      return res.status(400).json({
-        error: "Invalid application ID"
-      });
+      return res.status(400).json({ error: "Invalid application ID" });
     }
 
+    let dbClient;
     try {
       const application = await pool.query(
-        `
-        SELECT id, application_type
-        FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
-        `,
+        `SELECT id, client_id, application_type
+         FROM public.applications
+         WHERE id = $1 AND owner_id = $2`,
         [id, req.developer.id]
       );
-
       if (application.rows.length === 0) {
-        return res.status(404).json({
-          error: "Application not found"
-        });
+        return res.status(404).json({ error: "Application not found" });
       }
 
-      const applicationType =
-        application.rows[0]?.application_type || "web";
+      const applicationRow = application.rows[0];
+      const validation = validateRedirectUri(uri, {
+        applicationType: applicationRow.application_type || "web"
+      });
+      if (!validation.valid) return res.status(400).json({ error: validation.error });
 
-      const validation =
-        validateRedirectUri(uri, { applicationType });
-
-      if (!validation.valid) {
-        return res.status(400).json({
-          error: validation.error
-        });
+      dbClient = await pool.connect();
+      await dbClient.query("BEGIN");
+      const registration = await dbClient.query(
+        `SELECT client_id FROM public.aceid_clients
+         WHERE client_id = $1 AND owner_user_id = $2 FOR UPDATE`,
+        [applicationRow.client_id, req.developer.id]
+      );
+      if (!registration.rows.length) {
+        await dbClient.query("ROLLBACK");
+        return res.status(502).json({ error: "Ace ID client registration was not found. Redirect URI was not saved." });
       }
 
-      const result = await pool.query(
-        `
-        INSERT INTO public.redirect_uris
-          (application_id, uri)
-        VALUES
-          ($1, $2)
-        RETURNING
-          id,
-          application_id,
-          uri,
-          created_at
-        `,
+      const result = await dbClient.query(
+        `INSERT INTO public.redirect_uris (application_id, uri)
+         VALUES ($1, $2)
+         RETURNING id, application_id, uri, created_at`,
         [id, validation.uri]
       );
-
-      res.status(201).json({
-        redirect_uri: result.rows[0]
-      });
-    } catch (error) {
-      console.error(
-        "POST /api/applications/:id/redirect-uris:",
-        error
+      const synced = await dbClient.query(
+        `UPDATE public.aceid_clients
+         SET redirect_uris = CASE
+           WHEN $2 = ANY(COALESCE(redirect_uris, ARRAY[]::text[])) THEN COALESCE(redirect_uris, ARRAY[]::text[])
+           ELSE array_append(COALESCE(redirect_uris, ARRAY[]::text[]), $2)
+         END,
+         updated_at = now()
+         WHERE client_id = $1 AND owner_user_id = $3
+         RETURNING client_id`,
+        [applicationRow.client_id, validation.uri, req.developer.id]
       );
-
-      if (error?.code === "23505") {
-        return res.status(409).json({
-          error: "This redirect URI is already registered"
-        });
+      if (!synced.rows.length) {
+        await dbClient.query("ROLLBACK");
+        return res.status(502).json({ error: "Ace ID redirect URI registration could not be updated. Nothing was saved." });
       }
-
-      res.status(500).json({
-        error: "Failed to add redirect URI"
-      });
+      await dbClient.query("COMMIT");
+      return res.status(201).json({ redirect_uri: result.rows[0] });
+    } catch (error) {
+      if (dbClient) await dbClient.query("ROLLBACK").catch(() => {});
+      console.error("POST /api/applications/:id/redirect-uris:", error);
+      if (error?.code === "23505") {
+        return res.status(409).json({ error: "This redirect URI is already registered" });
+      }
+      return res.status(500).json({ error: "Failed to add redirect URI" });
+    } finally {
+      dbClient?.release();
     }
   }
 );
@@ -2932,73 +2930,52 @@ app.delete(
   "/api/applications/:id/redirect-uris/:uriId",
   requireAuth,
   async (req, res) => {
-    const {
-      id,
-      uriId
-    } = req.params;
+    const { id, uriId } = req.params;
+    if (!isValidUuid(id)) return res.status(400).json({ error: "Invalid application ID" });
+    if (!isValidUuid(uriId)) return res.status(400).json({ error: "Invalid redirect URI ID" });
 
-    if (!isValidUuid(id)) {
-      return res.status(400).json({
-        error: "Invalid application ID"
-      });
-    }
-
-    if (!isValidUuid(uriId)) {
-      return res.status(400).json({
-        error: "Invalid redirect URI ID"
-      });
-    }
-
+    let dbClient;
     try {
       const application = await pool.query(
-        `
-        SELECT id
-        FROM public.applications
-        WHERE id = $1
-          AND owner_id = $2
-        `,
+        `SELECT id, client_id FROM public.applications
+         WHERE id = $1 AND owner_id = $2`,
         [id, req.developer.id]
       );
+      if (!application.rows.length) return res.status(404).json({ error: "Application not found" });
 
-      if (application.rows.length === 0) {
-        return res.status(404).json({
-          error: "Application not found"
-        });
-      }
-
-      const result = await pool.query(
-        `
-        DELETE FROM public.redirect_uris
-        WHERE id = $1
-          AND application_id = $2
-        RETURNING
-          id,
-          application_id,
-          uri,
-          created_at
-        `,
+      dbClient = await pool.connect();
+      await dbClient.query("BEGIN");
+      const result = await dbClient.query(
+        `DELETE FROM public.redirect_uris
+         WHERE id = $1 AND application_id = $2
+         RETURNING id, application_id, uri, created_at`,
         [uriId, id]
       );
-
-      if (result.rows.length === 0) {
-        return res.status(404).json({
-          error: "Redirect URI not found"
-        });
+      if (!result.rows.length) {
+        await dbClient.query("ROLLBACK");
+        return res.status(404).json({ error: "Redirect URI not found" });
       }
 
-      res.json({
-        deleted: true,
-        redirect_uri: result.rows[0]
-      });
-    } catch (error) {
-      console.error(
-        "DELETE /api/applications/:id/redirect-uris/:uriId:",
-        error
+      const synced = await dbClient.query(
+        `UPDATE public.aceid_clients
+         SET redirect_uris = array_remove(COALESCE(redirect_uris, ARRAY[]::text[]), $2),
+             updated_at = now()
+         WHERE client_id = $1 AND owner_user_id = $3
+         RETURNING client_id`,
+        [application.rows[0].client_id, result.rows[0].uri, req.developer.id]
       );
-
-      res.status(500).json({
-        error: "Failed to delete redirect URI"
-      });
+      if (!synced.rows.length) {
+        await dbClient.query("ROLLBACK");
+        return res.status(502).json({ error: "Ace ID redirect URI registration could not be updated. Nothing was deleted." });
+      }
+      await dbClient.query("COMMIT");
+      return res.json({ deleted: true, redirect_uri: result.rows[0] });
+    } catch (error) {
+      if (dbClient) await dbClient.query("ROLLBACK").catch(() => {});
+      console.error("DELETE /api/applications/:id/redirect-uris/:uriId:", error);
+      return res.status(500).json({ error: "Failed to delete redirect URI" });
+    } finally {
+      dbClient?.release();
     }
   }
 );
