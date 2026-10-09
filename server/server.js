@@ -1890,25 +1890,22 @@ app.get(
           null
       });
 
-      const cookies = [
-        ...clearOauthCookies,
-        serializeCookie(
-          SESSION_COOKIE,
-          session.token,
-          {
-            maxAge: SESSION_TTL_MS,
-            httpOnly: true,
-            path: "/"
-          }
-        ),
-        serializeCookie(CSRF_COOKIE, session.csrfToken, {
-          maxAge: SESSION_TTL_MS,
-          httpOnly: false,
-          path: "/"
-        })
-      ];
+      clearOauthCookiesResponse(res);
 
-      res.set("Set-Cookie", cookies);
+      res.cookie(SESSION_COOKIE, session.token, {
+        maxAge: SESSION_TTL_MS,
+        httpOnly: true,
+        sameSite: "lax",
+        secure: IS_PRODUCTION,
+        path: "/"
+      });
+      res.cookie(CSRF_COOKIE, session.csrfToken, {
+        maxAge: SESSION_TTL_MS,
+        httpOnly: false,
+        sameSite: "lax",
+        secure: IS_PRODUCTION,
+        path: "/"
+      });
 
       res.redirect("/");
     } catch (error) {

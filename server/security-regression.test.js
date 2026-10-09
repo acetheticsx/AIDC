@@ -660,9 +660,10 @@ test("OAuth callback clears state and PKCE cookies before setting the new sessio
   const end = server.indexOf('/auth/logout', start);
   const callback = start >= 0 && end > start ? server.slice(start, end) : "";
   assert.ok(callback.length > 0, "OAuth callback route should exist");
-  assert.ok(callback.includes("const clearOauthCookies = ["), "cookie cleanup array should be defined");
-  assert.ok(callback.includes('clearCookie(OAUTH_STATE_COOKIE, "/auth")'), "state cookie should be cleared");
-  assert.ok(callback.includes('clearCookie(OAUTH_VERIFIER_COOKIE, "/auth")'), "PKCE verifier cookie should be cleared");
-  assert.ok(callback.includes("...clearOauthCookies"), "success path should clear OAuth cookies");
-  assert.ok(!callback.includes("...clearOAuthCookies"), "cookie variable casing must remain consistent");
+  assert.ok(callback.includes("clearOauthCookiesResponse(res)"), "state and PKCE cookies should be cleared before setting the session");
+  assert.ok(callback.includes("res.cookie(SESSION_COOKIE, session.token"), "session should use the Express cookie API");
+  assert.ok(callback.includes("res.cookie(CSRF_COOKIE, session.csrfToken"), "CSRF cookie should use the Express cookie API");
+  assert.ok(callback.includes("httpOnly: true"), "session cookie must remain HttpOnly");
+  assert.ok(callback.includes("sameSite: \"lax\""), "session cookies must retain SameSite protection");
+  assert.ok(!callback.includes("...clearOauthCookies"), "cleared OAuth cookie strings must not be spread into the session response");
 });;;
