@@ -350,6 +350,9 @@ function clearOAuthCookies(reply: FastifyReply): void {
 
 export function registerAuthRoutes(app: FastifyInstance): void {
   app.get("/auth/login", { config: { rateLimit: { max: 20, timeWindow: "10 minutes" } } }, async (_request, reply) => {
+    reply.header("Cache-Control", "no-store, max-age=0");
+    reply.header("Pragma", "no-cache");
+    reply.header("Referrer-Policy", "no-referrer");
     if (!(await requireDiscovery(reply))) return;
 
     const state = randomToken(32);
@@ -382,6 +385,9 @@ export function registerAuthRoutes(app: FastifyInstance): void {
   });
 
   app.get("/auth/callback", { config: { rateLimit: { max: 20, timeWindow: "10 minutes" } } }, async (request, reply) => {
+    reply.header("Cache-Control", "no-store, max-age=0");
+    reply.header("Pragma", "no-cache");
+    reply.header("Referrer-Policy", "no-referrer");
     if (!(await requireDiscovery(reply))) return;
 
     const query = request.query as Record<string, string | undefined>;
