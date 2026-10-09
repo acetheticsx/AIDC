@@ -667,7 +667,7 @@ function validateOriginUrl(value, { required = false } = {}) {
     return { valid: false, error: "HTTP origins are only allowed for localhost" };
   }
 
-  if (parsed.protocol === "https:" && isIP(hostname)) {
+  if (parsed.protocol === "https:" && isIP(hostname.replace(/^\\[|\\]$/g, ""))) {
     return {
       valid: false,
       error: "HTTPS Origin URLs must use a domain name for TXT verification"
@@ -1942,16 +1942,8 @@ app.post(
 
     res.set("Set-Cookie", cookies);
 
-    const logoutUrl =
-      discoveryState.status === "ready"
-        ? `${discoveryState.doc.end_session_endpoint}` +
-          `?client_id=${encodeURIComponent(CLIENT_ID)}` +
-          `&post_logout_redirect_uri=${encodeURIComponent(
-            POST_LOGOUT_URL
-          )}`
-        : null;
-
-    res.json({ logout_url: logoutUrl });
+    res.set("Cache-Control", "no-store");
+    res.json({ success: true });
   }
 );
 
@@ -2441,8 +2433,7 @@ app.patch(
       name === undefined &&
       description === undefined &&
       application_type === undefined &&
-      origin_url === undefined &&
-      status === undefined
+      origin_url === undefined
     ) {
       return res.status(400).json({ error: "No fields to update" });
     }
