@@ -1,5 +1,5 @@
-import { registerAIDCComponents } from "./ui.js?v=20261008-1";
-import { api } from "./api.js?v=20261008-1";
+import { registerAIDCComponents } from "./ui.js?v=20261009-2";
+import { api } from "./api.js?v=20261009-2";
 
 /* ─────────────────────────────────────────────
    Constants
@@ -133,20 +133,13 @@ document.addEventListener(
   "pointerdown",
   event => {
     const target = event.target.closest(
-      "button, [role='button'], a.aidc-mobile-nav-item, a.aidc-help-sheet-link"
+      "button, [role='button'], a.aidc-mobile-nav-item"
     );
 
     if (!target || target.getAttribute("aria-disabled") === "true") {
       return;
     }
-
-    haptic(
-      target.classList.contains("aidc-help-fab")
-        ? 10
-        : target.classList.contains("aidc-help-sheet-link")
-          ? 5
-          : 6
-    );
+    haptic(6);
   },
   { passive: true }
 );

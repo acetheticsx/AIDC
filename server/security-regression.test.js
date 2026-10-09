@@ -45,6 +45,24 @@ test("API and auth responses are not cacheable", () => {
   assert.match(server, /"Cache-Control": "no-store"/);
 });
 
+test("API client bounds the full request lifecycle and coalesces concurrent GETs", () => {
+  assert.match(api, /const inFlightGetRequests = new Map\(\)/);
+  assert.match(api, /async function performRequest\(/);
+  assert.match(api, /await response\.text\(\)/);
+  assert.match(api, /finally \{/);
+  assert.match(api, /timedOut = true/);
+  assert.match(api, /cache: fetchOptions\.cache \|\| "no-store"/);
+  assert.match(api, /const safeLimit = Math\.min\(Math\.max\(Number\.parseInt/);
+});
+
+test("support/help button and resource sheet are removed from the console shell", () => {
+  assert.doesNotMatch(ui, /aidc-help-top/);
+  assert.doesNotMatch(ui, /aidc-help-sheet-layer/);
+  assert.doesNotMatch(ui, /openHelp|closeHelp/);
+  assert.doesNotMatch(ui, /mailto:hello@ace-base\.cc/);
+});
+
+
 test("responses have server-generated request correlation IDs", () => {
   assert.match(server, /crypto\.randomUUID\(\)/);
   assert.match(server, /X-Request-ID/);
@@ -249,8 +267,8 @@ test("analytics ignores malformed login timestamps", () => {
 });
 
 test("frontend bundles have explicit cache-busted versions", () => {
-  assert.match(app, /\.\/ui\.js\?v=20261008-1/);
-  assert.match(index, /\/app\.js\?v=20261008-1/);
+  assert.match(app, /\.\/ui\.js\?v=20261009-2/);
+  assert.match(index, /\/app\.js\?v=20261009-2/);
   assert.match(index, /\/style\.css\?v=20261008-1/);
 });
 
