@@ -11,6 +11,7 @@ import { Overview } from "./views/Overview";
 import { Settings } from "./views/Settings";
 import { Users } from "./views/Users";
 import { api } from "./lib/api";
+import { haptic } from "./lib/haptics";
 import { navigate, readRoute, type RouteId } from "./lib/navigation";
 import type { Application, Entitlements, Quota, User } from "./types";
 
@@ -45,11 +46,13 @@ export function App() {
   };
   const updateApplication = async (id: string, changes: Partial<Pick<Application, "name" | "description" | "origin_url" | "application_type">>) => {
     const result = await api.applications.update(id, changes);
+    haptic(6);
     setApplications((items) => items.map((item) => item.id === id ? { ...item, ...result.application } : item));
     setSelectedApplication(result.application);
   };
   const deleteApplication = async (id: string) => {
     await api.applications.remove(id);
+    haptic(8);
     setApplications((items) => items.filter((item) => item.id !== id));
     setSelectedApplication(null);
     await loadQuota();
@@ -121,6 +124,7 @@ export function App() {
     try {
       const data = await api.applications.create({ ...input, application_type: "web" });
       if (!data.application) throw new Error("The server returned an invalid application.");
+      haptic(8);
       setApplications((current) => [data.application, ...current]);
       setCreateOpen(false); await loadQuota();
     } catch (error) {
