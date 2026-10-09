@@ -1,3 +1,11 @@
 
 /* Load the same immutable Satoshi font asset shipped with the production console. */
 @font-face{font-family:"Satoshi";src:url("https://raw.githubusercontent.com/acetheticsx/AIDC/d36260e3d918c4b074b4a19cab577ba7530b7a60/assets/fonts/Satoshi.woff2") format("woff2");font-style:normal;font-weight:300 900;font-display:swap}
+
+.neo-preset-guide .neo-code-block{display:block;max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:1rem;border:1px solid var(--border,#30343b);border-radius:12px;background:var(--surface-2,#17191d);font:500 .84rem/1.65 ui-monospace,SFMono-Regular,Consolas,monospace}
+.neo-preset-copy{display:flex;align-items:flex-start;gap:.75rem;min-width:0}
+.neo-preset-copy code{flex:1;min-width:0;overflow-wrap:anywhere;padding:.7rem;border:1px solid var(--border,#30343b);border-radius:10px}
+.neo-launch-checklist{display:grid;gap:.5rem;list-style:none;padding:0;margin:1rem 0}
+.neo-launch-checklist li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.65rem;align-items:start;padding:.75rem;border:1px solid var(--border,#30343b);border-radius:10px}
+.neo-launch-checklist li strong{font-size:.78rem;color:var(--muted,#a1a1aa)}
+@media(max-width:560px){.neo-preset-copy{flex-direction:column}.neo-preset-copy button{width:100%}.neo-launch-checklist li{grid-template-columns:auto minmax(0,1fr)}.neo-launch-checklist li strong{grid-column:2}}
