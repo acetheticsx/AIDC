@@ -192,13 +192,17 @@ async function loadDiscovery(): Promise<boolean> {
       "jwks_uri",
       "end_session_endpoint"
     ]) {
-      if (new URL(doc[field]).origin !== issuerOrigin) {
+      const endpoint = doc[field];
+      if (!endpoint) throw new Error(`discovery missing required field: ${field}`);
+      if (new URL(endpoint).origin !== issuerOrigin) {
         throw new Error(`OIDC ${field} origin mismatch.`);
       }
     }
 
+    const jwksUri = doc.jwks_uri;
+    if (!jwksUri) throw new Error("discovery missing required field: jwks_uri");
     discoveryState.doc = doc;
-    discoveryState.jwks = createRemoteJWKSet(new URL(doc.jwks_uri), {
+    discoveryState.jwks = createRemoteJWKSet(new URL(jwksUri), {
       timeoutDuration: JWKS_TIMEOUT_MS,
       cooldownDuration: 30_000,
       cacheMaxAge: 10 * 60_000
@@ -424,7 +428,9 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         code_verifier: codeVerifier
       });
 
-      const response = await fetch(discoveryState.doc!.token_endpoint, {
+      const tokenEndpoint = discoveryState.doc!.token_endpoint;
+      if (!tokenEndpoint) throw new Error("Ace ID token endpoint is unavailable.");
+      const response = await fetch(tokenEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",

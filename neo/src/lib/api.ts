@@ -5,7 +5,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 
 function csrfToken(): string | null {
   const match = document.cookie.match(/(?:^|; )aidc_csrf=([^;]*)/);
-  return match ? decodeURIComponent(match[1]) : null;
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 type RequestOptions = RequestInit & { base?: boolean };

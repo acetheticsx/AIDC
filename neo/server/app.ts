@@ -52,7 +52,7 @@ export function buildApp() {
   const app = Fastify({
     logger: true,
     trustProxy: config.AIDC_TRUST_PROXY_HOPS > 0
-      ? config.AIDC_TRUST_PROXY_HOPS
+      ? (_address, hop) => hop < config.AIDC_TRUST_PROXY_HOPS
       : false,
     requestIdHeader: false,
     genReqId: () => crypto.randomUUID()
@@ -63,7 +63,7 @@ export function buildApp() {
   const rateBuckets = new Map<string, { count: number; resetAt: number }>();
   app.addHook("onRequest", async (request, reply) => {
     reply.header("X-Request-ID", request.id);
-    const pathname = request.url.split("?", 1)[0];
+    const pathname = request.url.split("?", 1)[0] || "/"
     const authTraffic = pathname === "/auth/login" || pathname === "/auth/callback";
     const apiTraffic = pathname.startsWith("/api/");
     if (!authTraffic && !apiTraffic) return;
