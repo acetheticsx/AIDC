@@ -6,6 +6,7 @@ on:
       - main
       - "hardening/**"
       - "fix/**"
+      - "neo"
   pull_request:
   workflow_dispatch:
 
@@ -21,7 +22,6 @@ jobs:
         working-directory: server
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -36,6 +36,37 @@ jobs:
 
       - name: Security regression tests
         run: npm test
+
+      - name: Dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
+  neo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: neo
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Install locked migration dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Type check
+        run: npm run check
+
+      - name: Production build
+        run: npm run build
+
+      - name: Neo unit tests
+        run: npm test
+
+      - name: Server TypeScript build
+        run: npm run build:server
 
       - name: Dependency audit
         run: npm audit --omit=dev --audit-level=high

@@ -1,0 +1,116 @@
+import type { ActivityEvent, ApiError, Application, DiscoveryStatus, LoginAnalytics, OperationsAnalytics, Quota, RedirectUri, User, AppCredential, AppBranding, Entitlements, SessionRecord, UptimeReport, UserRecord, OriginVerification } from "../types";
+
+const API_BASE = "/api";
+const REQUEST_TIMEOUT_MS = 15_000;
+
+function csrfToken(): string | null {
+  const match = document.cookie.match(/(?:^|; )aidc_csrf=([^;]*)/);
+  if (!match?.[1]) return null;
+  try { return decodeURIComponent(match[1]); } catch { return null; }
+}
+
+type RequestOptions = RequestInit & { base?: boolean };
+export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const method = (options.method || "GET").toUpperCase();
+  const useApiBase = (options as RequestInit & { base?: boolean }).base !== false;
+  const fetchOptions = { ...options };
+  delete fetchOptions.base;
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const headers = new Headers(options.headers);
+
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+    const csrf = csrfToken();
+    if (csrf) headers.set("X-CSRF-Token", csrf);
+  }
+
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  try {
+    const response = await fetch((useApiBase ? API_BASE : "") + path, {
+      ...fetchOptions,
+      headers,
+      credentials: "include",
+      signal: controller.signal
+    });
+
+    const data = (await response.json().catch(() => null)) as unknown;
+    if (!response.ok) {
+      const payload = data as { error?: string; code?: string } | null;
+      const error = new Error(payload?.error || `Request failed with status ${response.status}`) as ApiError;
+      error.status = response.status;
+      error.code = payload?.code;
+      error.data = data;
+      throw error;
+    }
+
+    return data as T;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      const timeout = new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms`) as ApiError;
+      timeout.status = 408;
+      throw timeout;
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+export const api = {
+  auth: {
+    me: () => request<{ user: User }>("/me"),
+    logout: () => request<void>("/auth/logout", { method: "POST", base: false })
+  },
+  applications: {
+    list: () => request<{ applications: Application[] }>("/applications"),
+    create: (input: {
+      name: string;
+      description: string;
+      origin_url?: string;
+      application_type?: string;
+    }) => request<{ application: Application; quota?: Quota }>("/applications", {
+      method: "POST",
+      body: JSON.stringify(input)
+    }),
+    get: (id: string) => request<{ application: Application }>(`/applications/${encodeURIComponent(id)}`),
+    update: (id: string, input: Partial<Pick<Application, "name" | "description" | "origin_url" | "application_type">>) => request<{ application: Application }>(`/applications/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) }),
+    originVerification: (id: string) => request<{ verification: OriginVerification }>(`/applications/${encodeURIComponent(id)}/origin-verification`),
+    verifyOrigin: (id: string) => request<{ verification: OriginVerification }>(`/applications/${encodeURIComponent(id)}/origin-verification/verify`, { method: "POST", body: "{}" }),
+    addCloudflareOriginRecord: (id: string, apiToken: string) => request<{ provider: string; added: boolean; existing: boolean; verification: OriginVerification }>(`/applications/${encodeURIComponent(id)}/origin-verification/cloudflare`, { method: "POST", body: JSON.stringify({ api_token: apiToken }) }),
+    remove: (id: string) => request<{ deleted: boolean }>(`/applications/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    activity: (id: string, limit = 50) => request<{ events: ActivityEvent[] }>(`/applications/${encodeURIComponent(id)}/activity?limit=${Math.min(100, Math.max(1, limit))}`),
+    redirectUris: (id: string) => request<{ redirect_uris: RedirectUri[] }>(`/applications/${encodeURIComponent(id)}/redirect-uris`),
+    addRedirectUri: (id: string, uri: string) => request<{ redirect_uri: RedirectUri }>(`/applications/${encodeURIComponent(id)}/redirect-uris`, { method: "POST", body: JSON.stringify({ uri }) }),
+    removeRedirectUri: (id: string, uriId: string) => request<{ deleted: boolean }>(`/applications/${encodeURIComponent(id)}/redirect-uris/${encodeURIComponent(uriId)}`, { method: "DELETE" }),
+    sessions: (id: string, status: "active" | "all" | "revoked" = "active", limit = 50) => request<{ sessions: SessionRecord[] }>(`/applications/${encodeURIComponent(id)}/sessions?status=${status}&limit=${Math.min(100, Math.max(1, limit))}`),
+    uptime: (id: string, days = 30) => request<UptimeReport>(`/applications/${encodeURIComponent(id)}/uptime?days=${[7,14,30].includes(days) ? days : 30}`),
+    checkUptime: (id: string) => request<{ check: { success: boolean; created_at: string; metadata?: Record<string, unknown> } | null }>(`/applications/${encodeURIComponent(id)}/uptime/check`, { method: "POST", body: "{}" }),
+    scopes: (id: string) => request<{ scopes: string[] }>(`/applications/${encodeURIComponent(id)}/scopes`),
+    updateScopes: (id: string, scopes: string[]) => request<{ scopes: string[] }>(`/applications/${encodeURIComponent(id)}/scopes`, { method: "PUT", body: JSON.stringify({ scopes }) }),
+    credentials: (id: string) => request<{ credentials: AppCredential[] }>(`/applications/${encodeURIComponent(id)}/credentials`),
+    rotateCredentials: (id: string) => request<{ credential: AppCredential }>(`/applications/${encodeURIComponent(id)}/credentials/rotate`, { method: "POST" }),
+    revokeCredential: (id: string, credentialId: string) => request<{ revoked: boolean }>(`/applications/${encodeURIComponent(id)}/credentials/${encodeURIComponent(credentialId)}`, { method: "DELETE" }),
+    branding: (id: string) => request<{ branding: AppBranding }>(`/applications/${encodeURIComponent(id)}/branding`),
+    updateBranding: (id: string, branding: Pick<AppBranding, "display_name" | "logo_url" | "accent_color">) => request<{ branding: AppBranding }>(`/applications/${encodeURIComponent(id)}/branding`, { method: "PUT", body: JSON.stringify(branding) })
+  },
+  activity: {
+    list: (limit = 50) => request<{ events: ActivityEvent[] }>(`/activity?limit=${Math.min(100, Math.max(1, limit))}`)
+  },
+  analytics: {
+    logins: (days = 7) => request<LoginAnalytics>(`/analytics/logins?days=${[7,14,30].includes(days) ? days : 7}`),
+    operations: (days = 30) => request<OperationsAnalytics>(`/analytics/operations?days=${[7,14,30].includes(days) ? days : 30}`)
+  },
+  integration: { discovery: () => request<DiscoveryStatus>("/integration/discovery") },
+  users: {
+    search: (q = "", limit = 20) => request<{ users: UserRecord[] }>(`/users/search?q=${encodeURIComponent(q.slice(0, 120))}&limit=${Math.min(50, Math.max(1, limit))}`)
+  },
+  quota: {
+    get: () => request<{ quota: Quota; entitlements?: Entitlements }>("/quota")
+  },
+  health: {
+    get: () => request<{ ok: boolean }>("/health")
+  }
+};
