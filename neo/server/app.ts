@@ -645,7 +645,10 @@ export function buildApp() {
   app.setErrorHandler((error, request, reply) => {
     request.log.error({ err: error }, "Unhandled Neo request error");
     if (reply.sent) return;
-    reply.code(error.statusCode && error.statusCode >= 400 ? error.statusCode : 500).send({
+    const statusCode = typeof error === "object" && error !== null && "statusCode" in error && typeof (error as { statusCode?: unknown }).statusCode === "number"
+      ? (error as { statusCode: number }).statusCode
+      : 500;
+    reply.code(statusCode >= 400 ? statusCode : 500).send({
       error: "Internal server error",
       code: "NEO_INTERNAL_ERROR"
     });
