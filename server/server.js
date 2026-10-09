@@ -1639,11 +1639,14 @@ app.get(
  */
 app.get(
   "/auth/callback",
-  requireDiscovery,
-  async (req, res) => {
+  (req, res, next) => {
     res.set("Cache-Control", "no-store, max-age=0");
     res.set("Pragma", "no-cache");
     res.set("Referrer-Policy", "no-referrer");
+    next();
+  },
+  requireDiscovery,
+  async (req, res) => {
     const { code, state, error: oauthError } = req.query;
 
     const expectedState = getCookie(

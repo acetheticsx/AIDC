@@ -668,8 +668,8 @@ test("OAuth login sets state and PKCE cookies with secure attributes", () => {
 });
 
 test("OAuth callback clears state and PKCE cookies before setting the new session", () => {
-  const start = server.indexOf('/auth/callback');
-  const end = server.indexOf('/auth/logout', start);
+  const start = server.indexOf('app.get(\n  "/auth/callback"');
+  const end = server.indexOf("\n);", start);
   const callback = start >= 0 && end > start ? server.slice(start, end) : "";
   assert.ok(callback.length > 0, "OAuth callback route should exist");
   assert.ok(callback.includes("clearOauthCookiesResponse(res)"), "state and PKCE cookies should be cleared before setting the session");
@@ -677,7 +677,9 @@ test("OAuth callback clears state and PKCE cookies before setting the new sessio
   assert.ok(callback.includes("res.cookie(CSRF_COOKIE, session.csrfToken"), "CSRF cookie should use the Express cookie API");
   assert.ok(callback.includes("httpOnly: true"), "session cookie must remain HttpOnly");
   assert.ok(callback.includes("sameSite: \"lax\""), "session cookies must retain SameSite protection");
-  assert.ok(callback.includes("Cache-Control") && callback.includes("no-store"), "OAuth callback responses must not be cached");
+  const cacheGuard = callback.indexOf('res.set("Cache-Control", "no-store, max-age=0")');
+  const discoveryGuard = callback.indexOf("requireDiscovery");
+  assert.ok(cacheGuard >= 0 && cacheGuard < discoveryGuard, "no-store headers must be set before discovery can fail");
   assert.ok(callback.includes("Referrer-Policy") && callback.includes("no-referrer"), "OAuth callback codes must not leak through referrers");
   assert.ok(!callback.includes("...clearOauthCookies"), "cleared OAuth cookie strings must not be spread into the session response");
 });;;
