@@ -500,37 +500,6 @@ function getCookie(req, name) {
   return parseCookies(req.headers.cookie)[name];
 }
 
-function serializeCookie(
-  name,
-  value,
-  {
-    maxAge,
-    httpOnly = true,
-    sameSite = "Lax",
-    path: cookiePath = "/"
-  } = {}
-) {
-  const parts = [
-    `${name}=${encodeURIComponent(value)}`,
-    `Path=${cookiePath}`,
-    `SameSite=${sameSite}`
-  ];
-
-  if (httpOnly) {
-    parts.push("HttpOnly");
-  }
-
-  if (IS_PRODUCTION) {
-    parts.push("Secure");
-  }
-
-  if (typeof maxAge === "number") {
-    parts.push(`Max-Age=${Math.floor(maxAge / 1000)}`);
-  }
-
-  return parts.join("; ");
-}
-
 function clearCookie(name, cookiePath = "/") {
   const parts = [
     `${name}=`,
@@ -1613,22 +1582,20 @@ app.get(
       code_challenge_method: "S256"
     });
 
-    const cookies = [
-      serializeCookie(OAUTH_STATE_COOKIE, state, {
-        maxAge: OAUTH_TTL_MS,
-        path: "/auth"
-      }),
-      serializeCookie(
-        OAUTH_VERIFIER_COOKIE,
-        codeVerifier,
-        {
-          maxAge: OAUTH_TTL_MS,
-          path: "/auth"
-        }
-      )
-    ];
-
-    res.set("Set-Cookie", cookies);
+    res.cookie(OAUTH_STATE_COOKIE, state, {
+      maxAge: OAUTH_TTL_MS,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: IS_PRODUCTION,
+      path: "/auth"
+    });
+    res.cookie(OAUTH_VERIFIER_COOKIE, codeVerifier, {
+      maxAge: OAUTH_TTL_MS,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: IS_PRODUCTION,
+      path: "/auth"
+    });
 
     res.redirect(
       `${discoveryState.doc.authorization_endpoint}?${params.toString()}`
@@ -1891,24 +1858,21 @@ app.get(
           null
       });
 
-      const cookies = [
-        clearCookie(OAUTH_STATE_COOKIE, "/auth"),
-        clearCookie(OAUTH_VERIFIER_COOKIE, "/auth"),
-        serializeCookie(SESSION_COOKIE, session.token, {
-          maxAge: SESSION_TTL_MS,
-          httpOnly: true,
-          sameSite: "Lax",
-          path: "/"
-        }),
-        serializeCookie(CSRF_COOKIE, session.csrfToken, {
-          maxAge: SESSION_TTL_MS,
-          httpOnly: false,
-          sameSite: "Lax",
-          path: "/"
-        })
-      ];
-
-      res.set("Set-Cookie", cookies);
+      clearOauthCookiesResponse(res);
+      res.cookie(SESSION_COOKIE, session.token, {
+        maxAge: SESSION_TTL_MS,
+        httpOnly: true,
+        sameSite: "lax",
+        secure: IS_PRODUCTION,
+        path: "/"
+      });
+      res.cookie(CSRF_COOKIE, session.csrfToken, {
+        maxAge: SESSION_TTL_MS,
+        httpOnly: false,
+        sameSite: "lax",
+        secure: IS_PRODUCTION,
+        path: "/"
+      });
 
       res.redirect("/");
     } catch (error) {
