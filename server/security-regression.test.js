@@ -443,6 +443,36 @@ test("session viewer is scoped to the owned application and never returns sessio
   assert.doesNotMatch(server, /SELECT[^;]*token_hash[^;]*FROM public\.aceid_sessions/s);
 });
 
+test("OAuth login sets state and PKCE cookies with secure attributes", () => {
+  const start = server.indexOf('app.get(\n  "/auth/login"');
+  const end = server.indexOf('app.get(\n  "/auth/callback"', start);
+  const login = start >= 0 && end > start ? server.slice(start, end) : "";
+  assert.ok(login.length > 0, "OAuth login route should exist");
+  assert.ok(login.includes("res.cookie(OAUTH_STATE_COOKIE, state"), "state should use Express's cookie API");
+  assert.ok(login.includes("res.cookie(OAUTH_VERIFIER_COOKIE, codeVerifier"), "PKCE verifier should use Express's cookie API");
+  assert.ok(login.includes("httpOnly: true"), "OAuth cookies must be HttpOnly");
+  assert.ok(login.includes('sameSite: "lax"'), "OAuth cookies must use SameSite=Lax");
+  assert.ok(!login.includes('res.set("Set-Cookie", cookies)'), "OAuth secrets must not be written through a raw cookie header array");
+});
+
+test("OAuth callback clears state and PKCE cookies and prevents callback caching", () => {
+  const start = server.indexOf('app.get(\n  "/auth/callback"');
+  const end = server.indexOf("\n);", start);
+  const callback = start >= 0 && end > start ? server.slice(start, end) : "";
+  assert.ok(callback.length > 0, "OAuth callback route should exist");
+
+  const cacheHeaders = callback.indexOf('res.set("Cache-Control", "no-store, max-age=0")');
+  const discoveryGuard = callback.indexOf("requireDiscovery");
+  assert.ok(cacheHeaders >= 0 && cacheHeaders < discoveryGuard, "cache and referrer headers must be set before discovery can fail");
+  const sessionCookie = callback.indexOf("res.cookie(SESSION_COOKIE, session.token");
+  const clearedCookies = callback.lastIndexOf("clearOauthCookiesResponse(res)", sessionCookie);
+  assert.ok(sessionCookie >= 0 && clearedCookies >= 0 && clearedCookies < sessionCookie, "temporary OAuth cookies must be cleared before the session cookie is set");
+  assert.ok(callback.includes("res.cookie(CSRF_COOKIE, session.csrfToken"), "CSRF cookie should use Express's cookie API");
+  assert.ok(callback.includes("httpOnly: true"), "session cookie must remain HttpOnly");
+  assert.ok(callback.includes('sameSite: "lax"'), "session cookies must retain SameSite protection");
+  assert.doesNotMatch(callback, /\.\.\.clearOauthCookies/, "undefined OAuth cookie collections must never be spread into the response");
+});
+
 test("OAuth uptime history reuses durable application activity data", () => {
   assert.match(server, /event_type = 'uptime\.check'/);
   assert.match(server, /INSERT INTO public\.application_activity/);
