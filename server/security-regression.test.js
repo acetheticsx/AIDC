@@ -157,7 +157,9 @@ test("logout remains available when discovery is unavailable", () => {
   )?.[0] ?? "";
   assert.ok(logout.length > 0, "logout route should exist");
   assert.doesNotMatch(logout, /requireDiscovery\s*\(/);
-  assert.match(logout, /logout_url/);
+  assert.doesNotMatch(logout, /end_session_endpoint/);
+  assert.doesNotMatch(logout, /logout_url/);
+  assert.match(logout, /success:\s*true/);
 });
 
 test("branding logos require HTTPS", () => {
@@ -230,9 +232,9 @@ test("analytics ignores malformed login timestamps", () => {
 });
 
 test("frontend bundles have explicit cache-busted versions", () => {
-  assert.match(app, /\.\/ui\.js\?v=20261007-1/);
-  assert.match(index, /\/app\.js\?v=20261007-1/);
-  assert.match(index, /\/style\.css\?v=20261007-1/);
+  assert.match(app, /\.\/ui\.js\?v=20261008-1/);
+  assert.match(index, /\/app\.js\?v=20261008-1/);
+  assert.match(index, /\/style\.css\?v=20261008-1/);
 });
 
 test("frontend source hardens the reported total redeclaration", () => {
@@ -346,6 +348,14 @@ test("origin verification uses a scoped TXT challenge without controlling lifecy
   assert.doesNotMatch(server, /ORIGIN_DOMAIN_UNVERIFIED/);
 });
 
+test("Origin URL validation rejects IPv6 literals for HTTPS DNS verification", () => {
+  const start = server.indexOf("function validateOriginUrl(");
+  const end = server.indexOf("const dnsResolvers", start);
+  const validator = server.slice(start, end);
+  assert.match(validator, /isIP\(hostname\.replace\(\/\^\\\\\[\|\\\\\]\\\$\/g, ""\)\)/);
+  assert.match(validator, /HTTPS Origin URLs must use a domain name for TXT verification/);
+});
+
 test("Origin URL save binds the application update parameters correctly", () => {
   assert.match(server, /WHERE id = \$11\s+AND owner_id = \$12/);
   assert.match(ui, /View DNS records/);
@@ -361,6 +371,29 @@ test("DNS records sheet remains usable while applications stay always-on", () =>
   assert.match(ui, /event\.key !== "Tab"/);
   assert.match(server, /verifyOriginDns/);
   assert.doesNotMatch(server, /forcedStatus = "disabled"/);
+});
+
+test("application PATCH cannot reference an undefined lifecycle status", () => {
+  const routeStart = server.indexOf('app.patch(\n  "/api/applications/:id"');
+  const routeEnd = server.indexOf('app.get(\n  "/api/applications/:id/origin-verification"');
+  const route = server.slice(routeStart, routeEnd);
+  assert.ok(routeStart >= 0 && routeEnd > routeStart, "application PATCH route should exist");
+  assert.doesNotMatch(route, /status === undefined/);
+  assert.match(route, /No fields to update/);
+});
+
+test("Origin URL save unwraps the application PATCH response", () => {
+  assert.match(ui, /response\?\.application \|\| response/);
+  assert.match(ui, /Application update returned no application/);
+});
+
+test("branding picker uses CSP-safe color classes instead of inline styles", () => {
+  assert.doesNotMatch(ui, /class="aidc-color-option"[^>]*style=/);
+  assert.doesNotMatch(ui, /class="aidc-color-swatch"[^>]*style=/);
+  assert.doesNotMatch(ui, /aidc-branding-preview" style=/);
+  assert.match(ui, /AIDC_BRANDING_COLORS/);
+  assert.match(style, /aidc-color-token-ca8a04/);
+  assert.match(style, /aidc-preview-accent-ca8a04/);
 });
 
 test("mobile overlays stay above navigation and branding color selection stays in-app", () => {
@@ -630,4 +663,17 @@ test("Deplexo uses the version 1 Docker build configuration", () => {
   assert.match(dockerfile, /COPY server\/package\*.json \.\/server\//);
   assert.match(dockerfile, /RUN cd server && npm ci --omit=dev/);
   assert.match(dockerfile, /CMD \[\"node\", \"server\/server\.js\"\]/);
+});
+
+
+test("auth redirect is guarded against repeated navigation", () => {
+  assert.match(app, /AUTH_REDIRECT_MARKER/);
+  assert.match(app, /AUTH_REDIRECT_COOLDOWN_MS/);
+  assert.match(app, /window\.location\.pathname === LOGIN_PATH/);
+});
+
+test("copy controls are explicit buttons and use a mobile-safe fallback", () => {
+  assert.match(ui, /class="aidc-icon-button"\s+type="button"\s+title="Copy client ID"/);
+  assert.match(ui, /class="aidc-icon-button"\s+type="button"\s+title="Copy URI"/);
+  assert.match(app, /setSelectionRange\(0, textarea\.value\.length\)/);
 });
