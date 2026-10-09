@@ -97,18 +97,16 @@ The server supports explicit reverse-proxy and PostgreSQL TLS configuration.
 
 Is Where Better Begins...
 
-## Origin URL domain verification
+## Origin URL configuration
 
-HTTPS Origin URLs require DNS control verification before a web application can be enabled.
+Origin URLs are validated as URL values; AIDC does not perform DNS TXT ownership checks or require DNS propagation. Save the origin directly in application settings.
 
-AIDC generates a TXT challenge scoped to the application and exact Origin URL:
+- Use an origin only, such as `https://example.com`, with no path, query, or fragment.
+- Only `http` and `https` schemes are accepted. Plain HTTP is limited to localhost development addresses.
+- URLs containing username/password credentials are rejected.
+- HTTPS origins may use DNS hostnames or IP addresses. AIDC does not resolve the hostname during save.
+- Redirect URIs remain a separate allowlist and must be registered exactly with Ace ID. Removing DNS verification does not bypass redirect URI checks, session authentication, or origin/CSRF protections.
 
-1. Save the HTTPS Origin URL.
-2. Open the Origin URL settings and copy the displayed TXT record.
-3. Create the TXT record at the displayed _aceid-challenge.<host> name.
-4. Wait for DNS propagation, then choose **Verify TXT record**.
-5. Keep the TXT record in DNS while the Origin URL is in use. AIDC treats the record as a persistent authorization signal and labels expiry=never.
+Origin URL configuration is not proof of domain ownership. Only configure origins you control, and use HTTPS in production.
 
-Localhost HTTP origins do not require DNS verification. HTTPS IP-address origins are rejected because they cannot provide the requested domain-control proof.
-
-The verification uses DNS TXT resolution and a keyed application-specific token; the raw token is never stored in the application database.
+See [Origin URL configuration details](docs/origin-url.md) for the validation rules and security boundaries.

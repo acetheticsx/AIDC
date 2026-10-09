@@ -2151,10 +2151,6 @@ export function registerAIDCComponents(AIDC) {
       originUrl: { state: true },
       savingOrigin: { state: true },
       originError: { state: true },
-      verification: { state: true },
-      verifying: { state: true },
-      addingCloudflare: { state: true },
-      recordsOpen: { state: true }
     };
 
     constructor() {
@@ -2163,31 +2159,16 @@ export function registerAIDCComponents(AIDC) {
       this.originUrl = "";
       this.savingOrigin = false;
       this.originError = "";
-      this.verification = null;
-      this.verifying = false;
-      this.addingCloudflare = false;
-      this.recordsOpen = false;
-      this._recordsTrigger = null;
     }
 
     connectedCallback() {
       super.connectedCallback();
-      if (this.application?.id) {
-        this.loadVerification(this.application.id);
-      }
     }
 
     updated(changed) {
       if (changed.has("application")) {
         this.originUrl = this.application?.origin_url || "";
         this.originError = "";
-        this.verification = null;
-        this.recordsOpen = false;
-        this._recordsTrigger = null;
-
-        if (this.application?.id) {
-          this.loadVerification(this.application.id);
-        }
       }
     }
 
@@ -2221,16 +2202,7 @@ export function registerAIDCComponents(AIDC) {
           };
         }
 
-        if (
-          parsed.protocol === "https:" &&
-          /^[0-9a-f:.]+$/i.test(parsed.hostname) &&
-          parsed.hostname.includes(":")
-        ) {
-          return {
-            valid: false,
-            error: "HTTPS Origin URLs must use a domain name for TXT verification."
-          };
-        }
+
 
         if (
           parsed.pathname !== "/" ||
@@ -2252,31 +2224,6 @@ export function registerAIDCComponents(AIDC) {
           valid: false,
           error: "Enter a valid Origin URL."
         };
-      }
-    }
-
-    async loadVerification(applicationId = this.application?.id) {
-      if (!applicationId) {
-        return;
-      }
-
-      try {
-        const data =
-          await AIDC.api.originVerification.get(
-            applicationId
-          );
-
-        if (this.application?.id === applicationId) {
-          this.verification = data?.verification || null;
-        }
-      } catch (error) {
-        if (this.application?.id === applicationId) {
-          this.verification = null;
-          console.error(
-            "Origin verification check failed:",
-            error
-          );
-        }
       }
     }
 
@@ -2313,15 +2260,7 @@ export function registerAIDCComponents(AIDC) {
         this.originUrl =
           updated.origin_url || "";
 
-        await this.loadVerification(
-          this.application.id
-        );
-
-        notify(
-          result.value && this.verification?.required
-            ? "Origin URL saved. Domain verification required."
-            : "Origin URL saved"
-        );
+        notify("Origin URL saved");
 
         haptic?.(8);
       } catch (error) {
@@ -2331,286 +2270,6 @@ export function registerAIDCComponents(AIDC) {
       } finally {
         this.savingOrigin = false;
       }
-    }
-
-    async verifyDomain() {
-      if (
-        !this.application?.id ||
-        this.verifying
-      ) {
-        return;
-      }
-
-      this.verifying = true;
-
-      try {
-        const data =
-          await AIDC.api.originVerification.verify(
-            this.application.id
-          );
-
-        this.verification =
-          data?.verification || null;
-
-        if (this.verification?.verified) {
-          notify("Origin domain verified");
-          haptic?.(10);
-        }
-      } catch (error) {
-        this.verification =
-          error?.details?.verification ||
-          error?.data?.verification ||
-          this.verification;
-
-        notify(
-          error?.message ||
-            "TXT record was not found yet.",
-          "error"
-        );
-      } finally {
-        this.verifying = false;
-      }
-    }
-
-    async addCloudflareDnsRecord() {
-      if (
-        !this.application?.id ||
-        this.verifying ||
-        this.addingCloudflare
-      ) {
-        return;
-      }
-
-      const apiToken = window.prompt(
-        "Cloudflare API token\n\nCreate a token with Zone:Read and DNS:Edit for this domain. AIDC uses it only for this request and does not store it."
-      );
-
-      if (apiToken === null) {
-        return;
-      }
-
-      if (!apiToken.trim()) {
-        notify("Cloudflare API token is required", "error");
-        return;
-      }
-
-      this.addingCloudflare = true;
-
-      try {
-        const data =
-          await AIDC.api.originVerification.addCloudflareRecord(
-            this.application.id,
-            apiToken.trim()
-          );
-
-        this.verification =
-          data?.verification || this.verification;
-
-        if (data?.existing) {
-          notify("Cloudflare already has the AIDC TXT record");
-        } else if (data?.added) {
-          notify("Cloudflare TXT record added");
-        }
-
-        if (this.verification?.verified) {
-          notify("Origin domain verified");
-          haptic?.(10);
-        } else {
-          haptic?.(8);
-        }
-      } catch (error) {
-        notify(
-          error?.message ||
-            "Unable to add the Cloudflare TXT record.",
-          "error"
-        );
-      } finally {
-        this.addingCloudflare = false;
-      }
-    }
-
-    copyVerification(value, label) {
-      copyToClipboard(value).then(copied => {
-        if (copied) {
-          notify(`${label} copied`);
-        }
-      });
-    }
-
-    openRecords(event) {
-      if (!this.verification?.required) {
-        return;
-      }
-
-      this._recordsTrigger = event?.currentTarget || null;
-      this.recordsOpen = true;
-    }
-
-    closeRecords() {
-      if (!this.recordsOpen) {
-        return;
-      }
-
-      this.recordsOpen = false;
-    }
-
-    handleEscape() {
-      if (this.recordsOpen) {
-        this.closeRecords();
-      }
-    }
-
-    handleRecordsKeydown(event) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        this.closeRecords();
-        return;
-      }
-
-      if (event.key !== "Tab") {
-        return;
-      }
-
-      const dialog = this.querySelector(".aidc-record-sheet");
-      if (!dialog) {
-        return;
-      }
-
-      const focusable = [...dialog.querySelectorAll(
-        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      )];
-
-      if (!focusable.length) {
-        event.preventDefault();
-        dialog.focus();
-        return;
-      }
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-
-    renderVerification() {
-      const v = this.verification;
-
-      if (!v || !v.required) {
-        if (v?.reason) {
-          return html`
-            <div class="aidc-dialog-note">
-              ${icon("information-circle")}
-              <span>${v.reason}</span>
-            </div>
-          `;
-        }
-
-        return "";
-      }
-
-      return html`
-        <section class="aidc-origin-verification">
-          <div class="aidc-origin-verification-head">
-            <div>
-              <span class="aidc-eyebrow">Domain Records</span>
-              <strong>Domain Records</strong>
-              <p>
-                Add this TXT record to prove you control the domain. Verification is a security/configuration check and does not control application availability.
-              </p>
-            </div>
-            <span class="aidc-origin-verification-badge ${v.verified ? "is-verified" : ""}">
-              ${v.verified ? "Verified" : "Pending"}
-            </span>
-          </div>
-
-          <div class="aidc-domain-record-trigger">
-            <button class="aidc-button aidc-button-secondary" type="button" @click=${this.openRecords}>
-              ${icon("dns-01")}
-              View DNS records
-            </button>
-            <span class="aidc-origin-verification-hint">
-              Applications are always on. DNS verification only confirms control of the configured Origin domain.
-            </span>
-          </div>
-
-          ${this.recordsOpen ? html`
-            <div class="aidc-record-sheet-layer">
-              <button class="aidc-record-sheet-backdrop" type="button" aria-label="Close DNS records" @click=${this.closeRecords}></button>
-              <section class="aidc-record-sheet" role="dialog" aria-modal="true" aria-labelledby="aidc-record-sheet-title" tabindex="-1" @keydown=${this.handleRecordsKeydown}>
-                <header class="aidc-record-sheet-head">
-                  <div>
-                    <span class="aidc-eyebrow">DNS configuration</span>
-                    <h3 id="aidc-record-sheet-title">Domain Records</h3>
-                    <p>Copy these values into your DNS provider.</p>
-                  </div>
-                  <button class="aidc-icon-button" type="button" aria-label="Close DNS records" @click=${this.closeRecords}>${icon("cancel-01")}</button>
-                </header>
-                <div class="aidc-dns-record">
-                  <div class="aidc-dns-row">
-                    <span>Name</span><code>${v.record_name}</code>
-                    <button class="aidc-icon-button" type="button" aria-label="Copy TXT record name" @click=${() => this.copyVerification(v.record_name, "TXT name")}>${icon("copy-01")}</button>
-                  </div>
-                  <div class="aidc-dns-row"><span>Type</span><code>${v.record_type}</code></div>
-                  <div class="aidc-dns-row">
-                    <span>Value</span><code>${v.record_value}</code>
-                    <button class="aidc-icon-button" type="button" aria-label="Copy TXT record value" @click=${() => this.copyVerification(v.record_value, "TXT value")}>${icon("copy-01")}</button>
-                  </div>
-                </div>
-                ${v.records?.length ? html`
-                  <div class="aidc-dns-records-found">
-                    <span>Records found</span>
-                    <div>${v.records.map(record => html`<code>${record}</code>`)}</div>
-                  </div>
-                ` : html`
-                  <div class="aidc-dialog-note">${icon("information-circle")}<span>No matching TXT record has been detected yet.</span></div>
-                `}
-              </section>
-            </div>
-          ` : ""}
-
-          <div class="aidc-dialog-note">
-            ${icon(v.verified ? "checkmark-circle-02" : "information-circle")}
-            <span>${v.verified
-              ? "The TXT record is visible in DNS."
-              : "DNS changes can take a few minutes to propagate. Keep the TXT record in place while this Origin URL is used."
-            }</span>
-          </div>
-
-          <div class="aidc-dialog-actions">
-            <button
-              class="aidc-button aidc-button-secondary ${this.addingCloudflare ? "is-loading" : ""}"
-              type="button"
-              ?disabled=${this.verifying || this.addingCloudflare || v.verified}
-              @click=${this.addCloudflareDnsRecord}
-            >
-              <span class="aidc-button-content">
-                ${icon("globe-02")}
-                ${this.addingCloudflare ? "Adding via Cloudflare…" : "Add automatically with Cloudflare"}
-              </span>
-              <span class="aidc-button-loading">Adding via Cloudflare…</span>
-            </button>
-
-            <button
-              class="aidc-button aidc-button-primary ${this.verifying ? "is-loading" : ""}"
-              type="button"
-              ?disabled=${this.verifying || this.addingCloudflare || v.verified}
-              @click=${this.verifyDomain}
-            >
-              <span class="aidc-button-content">
-                ${icon(v.verified ? "checkmark-circle-02" : "refresh")}
-                ${this.verifying ? "Checking DNS…" : v.verified ? "Domain verified" : "Verify TXT record"}
-              </span>
-              <span class="aidc-button-loading">Checking DNS…</span>
-            </button>
-          </div>
-        </section>
-      `;
     }
 
     render() {
@@ -2648,7 +2307,7 @@ export function registerAIDCComponents(AIDC) {
                 />
                 <small>
                   Use the origin only, for example https://example.com.
-                  HTTPS domains require DNS TXT verification. This does not disable the application while pending.
+                  No domain ownership challenge is required. Use the origin only, without a path or query string.
                 </small>
               </label>
 
@@ -2676,7 +2335,6 @@ export function registerAIDCComponents(AIDC) {
                 </button>
               </div>
             </div>
-          ${this.renderVerification()}
           </section>
 
           <aidc-redirect-uris
@@ -4792,10 +4450,6 @@ if (!query) return true;
       submitting: {
         state: true
       },
-
-      verification: {
-        state: true
-      },
       createdApplication: {
         state: true
       }
@@ -4809,7 +4463,6 @@ if (!query) return true;
       this.originUrl = "";
       this.applicationType = "web";
       this.submitting = false;
-      this.verification = null;
       this.createdApplication = null;
 
       this._wasOpen = false;
@@ -4819,8 +4472,7 @@ if (!query) return true;
       const open = state.ui.createModal;
 
       if (open && !this._wasOpen) {
-        this.verification = null;
-        this.createdApplication = null;
+          this.createdApplication = null;
         this.name = "";
         this.description = "";
         this.originUrl = "";
@@ -4862,13 +4514,7 @@ if (!query) return true;
           return { valid: false, error: "HTTP Origin URLs are only allowed for localhost." };
         }
 
-        if (
-          parsed.protocol === "https:" &&
-          /^[0-9a-f:.]+$/i.test(parsed.hostname) &&
-          parsed.hostname.includes(":")
-        ) {
-          return { valid: false, error: "HTTPS Origin URLs must use a domain name for TXT verification." };
-        }
+
 
         if (parsed.pathname !== "/" || parsed.search || parsed.hash) {
           return { valid: false, error: "Use the origin only, without a path or query string." };
@@ -4932,18 +4578,6 @@ if (!query) return true;
         AIDC.utils.clearDirty();
 
         this.createdApplication = application;
-
-        try {
-          this.verification =
-            await api.originVerification.get(application.id);
-        } catch (verificationError) {
-          this.verification = null;
-          notify(
-            verificationError?.message ||
-              "Application created, but DNS verification details could not be loaded.",
-            "error"
-          );
-        }
 
         notify("Application created");
         haptic?.(10);
@@ -5025,30 +4659,8 @@ if (!query) return true;
               ? html`
                   <section class="aidc-dialog-note" aria-live="polite">
                     ${icon("checkmark-circle-02")}
-                    <div><strong>Application created</strong><span>${text(this.createdApplication.name)} is ready. DNS verification is optional and does not disable the application.</span></div>
+                    <div><strong>Application created</strong><span>${text(this.createdApplication.name)} is ready. You can configure its Origin URL and redirect allowlist in settings.</span></div>
                   </section>
-                  ${this.verification?.required
-                    ? html`
-                        <section class="aidc-card aidc-origin-verification-card">
-                          <header class="aidc-card-section-header">
-                            <div><h3>DNS verification</h3><p>Add this TXT record to your domain.</p></div>
-                            <span class="aidc-status aidc-status-active"><span class="aidc-status-dot"></span>${this.verification.verified ? "Verified" : "Pending"}</span>
-                          </header>
-                          <div class="aidc-dialog-note">
-                            <div><strong>Record name</strong><code class="aidc-mono">${text(this.verification.record_name)}</code></div>
-                            <button class="aidc-icon-button" type="button" title="Copy DNS record name" aria-label="Copy DNS record name" @click=${async () => { if (await copyToClipboard(this.verification.record_name)) notify("DNS record name copied"); else notify("Unable to copy DNS record name.", "error"); }}>${icon("copy-01")}</button>
-                          </div>
-                          <div class="aidc-dialog-note">
-                            <div><strong>TXT value</strong><code class="aidc-mono">${text(this.verification.record_value)}</code></div>
-                            <button class="aidc-icon-button" type="button" title="Copy DNS TXT value" aria-label="Copy DNS TXT value" @click=${async () => { if (await copyToClipboard(this.verification.record_value)) notify("DNS TXT value copied"); else notify("Unable to copy DNS TXT value.", "error"); }}>${icon("copy-01")}</button>
-                          </div>
-                          <small>${text(this.verification.reason || "Add the TXT record, then verify it from application settings.")}</small>
-                        </section>
-                      `
-                    : this.verification
-                      ? html`<section class="aidc-dialog-note">${icon("information-circle")}<span>${text(this.verification.reason || "DNS verification is not required for this Origin.")}</span></section>`
-                      : ""
-                  }
                   <div class="aidc-dialog-actions">
                     <button type="button" class="aidc-button aidc-button-secondary" @click=${modals.closeCreate}>Close</button>
                     <button type="button" class="aidc-button aidc-button-primary" @click=${() => router.navigate("/applications/" + this.createdApplication.id)}>${icon("settings-01")} Open application</button>
@@ -5146,7 +4758,7 @@ if (!query) return true;
                 <small>
                   ${this.applicationType === "native"
                     ? "Optional for native clients. Configure redirect URIs after creation."
-                    : "Use the web origin where Ace ID authentication starts. HTTPS domains receive a DNS verification check after creation."}
+                    : "Use the web origin where Ace ID authentication starts. No domain ownership challenge is required."}
                 </small>
 
                 ${!this.originUrl.trim()

@@ -268,12 +268,10 @@ test("application creation validates and normalizes origin inputs before submiss
   assert.match(ui, /originValidation\.value \|\| undefined/);
 });
 
-test("domain verification is diagnostic and never controls application availability", () => {
-  assert.doesNotMatch(ui, /before enabling the application/);
-  assert.doesNotMatch(ui, /before enabling this application/);
-  assert.match(ui, /Applications are always on/);
-  assert.doesNotMatch(ui, /if \(this\.verification\?\.required\) \{\s*this\.recordsOpen = true;\s*\}/);
-  assert.match(server, /res\.status\(200\)\.json\(\{\s*verification/);
+test("Origin URL configuration is independent of application lifecycle", () => {
+  assert.match(server, /const initialStatus = "active"/);
+  assert.doesNotMatch(server, /verifyOriginDns|origin-verification/);
+  assert.doesNotMatch(ui, /this\.verification|View DNS records|Verify TXT record/);
 });
 
 test("frontend uses the first-party boot fallback", () => {
@@ -350,40 +348,22 @@ test("cross-app scope plumbing is removed", () => {
   assert.doesNotMatch(ui, /crossAppScopes|crossAppInput|aidc-cross-app-card/);
 });
 
-test("AIDC loading UI keeps skeleton animation and domain records", () => {
+test("AIDC loading UI keeps skeleton animation", () => {
   assert.match(ui, /aidc-loading-card[^>]*aria-label="Loading applications"/);
   assert.match(style, /aidc-skeleton-shimmer/);
-  assert.match(ui, /Domain Records/);
 });
 
-test("origin verification uses a scoped TXT challenge without controlling lifecycle", () => {
-  assert.match(server, /_aceid-challenge/);
-  assert.match(server, /resolveTxt/);
-  assert.match(server, /token=/);
-  assert.match(server, /verifyOriginDns/);
-  assert.doesNotMatch(server, /ORIGIN_DOMAIN_UNVERIFIED/);
-});
 
-test("Origin URL save binds the application update parameters correctly", () => {
-  assert.match(server, /WHERE id = \$11\s+AND owner_id = \$12/);
-  assert.match(ui, /View DNS records/);
-  assert.match(ui, /role="dialog"/);
-  assert.match(ui, /aria-labelledby="aidc-record-sheet-title"/);
-  assert.match(style, /aidc-record-sheet-layer/);
-});
-
-test("DNS records sheet remains usable while applications stay always-on", () => {
-  assert.match(ui, /this\._recordsTrigger/);
-  assert.match(ui, /handleRecordsKeydown/);
-  assert.match(ui, /event\.key === "Escape"/);
-  assert.match(ui, /event\.key !== "Tab"/);
-  assert.match(server, /verifyOriginDns/);
-  assert.doesNotMatch(server, /forcedStatus = "disabled"/);
+test("Origin URL save binds application update parameters and keeps URL configuration simple", () => {
+  assert.ok(server.includes("WHERE id = $11"));
+  assert.ok(server.includes("AND owner_id = $12"));
+  assert.match(ui, /Save Origin URL/);
+  assert.doesNotMatch(ui, /View DNS records|Verify TXT record|addCloudflareDnsRecord/);
 });
 
 test("application PATCH cannot reference an undefined lifecycle status", () => {
   const routeStart = server.indexOf('app.patch(\n  "/api/applications/:id"');
-  const routeEnd = server.indexOf('app.get(\n  "/api/applications/:id/origin-verification"');
+  const routeEnd = server.indexOf('app.delete(\n  "/api/applications/:id"');
   const route = server.slice(routeStart, routeEnd);
   assert.ok(routeStart >= 0 && routeEnd > routeStart, "application PATCH route should exist");
   assert.doesNotMatch(route, /status === undefined/);
@@ -547,12 +527,10 @@ test("new applications are public OIDC clients", () => {
   assert.match(server, /public: true/);
 });
 
-test("create application UI removes templates and uses snackbar errors", () => {
+test("create application UI saves Origin URLs without DNS verification", () => {
   assert.doesNotMatch(ui, /Start from template/);
   assert.doesNotMatch(ui, /applyTemplate\(/);
-  assert.match(ui, /notify\("Application name is required\.", "error"\)/);
-  assert.match(ui, /api\.originVerification\.get\(application\.id\)/);
-  assert.match(ui, /DNS verification/);
+  assert.doesNotMatch(ui, /DNS verification|originVerification/);
 });
 
 test("clients use the same application icon fallback", () => {
@@ -671,4 +649,25 @@ test("Deplexo uses the version 1 Docker build configuration", () => {
   assert.match(dockerfile, /COPY server\/package\*.json \.\/server\//);
   assert.match(dockerfile, /RUN cd server && npm ci --omit=dev/);
   assert.match(dockerfile, /CMD \[\"node\", \"server\/server\.js\"\]/);
+});
+
+
+
+
+test("Origin URL configuration does not perform DNS verification", () => {
+  assert.doesNotMatch(server, /node:dns\/promises|verifyOriginDns|origin-verification/);
+  assert.doesNotMatch(api, /originVerification/);
+  assert.doesNotMatch(ui, /DNS verification|Verify TXT record|addCloudflareDnsRecord/);
+  assert.match(server, /function validateOriginUrl/);
+});
+
+test("Origin URL validation keeps URL safety checks without hostname resolution", () => {
+  const start = server.indexOf("function validateOriginUrl(");
+  const end = server.indexOf("function validateBranding(", start);
+  const validator = server.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(validator, /parsed\.protocol/);
+  assert.match(validator, /parsed\.username \|\| parsed\.password/);
+  assert.match(validator, /parsed\.pathname/);
+  assert.doesNotMatch(validator, /isIP|TXT verification|dns/i);
 });
