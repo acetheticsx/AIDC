@@ -157,7 +157,9 @@ test("logout remains available when discovery is unavailable", () => {
   )?.[0] ?? "";
   assert.ok(logout.length > 0, "logout route should exist");
   assert.doesNotMatch(logout, /requireDiscovery\s*\(/);
-  assert.match(logout, /logout_url/);
+  assert.doesNotMatch(logout, /end_session_endpoint/);
+  assert.doesNotMatch(logout, /logout_url/);
+  assert.match(logout, /success:\s*true/);
 });
 
 test("branding logos require HTTPS", () => {
@@ -653,4 +655,17 @@ test("Deplexo uses the version 1 Docker build configuration", () => {
   assert.match(dockerfile, /COPY server\/package\*.json \.\/server\//);
   assert.match(dockerfile, /RUN cd server && npm ci --omit=dev/);
   assert.match(dockerfile, /CMD \[\"node\", \"server\/server\.js\"\]/);
+});
+
+
+test("auth redirect is guarded against repeated navigation", () => {
+  assert.match(app, /AUTH_REDIRECT_MARKER/);
+  assert.match(app, /AUTH_REDIRECT_COOLDOWN_MS/);
+  assert.match(app, /window\.location\.pathname === LOGIN_PATH/);
+});
+
+test("copy controls are explicit buttons and use a mobile-safe fallback", () => {
+  assert.match(ui, /class="aidc-icon-button"\s+type="button"\s+title="Copy client ID"/);
+  assert.match(ui, /class="aidc-icon-button"\s+type="button"\s+title="Copy URI"/);
+  assert.match(app, /setSelectionRange\(0, textarea\.value\.length\)/);
 });

@@ -532,6 +532,7 @@ export function registerAIDCComponents(AIDC) {
 
             <button
               class="aidc-icon-button"
+              type="button"
               title="Copy client ID"
               aria-label="Copy client ID"
               @click=${async event => {
@@ -1920,6 +1921,7 @@ export function registerAIDCComponents(AIDC) {
 
                   <button
                     class="aidc-icon-button"
+                    type="button"
                     title="Copy client ID"
                     aria-label="Copy client ID"
                     @click=${this.copyClientId}
@@ -3010,6 +3012,7 @@ ${getApplication(AIDC, this.applicationId)?.application_type === "native"
                                   <code class="aidc-mono">${item.uri}</code>
                                   <button
                                     class="aidc-icon-button"
+                                    type="button"
                                     title="Copy URI"
                                     aria-label="Copy redirect URI"
                                     @click=${() => this.copyUri(item.uri)}

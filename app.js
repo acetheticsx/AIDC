@@ -99,6 +99,8 @@ let applicationsLoadPromise = null;
  * not fire it repeatedly.
  */
 let authRedirecting = false;
+const AUTH_REDIRECT_MARKER = "aidc-auth-redirect-at";
+const AUTH_REDIRECT_COOLDOWN_MS = 5000;
 let authBootstrapPromise = null;
 
 /* ─────────────────────────────────────────────
@@ -222,12 +224,22 @@ function handleError(error, fallbackMessage) {
 ───────────────────────────────────────────── */
 
 function requireAuth() {
-  if (authRedirecting) {
+  if (authRedirecting || window.location.pathname === LOGIN_PATH) {
     return;
   }
 
-  authRedirecting = true;
+  const now = Date.now();
+  try {
+    const previous = Number(sessionStorage.getItem(AUTH_REDIRECT_MARKER) || 0);
+    if (previous && now - previous < AUTH_REDIRECT_COOLDOWN_MS) {
+      return;
+    }
+    sessionStorage.setItem(AUTH_REDIRECT_MARKER, String(now));
+  } catch {
+    // Storage is optional. The in-memory guard still prevents same-page bursts.
+  }
 
+  authRedirecting = true;
   window.location.replace(LOGIN_PATH);
 }
 
@@ -342,7 +354,7 @@ const auth = {
     }
 
     if (!state.user) {
-      window.location.assign(LOGIN_PATH);
+      requireAuth();
       return false;
     }
 
@@ -1617,16 +1629,23 @@ async function copyToClipboard(value) {
     textarea.value = valueToCopy;
 
     textarea.setAttribute("readonly", "");
+    textarea.setAttribute("aria-hidden", "true");
 
     textarea.style.position = "fixed";
     textarea.style.top = "0";
     textarea.style.left = "0";
+    textarea.style.width = "1px";
+    textarea.style.height = "1px";
+    textarea.style.padding = "0";
+    textarea.style.border = "0";
     textarea.style.opacity = "0";
+    textarea.style.pointerEvents = "none";
 
     document.body.appendChild(textarea);
 
-    textarea.focus();
+    textarea.focus({ preventScroll: true });
     textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
 
     const copied =
       document.execCommand("copy");
