@@ -80,6 +80,7 @@ export const api = {
     verifyOrigin: (id: string) => request<{ verification: OriginVerification }>(`/applications/${encodeURIComponent(id)}/origin-verification/verify`, { method: "POST", body: "{}" }),
     addCloudflareOriginRecord: (id: string, apiToken: string) => request<{ provider: string; added: boolean; existing: boolean; verification: OriginVerification }>(`/applications/${encodeURIComponent(id)}/origin-verification/cloudflare`, { method: "POST", body: JSON.stringify({ api_token: apiToken }) }),
     remove: (id: string) => request<{ deleted: boolean }>(`/applications/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    activity: (id: string, limit = 50) => request<{ events: ActivityEvent[] }>(`/applications/${encodeURIComponent(id)}/activity?limit=${Math.min(100, Math.max(1, limit))}`),
     redirectUris: (id: string) => request<{ redirect_uris: RedirectUri[] }>(`/applications/${encodeURIComponent(id)}/redirect-uris`),
     addRedirectUri: (id: string, uri: string) => request<{ redirect_uri: RedirectUri }>(`/applications/${encodeURIComponent(id)}/redirect-uris`, { method: "POST", body: JSON.stringify({ uri }) }),
     removeRedirectUri: (id: string, uriId: string) => request<{ deleted: boolean }>(`/applications/${encodeURIComponent(id)}/redirect-uris/${encodeURIComponent(uriId)}`, { method: "DELETE" }),

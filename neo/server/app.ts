@@ -82,10 +82,16 @@ export function buildApp() {
       return reply.code(429).send({ error: "Too many requests. Try again shortly.", code: "RATE_LIMITED" });
     }
     bucket.count += 1;
+    rateBuckets.delete(key);
+    rateBuckets.set(key, bucket);
     if (rateBuckets.size > 10_000) {
       for (const [bucketKey, value] of rateBuckets) {
-        if (value.resetAt <= now || rateBuckets.size > 9_000) rateBuckets.delete(bucketKey);
-        if (rateBuckets.size <= 9_000) break;
+        if (value.resetAt <= now) rateBuckets.delete(bucketKey);
+      }
+      while (rateBuckets.size > 10_000) {
+        const oldestKey = rateBuckets.keys().next().value;
+        if (!oldestKey) break;
+        rateBuckets.delete(oldestKey);
       }
     }
   });
@@ -728,6 +734,22 @@ export function buildApp() {
     await recordApplicationUptime(id);
     const latest = await getPool().query("SELECT success, created_at, metadata FROM public.application_activity WHERE application_id = $1 AND event_type = 'uptime.check' ORDER BY created_at DESC LIMIT 1", [id]);
     return { check: latest.rows[0] || null };
+  });
+
+  app.get("/api/applications/:id/activity", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const query = request.query as { limit?: string };
+    const parsed = Number.parseInt(query.limit || "50", 10);
+    const limit = Number.isFinite(parsed) ? Math.min(100, Math.max(1, parsed)) : 50;
+    try {
+      const owned = await getPool().query("SELECT id FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+      if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
+      const result = await getPool().query("SELECT id, application_id, event_type, success, metadata, created_at FROM public.application_activity WHERE application_id = $1 ORDER BY created_at DESC LIMIT $2", [id, limit]);
+      return { events: result.rows };
+    } catch (error) {
+      request.log.error({ err: error }, "application activity query failed");
+      return reply.code(503).send({ error: "Application activity is currently unavailable." });
+    }
   });
 
   app.get("/api/activity", { preHandler: requireAuth }, async (request) => {
