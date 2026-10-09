@@ -75,3 +75,8 @@ The landing page contains the canonical public product description. Authenticate
 ## Terminology
 
 AIDC means Ace Identity Developer Console. Ace ID is the identity service used by AIDC.
+
+
+## Origin URL behavior
+
+AIDC validates Origin URLs syntactically and does not require DNS TXT verification or hostname resolution. HTTPS origins may use DNS hostnames or IP literals; HTTP is restricted to localhost. Redirect URIs remain separately allowlisted. See `docs/origin-url.md` for validation rules and security boundaries.
