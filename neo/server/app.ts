@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { isIP } from "node:net";
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
@@ -26,16 +27,27 @@ function applicationDescription(value: unknown): string | null {
   return value.trim();
 }
 
-function validateOrigin(value: unknown): string | null {
-  if (value === undefined || value === null || value === "") return null;
-  if (typeof value !== "string" || value.length > 2048) return null;
+export function validateOrigin(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") return null;
+
+  const input = value.trim();
+  if (!input) return null;
+  if (input.length > 2048) return null;
 
   try {
-    const parsed = new URL(value);
-    if (parsed.protocol === "http:" && parsed.hostname !== "localhost") return null;
+    const parsed = new URL(input);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
     if (parsed.username || parsed.password || parsed.hash || parsed.search) return null;
-    if (parsed.pathname !== "/" && parsed.pathname !== "") return null;
+    if (parsed.pathname !== "/") return null;
+
+    const hostname = parsed.hostname.toLowerCase();
+    const unbracketedHostname = hostname.replace(/^\[|\]$/g, "");
+    const isLoopback = hostname === "localhost" || unbracketedHostname === "127.0.0.1" || unbracketedHostname === "::1";
+
+    if (parsed.protocol === "http:" && !isLoopback) return null;
+    if (parsed.protocol === "https:" && isIP(unbracketedHostname)) return null;
+
     return parsed.origin;
   } catch {
     return null;

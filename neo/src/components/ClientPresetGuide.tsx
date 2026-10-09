@@ -14,8 +14,16 @@ export function ClientPresetGuide({ application, redirects, scopes, onStatus }: 
     if (preset === "vanilla") return `const clientId = "${clientId}";\nconst redirectUri = "${redirect}";\n// Authorization Code + PKCE. Never embed a client secret.`;
     return `clientId: "${clientId}"\nredirectUri: "${redirect}"\n// Use the system browser + Authorization Code + PKCE.\n// Register a reverse-domain scheme or verified app link.`;
   }, [application.client_id, preset, redirect]);
+  const productionOriginIsConfigured = useMemo(() => {
+    try {
+      const parsed = new URL(origin);
+      return parsed.protocol === "https:" && parsed.hostname !== "example.com" && !parsed.hostname.endsWith(".example.com");
+    } catch {
+      return false;
+    }
+  }, [origin]);
   const checks = [
-    { label: "Production origin uses HTTPS", ok: origin.startsWith("https://") && !origin.includes("example.com") },
+    { label: "Production origin uses HTTPS", ok: productionOriginIsConfigured },
     { label: "Callback URI registered exactly", ok: redirects.some((item) => item.uri === redirect) },
     { label: "openid scope enabled", ok: scopes.includes("openid") },
     { label: "Client type and redirect flow reviewed", ok: false },

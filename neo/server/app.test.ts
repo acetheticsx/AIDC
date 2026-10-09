@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { buildApp } from "./app.js";
+import { buildApp, validateOrigin } from "./app.js";
 
 describe("Neo API foundation", () => {
+  it("normalizes safe origins and rejects paths, credentials, insecure hosts, and IP-based HTTPS DNS challenges", () => {
+    expect(validateOrigin(" https://Example.com/ ")).toBe("https://example.com");
+    expect(validateOrigin("http://localhost:3000")).toBe("http://localhost:3000");
+    expect(validateOrigin("http://127.0.0.1:3000")).toBe("http://127.0.0.1:3000");
+    expect(validateOrigin("http://example.com")).toBeNull();
+    expect(validateOrigin("https://127.0.0.1")).toBeNull();
+    expect(validateOrigin("https://[2001:db8::1]")).toBeNull();
+    expect(validateOrigin("https://user:pass@example.com")).toBeNull();
+    expect(validateOrigin("https://example.com/path")).toBeNull();
+    expect(validateOrigin("https://example.com?next=/")).toBeNull();
+  });
   it("returns a liveness response", async () => {
     const app = buildApp();
     const response = await app.inject({ method: "GET", url: "/healthz" });
