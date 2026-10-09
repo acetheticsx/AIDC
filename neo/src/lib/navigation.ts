@@ -1,7 +1,8 @@
 export const routes = [
-  { id: "overview", label: "Overview", icon: "⌂" },
-  { id: "applications", label: "Applications", icon: "▣" },
+  { id: "overview", label: "Overview", icon: "◇" },
+  { id: "applications", label: "Applications", icon: "▦" },
   { id: "activity", label: "Activity", icon: "◷" },
+  { id: "users", label: "Users", icon: "◎" },
   { id: "settings", label: "Settings", icon: "⚙" }
 ] as const;
 export type RouteId = (typeof routes)[number]["id"];

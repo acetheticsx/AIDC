@@ -8,9 +8,10 @@ import { Applications } from "./views/Applications";
 import { Activity } from "./views/Activity";
 import { Overview } from "./views/Overview";
 import { Settings } from "./views/Settings";
+import { Users } from "./views/Users";
 import { api } from "./lib/api";
 import { navigate, readRoute, type RouteId } from "./lib/navigation";
-import type { Application, Quota, User } from "./types";
+import type { Application, Entitlements, Quota, User } from "./types";
 
 export function App() {
   const [route, setRoute] = useState<RouteId>(readRoute);
@@ -21,6 +22,7 @@ export function App() {
   const [applicationsLoading, setApplicationsLoading] = useState(false);
   const [applicationsError, setApplicationsError] = useState<string | null>(null);
   const [quota, setQuota] = useState<Quota | null>(null);
+  const [entitlements, setEntitlements] = useState<Entitlements | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
@@ -31,7 +33,7 @@ export function App() {
     if (logoutBusy) return;
     setLogoutBusy(true);
     try { await api.auth.logout(); } catch { /* Clear local view even if the session already expired. */ }
-    setUser(null); setApplications([]); setQuota(null); setSelectedApplication(null);
+    setUser(null); setApplications([]); setQuota(null); setEntitlements(null); setSelectedApplication(null);
     window.location.replace("/");
   };
   const updateApplication = async (id: string, changes: Partial<Pick<Application, "name" | "description" | "origin_url" | "application_type">>) => {
@@ -64,8 +66,10 @@ export function App() {
     try {
       const data = await api.quota.get();
       setQuota(data.quota ?? null);
+      setEntitlements(data.entitlements ?? null);
     } catch {
       setQuota(null);
+      setEntitlements(null);
     }
   }, []);
 
@@ -151,9 +155,10 @@ export function App() {
         <main className="neo-content"><div className="neo-state neo-state-error" role="alert"><strong>Console connection failed</strong><span>{authError}</span><button className="neo-button neo-button-secondary" onClick={() => void bootstrap()}>Retry</button></div></main>
       ) : (
         <main className="neo-content">
-          {route === "overview" && <Overview applications={applications} quota={quota} signedIn={Boolean(user)} onApplications={() => navigate("applications")} />}
+          {route === "overview" && <Overview applications={applications} quota={quota} entitlements={entitlements} signedIn={Boolean(user)} onApplications={() => navigate("applications")} />}
           {route === "applications" && <Applications applications={applications} loading={applicationsLoading} error={applicationsError} signedIn={Boolean(user)} onRetry={() => void loadApplications()} onCreate={() => { setCreateError(null); setCreateOpen(true); }} onOpen={setSelectedApplication} />}
           {route === "activity" && <Activity />}
+          {route === "users" && <Users />}
           {route === "settings" && <Settings />}
         </main>
       )}

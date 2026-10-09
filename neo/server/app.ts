@@ -551,6 +551,86 @@ export function buildApp() {
     }
   });
 
+  app.get("/api/users/search", { preHandler: requireAuth }, async (request, reply) => {
+    const query = request.query as { q?: string; limit?: string };
+    const search = String(query.q || "").trim();
+    const parsed = Number.parseInt(query.limit || "20", 10);
+    const limit = Number.isFinite(parsed) ? Math.min(50, Math.max(1, parsed)) : 20;
+    if (search.length > 120) return reply.code(400).send({ error: "Search query is too long." });
+    try {
+      const result = await getPool().query(`WITH owned_clients AS (SELECT DISTINCT client_id FROM public.applications WHERE owner_id = $1), authorized_users AS (SELECT DISTINCT consent.user_id FROM public.aceid_consents consent JOIN owned_clients clients ON clients.client_id = consent.client_id) SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.email_verified, u.created_at, u.updated_at, u.frozen_at, u.onboarding_completed_at FROM public.aceid_users u JOIN authorized_users au ON au.user_id = u.id WHERE ($2 = '' OR lower(u.email) LIKE lower($2) || '%' OR lower(u.username) LIKE lower($2) || '%' OR lower(u.display_name) LIKE lower($2) || '%' OR u.id::text LIKE $2 || '%') ORDER BY u.updated_at DESC, u.created_at DESC LIMIT $3`, [request.developer!.id, search, limit]);
+      return { users: result.rows };
+    } catch (error) {
+      request.log.error({ err: error }, "user search failed");
+      return reply.code(503).send({ error: "User search is currently unavailable." });
+    }
+  });
+
+  app.get("/api/applications/:id/sessions", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) return reply.code(400).send({ error: "Invalid application ID." });
+    const query = request.query as { limit?: string; status?: string };
+    const parsed = Number.parseInt(query.limit || "50", 10);
+    const limit = Number.isFinite(parsed) ? Math.min(100, Math.max(1, parsed)) : 50;
+    const status = ["active", "all", "revoked"].includes(query.status || "") ? query.status! : "active";
+    try {
+      const application = await getPool().query("SELECT client_id FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+      if (!application.rows[0]) return reply.code(404).send({ error: "Application not found." });
+      const result = await getPool().query(`WITH authorized_users AS (SELECT DISTINCT user_id FROM public.aceid_consents WHERE client_id = $1) SELECT s.id, s.user_id, u.email, u.username, u.display_name, u.avatar_url, s.created_at, s.last_seen_at, s.expires_at, s.revoked_at, s.user_agent, s.authenticated_at FROM public.aceid_sessions s JOIN public.aceid_users u ON u.id = s.user_id JOIN authorized_users au ON au.user_id = s.user_id WHERE (($2 = 'active' AND s.revoked_at IS NULL AND s.expires_at > now()) OR ($2 = 'revoked' AND s.revoked_at IS NOT NULL) OR ($2 = 'all')) ORDER BY COALESCE(s.last_seen_at, s.created_at) DESC LIMIT $3`, [application.rows[0].client_id, status, limit]);
+      return { sessions: result.rows.map((session) => ({ ...session, status: session.revoked_at ? "revoked" : new Date(session.expires_at) <= new Date() ? "expired" : "active" })) };
+    } catch (error) {
+      request.log.error({ err: error }, "application sessions query failed");
+      return reply.code(503).send({ error: "Application sessions are currently unavailable." });
+    }
+  });
+
+  async function recordApplicationUptime(applicationId: string) {
+    const startedAt = Date.now();
+    try {
+      const result = await getPool().query("SELECT a.id, a.client_id, a.status, c.client_id AS registered_client_id FROM public.applications a LEFT JOIN public.aceid_clients c ON c.client_id = a.client_id WHERE a.id = $1", [applicationId]);
+      const row = result.rows[0];
+      if (!row) return;
+      let discoveryOk = false;
+      const issuer = config.ACE_ID_ISSUER?.replace(/\/+$/, "");
+      if (issuer) {
+        try { const response = await fetch(`${issuer}/.well-known/openid-configuration`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) }); discoveryOk = response.ok; } catch { discoveryOk = false; }
+      }
+      const registered = row.registered_client_id === row.client_id;
+      const success = row.status === "active" && registered && discoveryOk;
+      await getPool().query("INSERT INTO public.application_activity (application_id, event_type, success, metadata) VALUES ($1, 'uptime.check', $2, $3::jsonb)", [applicationId, success, JSON.stringify({ latency_ms: Date.now() - startedAt, application_active: row.status === "active", client_registered: registered, identity_discovery: discoveryOk })]);
+    } catch (error) { requestLogUptimeError(error); }
+  }
+  function requestLogUptimeError(error: unknown) { app.log.error({ err: error }, "application uptime check failed"); }
+
+  app.get("/api/applications/:id/uptime", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) return reply.code(400).send({ error: "Invalid application ID." });
+    const query = request.query as { days?: string };
+    const parsed = Number.parseInt(query.days || "30", 10);
+    const days = [7, 14, 30].includes(parsed) ? parsed : 30;
+    try {
+      const owned = await getPool().query("SELECT id FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+      if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
+      const [summary, daily, latest] = await Promise.all([
+        getPool().query("SELECT COUNT(*)::int AS total_checks, COUNT(*) FILTER (WHERE success)::int AS successful_checks, ROUND(100.0 * COUNT(*) FILTER (WHERE success) / NULLIF(COUNT(*), 0), 2) AS uptime_percent, MAX(created_at) AS last_checked_at, BOOL_OR(success) FILTER (WHERE created_at >= now() - INTERVAL '15 minutes') AS recent_success FROM public.application_activity WHERE application_id = $1 AND event_type = 'uptime.check' AND created_at >= now() - ($2::int * INTERVAL '1 day')", [id, days]),
+        getPool().query("SELECT date_trunc('day', created_at) AS day, COUNT(*)::int AS checks, COUNT(*) FILTER (WHERE success)::int AS successes, ROUND(100.0 * COUNT(*) FILTER (WHERE success) / NULLIF(COUNT(*), 0), 2) AS uptime_percent FROM public.application_activity WHERE application_id = $1 AND event_type = 'uptime.check' AND created_at >= now() - ($2::int * INTERVAL '1 day') GROUP BY 1 ORDER BY 1 ASC", [id, days]),
+        getPool().query("SELECT success, created_at, metadata FROM public.application_activity WHERE application_id = $1 AND event_type = 'uptime.check' ORDER BY created_at DESC LIMIT 1", [id])
+      ]);
+      const row = summary.rows[0] || {};
+      return { days, summary: { total_checks: Number(row.total_checks) || 0, successful_checks: Number(row.successful_checks) || 0, uptime_percent: row.uptime_percent == null ? null : Number(row.uptime_percent), last_checked_at: row.last_checked_at || null, status: row.recent_success === true ? "operational" : row.recent_success === false ? "degraded" : "no_data" }, daily: daily.rows.map((item) => ({ day: item.day, checks: Number(item.checks) || 0, successes: Number(item.successes) || 0, uptime_percent: item.uptime_percent == null ? null : Number(item.uptime_percent) })), latest: latest.rows[0] || null };
+    } catch (error) { request.log.error({ err: error }, "application uptime query failed"); return reply.code(503).send({ error: "Uptime history is currently unavailable." }); }
+  });
+
+  app.post("/api/applications/:id/uptime/check", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) return reply.code(400).send({ error: "Invalid application ID." });
+    const owned = await getPool().query("SELECT id FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+    if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
+    await recordApplicationUptime(id);
+    const latest = await getPool().query("SELECT success, created_at, metadata FROM public.application_activity WHERE application_id = $1 AND event_type = 'uptime.check' ORDER BY created_at DESC LIMIT 1", [id]);
+    return { check: latest.rows[0] || null };
+  });
+
   app.get("/api/activity", { preHandler: requireAuth }, async (request) => {
     const query = request.query as { limit?: string };
     const parsed = Number.parseInt(query.limit || "50", 10);

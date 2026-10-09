@@ -7,7 +7,8 @@ A React + TypeScript developer console backed by Fastify and PostgreSQL. Neo kee
 - Ace ID OIDC login, PKCE, server-side sessions, CSRF protection, and local logout.
 - Application create, edit, delete, quota-aware creation, redirect URI management, and OIDC scope management.
 - One-time client-secret rotation/revocation and per-application branding controls.
-- Live activity stream, login analytics, active-session and uptime summaries, plus integration diagnostics.
+- Live activity stream, login analytics, user search scoped to consenting users, per-application sessions and uptime checks, plus integration diagnostics.
+- Ace ID entitlement visibility including application quota, MAU allowance, feature flags, and payment/renewal metadata where provided.
 - Local theme, accent, density, reduced-motion, and guidance preferences.
 - Health/readiness endpoints and typed API errors.
 

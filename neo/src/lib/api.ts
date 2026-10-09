@@ -1,4 +1,4 @@
-import type { ActivityEvent, ApiError, Application, DiscoveryStatus, LoginAnalytics, OperationsAnalytics, Quota, RedirectUri, User, AppCredential, AppBranding } from "../types";
+import type { ActivityEvent, ApiError, Application, DiscoveryStatus, LoginAnalytics, OperationsAnalytics, Quota, RedirectUri, User, AppCredential, AppBranding, Entitlements, SessionRecord, UptimeReport, UserRecord } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -80,6 +80,9 @@ export const api = {
     redirectUris: (id: string) => request<{ redirect_uris: RedirectUri[] }>(`/applications/${encodeURIComponent(id)}/redirect-uris`),
     addRedirectUri: (id: string, uri: string) => request<{ redirect_uri: RedirectUri }>(`/applications/${encodeURIComponent(id)}/redirect-uris`, { method: "POST", body: JSON.stringify({ uri }) }),
     removeRedirectUri: (id: string, uriId: string) => request<{ deleted: boolean }>(`/applications/${encodeURIComponent(id)}/redirect-uris/${encodeURIComponent(uriId)}`, { method: "DELETE" }),
+    sessions: (id: string, status: "active" | "all" | "revoked" = "active", limit = 50) => request<{ sessions: SessionRecord[] }>(`/applications/${encodeURIComponent(id)}/sessions?status=${status}&limit=${Math.min(100, Math.max(1, limit))}`),
+    uptime: (id: string, days = 30) => request<UptimeReport>(`/applications/${encodeURIComponent(id)}/uptime?days=${[7,14,30].includes(days) ? days : 30}`),
+    checkUptime: (id: string) => request<{ check: { success: boolean; created_at: string; metadata?: Record<string, unknown> } | null }>(`/applications/${encodeURIComponent(id)}/uptime/check`, { method: "POST", body: "{}" }),
     scopes: (id: string) => request<{ scopes: string[] }>(`/applications/${encodeURIComponent(id)}/scopes`),
     updateScopes: (id: string, scopes: string[]) => request<{ scopes: string[] }>(`/applications/${encodeURIComponent(id)}/scopes`, { method: "PUT", body: JSON.stringify({ scopes }) }),
     credentials: (id: string) => request<{ credentials: AppCredential[] }>(`/applications/${encodeURIComponent(id)}/credentials`),
@@ -96,8 +99,11 @@ export const api = {
     operations: (days = 30) => request<OperationsAnalytics>(`/analytics/operations?days=${[7,14,30].includes(days) ? days : 30}`)
   },
   integration: { discovery: () => request<DiscoveryStatus>("/integration/discovery") },
+  users: {
+    search: (q = "", limit = 20) => request<{ users: UserRecord[] }>(`/users/search?q=${encodeURIComponent(q.slice(0, 120))}&limit=${Math.min(50, Math.max(1, limit))}`)
+  },
   quota: {
-    get: () => request<{ quota: Quota; entitlements?: unknown }>("/quota")
+    get: () => request<{ quota: Quota; entitlements?: Entitlements }>("/quota")
   },
   health: {
     get: () => request<{ ok: boolean }>("/health")

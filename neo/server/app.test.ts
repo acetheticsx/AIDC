@@ -12,7 +12,7 @@ describe("Neo API foundation", () => {
 
   it("protects activity and application configuration APIs", async () => {
     const app = buildApp();
-    for (const url of ["/api/activity", "/api/analytics/logins", "/api/analytics/operations", "/api/applications/not-a-uuid/redirect-uris"]) {
+    for (const url of ["/api/activity", "/api/analytics/logins", "/api/analytics/operations", "/api/users/search", "/api/applications/not-a-uuid/redirect-uris", "/api/applications/not-a-uuid/sessions", "/api/applications/not-a-uuid/uptime"]) {
       const response = await app.inject({ method: "GET", url });
       expect(response.statusCode, url).toBe(401);
     }
