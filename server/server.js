@@ -1613,22 +1613,20 @@ app.get(
       code_challenge_method: "S256"
     });
 
-    const cookies = [
-      serializeCookie(OAUTH_STATE_COOKIE, state, {
-        maxAge: OAUTH_TTL_MS,
-        path: "/auth"
-      }),
-      serializeCookie(
-        OAUTH_VERIFIER_COOKIE,
-        codeVerifier,
-        {
-          maxAge: OAUTH_TTL_MS,
-          path: "/auth"
-        }
-      )
-    ];
-
-    res.set("Set-Cookie", cookies);
+    res.cookie(OAUTH_STATE_COOKIE, state, {
+      maxAge: OAUTH_TTL_MS,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: IS_PRODUCTION,
+      path: "/auth"
+    });
+    res.cookie(OAUTH_VERIFIER_COOKIE, codeVerifier, {
+      maxAge: OAUTH_TTL_MS,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: IS_PRODUCTION,
+      path: "/auth"
+    });
 
     res.redirect(
       `${discoveryState.doc.authorization_endpoint}?${params.toString()}`
@@ -1643,6 +1641,9 @@ app.get(
   "/auth/callback",
   requireDiscovery,
   async (req, res) => {
+    res.set("Cache-Control", "no-store, max-age=0");
+    res.set("Pragma", "no-cache");
+    res.set("Referrer-Policy", "no-referrer");
     const { code, state, error: oauthError } = req.query;
 
     const expectedState = getCookie(
@@ -1654,11 +1655,6 @@ app.get(
       req,
       OAUTH_VERIFIER_COOKIE
     );
-
-    const clearOauthCookies = [
-      clearCookie(OAUTH_STATE_COOKIE, "/auth"),
-      clearCookie(OAUTH_VERIFIER_COOKIE, "/auth")
-    ];
 
     function clearOauthCookiesResponse(response) {
       response.clearCookie(OAUTH_STATE_COOKIE, {
@@ -1937,12 +1933,12 @@ app.post(
       }
     }
 
-    const cookies = [
-      clearCookie(SESSION_COOKIE, "/"),
-      clearCookie(CSRF_COOKIE, "/")
-    ];
-
-    res.set("Set-Cookie", cookies);
+    res.clearCookie(SESSION_COOKIE, {
+      path: "/", httpOnly: true, sameSite: "lax", secure: IS_PRODUCTION
+    });
+    res.clearCookie(CSRF_COOKIE, {
+      path: "/", httpOnly: false, sameSite: "lax", secure: IS_PRODUCTION
+    });
 
     const logoutUrl =
       discoveryState.status === "ready"

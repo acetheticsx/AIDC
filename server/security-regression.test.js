@@ -152,9 +152,9 @@ test("OIDC callback requires a local Ace ID identity", () => {
 });
 
 test("logout remains available when discovery is unavailable", () => {
-  const logout = server.match(
-    /app\.post\(\s*["']\/auth\/logout["'][\s\S]*?\n\s*\}\);/
-  )?.[0] ?? "";
+  const start = server.indexOf('app.post(\n  "/auth/logout"');
+  const end = server.indexOf('\n);', start);
+  const logout = start >= 0 && end > start ? server.slice(start, end) : "";
   assert.ok(logout.length > 0, "logout route should exist");
   assert.doesNotMatch(logout, /requireDiscovery\s*\(/);
   assert.match(logout, /logout_url/);
@@ -655,6 +655,18 @@ test("Deplexo uses the version 1 Docker build configuration", () => {
   assert.match(dockerfile, /CMD \[\"node\", \"server\/server\.js\"\]/);
 });
 
+test("OAuth login sets state and PKCE cookies with secure attributes", () => {
+  const start = server.indexOf('app.get(\n  "/auth/login"');
+  const end = server.indexOf('app.get(\n  "/auth/callback"', start);
+  const login = start >= 0 && end > start ? server.slice(start, end) : "";
+  assert.ok(login.length > 0, "OAuth login route should exist");
+  assert.ok(login.includes("res.cookie(OAUTH_STATE_COOKIE, state"), "state should use the cookie API");
+  assert.ok(login.includes("res.cookie(OAUTH_VERIFIER_COOKIE, codeVerifier"), "PKCE verifier should use the cookie API");
+  assert.ok(login.includes("httpOnly: true"), "OAuth cookies must be HttpOnly");
+  assert.ok(login.includes("sameSite: \"lax\""), "OAuth cookies must use SameSite=Lax");
+  assert.ok(!login.includes('res.set("Set-Cookie", cookies)'), "OAuth secrets must not be written through a raw cookie header array");
+});
+
 test("OAuth callback clears state and PKCE cookies before setting the new session", () => {
   const start = server.indexOf('/auth/callback');
   const end = server.indexOf('/auth/logout', start);
@@ -665,5 +677,7 @@ test("OAuth callback clears state and PKCE cookies before setting the new sessio
   assert.ok(callback.includes("res.cookie(CSRF_COOKIE, session.csrfToken"), "CSRF cookie should use the Express cookie API");
   assert.ok(callback.includes("httpOnly: true"), "session cookie must remain HttpOnly");
   assert.ok(callback.includes("sameSite: \"lax\""), "session cookies must retain SameSite protection");
+  assert.ok(callback.includes("Cache-Control") && callback.includes("no-store"), "OAuth callback responses must not be cached");
+  assert.ok(callback.includes("Referrer-Policy") && callback.includes("no-referrer"), "OAuth callback codes must not leak through referrers");
   assert.ok(!callback.includes("...clearOauthCookies"), "cleared OAuth cookie strings must not be spread into the session response");
 });;;
