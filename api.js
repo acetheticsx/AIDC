@@ -1,131 +1,136 @@
 const API_BASE = window.AIDC_API_URL || "/api";
 
-/**
- * Request timeout in milliseconds.
- * 30 seconds is generous for API calls while preventing indefinite hangs.
- */
+/** A bounded request lifetime, including reading and decoding the response body. */
 const REQUEST_TIMEOUT_MS = 30000;
+const inFlightGetRequests = new Map();
 
 function readCookie(name) {
-  const escaped = name.replace(
-    /[.*+?^${}()|[\]\\]/g,
-    "\\$&"
-  );
-
-  const match = document.cookie.match(
-    new RegExp("(?:^|; )" + escaped + "=([^;]*)")
-  );
-
-  return match ? decodeURIComponent(match[1]) : null;
+  const prefix = `${name}=`;
+  for (const part of document.cookie.split(";")) {
+    const cookie = part.trim();
+    if (!cookie.startsWith(prefix)) continue;
+    try {
+      return decodeURIComponent(cookie.slice(prefix.length));
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 /**
- * Send an authenticated request to the AIDC API.
- *
- * Features:
- * - 30s timeout via AbortController
- * - CSRF protection via double-submit cookie
- * - Automatic 401 -> auth-required event dispatch
- * - Proper cleanup of timeout on all paths
- * - Distinguishes timeout errors (408) from other errors
+ * Coalesce identical concurrent GETs without persisting private API data.
+ * Mutations and requests with caller-owned AbortSignals are never coalesced.
  */
-async function request(path, options = {}) {
+function request(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();
+  if (method !== "GET" || options.signal || options.dedupe === false) {
+    return performRequest(path, options);
+  }
 
+  const base = options.base === false ? "" : API_BASE;
+  const headers = new Headers(options.headers || {});
+  const headerKey = JSON.stringify(Array.from(headers.entries()).sort(([a], [b]) => a.localeCompare(b)));
+  const key = `${method} ${base}${path} ${headerKey} auth=${options.authRedirect !== false}`;
+  const existing = inFlightGetRequests.get(key);
+  if (existing) return existing;
+
+  const pending = performRequest(path, options).finally(() => {
+    if (inFlightGetRequests.get(key) === pending) inFlightGetRequests.delete(key);
+  });
+  inFlightGetRequests.set(key, pending);
+  return pending;
+}
+
+async function performRequest(path, options = {}) {
+  const method = (options.method || "GET").toUpperCase();
   const useApiBase = options.base !== false;
   const fetchOptions = { ...options };
   const redirectOnAuthFailure = options.authRedirect !== false;
+  const callerSignal = fetchOptions.signal;
 
   delete fetchOptions.base;
   delete fetchOptions.authRedirect;
+  delete fetchOptions.dedupe;
+  delete fetchOptions.signal;
 
-  const headers = {
-    "Content-Type": "application/json",
-    ...(fetchOptions.headers || {})
-  };
+  const headers = new Headers(fetchOptions.headers || {});
+  if (!headers.has("Accept")) headers.set("Accept", "application/json");
+  if (
+    fetchOptions.body != null &&
+    !(typeof FormData !== "undefined" && fetchOptions.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
+    headers.set("Content-Type", "application/json");
+  }
 
-  /*
-   * Double-submit CSRF: echo the value of the
-   * aidc_csrf cookie back as a header. The server
-   * compares them with timingSafeEqual.
-   */
+  // Double-submit CSRF: echo the cookie value on state-changing requests.
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
     const csrf = readCookie("aidc_csrf");
-    if (csrf) {
-      headers["X-CSRF-Token"] = csrf;
-    }
+    if (csrf) headers.set("X-CSRF-Token", csrf);
   }
 
   const base = useApiBase ? API_BASE : "";
-
   const controller = new AbortController();
-  const timeoutId = setTimeout(
-    () => controller.abort(),
-    REQUEST_TIMEOUT_MS
-  );
+  let timedOut = false;
+  const abortFromCaller = () => controller.abort(callerSignal?.reason);
+  if (callerSignal) {
+    if (callerSignal.aborted) abortFromCaller();
+    else callerSignal.addEventListener("abort", abortFromCaller, { once: true });
+  }
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
 
   try {
     const response = await fetch(`${base}${path}`, {
       ...fetchOptions,
       signal: controller.signal,
       credentials: "include",
+      cache: fetchOptions.cache || "no-store",
       headers
     });
 
-    clearTimeout(timeoutId);
-
+    // Keep the timeout active while the body is being transferred and parsed.
+    const responseText = await response.text();
     let data = null;
-    try {
-      data = await response.json();
-    } catch {
-      // Empty response body is valid for some requests.
+    if (responseText) {
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = responseText;
+      }
     }
 
     if (!response.ok) {
-      const error = new Error(
-        data?.error || `Request failed with status ${response.status}.`
-      );
+      const message = typeof data === "string"
+        ? data.slice(0, 500)
+        : data?.error || `Request failed with status ${response.status}.`;
+      const error = new Error(message);
       error.status = response.status;
       error.data = data;
 
-      /*
-       * Let the app layer know it should redirect
-       * to /auth/login. Doing this here means every
-       * API caller gets the behaviour for free.
-       */
       if (response.status === 401 && redirectOnAuthFailure) {
-        window.dispatchEvent(
-          new CustomEvent("aidc-auth-required", {
-            detail: {
-              status: response.status,
-              message: error.message
-            }
-          })
-        );
+        window.dispatchEvent(new CustomEvent("aidc-auth-required", {
+          detail: { status: response.status, message: error.message }
+        }));
       }
-
       throw error;
     }
 
     return data;
   } catch (error) {
-    clearTimeout(timeoutId);
-
-    /*
-     * Re-throw DOMException for aborted requests
-     * so callers can distinguish timeouts from
-     * other errors.
-     */
-    if (error.name === "AbortError") {
-      const timeoutError = new Error(
-        `Request timed out after ${REQUEST_TIMEOUT_MS}ms.`
-      );
+    if (timedOut) {
+      const timeoutError = new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms.`);
       timeoutError.name = "TimeoutError";
       timeoutError.status = 408;
       throw timeoutError;
     }
-
     throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    callerSignal?.removeEventListener("abort", abortFromCaller);
   }
 }
 
@@ -301,18 +306,19 @@ export const api = {
 
   activity: {
     list(applicationId, limit = 50) {
+      const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 50, 1), 100);
       return request(
-        `/applications/${id(applicationId)}/activity?limit=${encodeURIComponent(
-          limit
-        )}`
+        `/applications/${id(applicationId)}/activity?limit=${safeLimit}`
       );
     }
   },
   users: {
     search(query = "", limit = 20) {
       const params = new URLSearchParams();
-      if (String(query || "").trim()) params.set("q", String(query).trim());
-      params.set("limit", String(limit));
+      const normalizedQuery = String(query || "").trim();
+      if (normalizedQuery) params.set("q", normalizedQuery);
+      const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 50);
+      params.set("limit", String(safeLimit));
       return request("/users/search?" + params.toString());
     }
   },
@@ -320,8 +326,9 @@ export const api = {
   sessions: {
     list(applicationId, options = {}) {
       const params = new URLSearchParams();
-      params.set("limit", String(options.limit || 50));
-      if (options.status) params.set("status", options.status);
+      const safeLimit = Math.min(Math.max(Number.parseInt(options.limit, 10) || 50, 1), 100);
+      params.set("limit", String(safeLimit));
+      if (["active", "all", "revoked"].includes(options.status)) params.set("status", options.status);
       return request(
         "/applications/" + id(applicationId) + "/sessions?" + params.toString()
       );

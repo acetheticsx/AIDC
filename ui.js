@@ -275,9 +275,6 @@ export function registerAIDCComponents(AIDC) {
             <a class="aidc-sidebar-link" href="https://docs.ace-base.cc" target="_blank" rel="noreferrer">
               ${icon("book-01")}<span>Docs</span>${icon("arrow-up-right-01")}
             </a>
-            <a class="aidc-sidebar-link" href="mailto:hello@ace-base.cc">
-              ${icon("mail-01")}<span>Help</span>${icon("arrow-up-right-01")}
-            </a>
           </div>
           
           <div class="aidc-computer-shortcuts" aria-label="Computer shortcuts">
@@ -5369,9 +5366,6 @@ if (!query) return true;
       sidebarOpen: {
         state: true
       },
-      helpOpen: {
-        state: true
-      },
       theme: {
         state: true
       },
@@ -5396,7 +5390,6 @@ if (!query) return true;
       super();
 
       this.sidebarOpen = false;
-      this.helpOpen = false;
       this.theme = "light";
       this.shortcutsOpen = false;
       this.accountMenuOpen = false;
@@ -5408,7 +5401,6 @@ if (!query) return true;
 
       this._closeSidebar = () => {
         this.sidebarOpen = false;
-        this.helpOpen = false;
       };
     }
 
@@ -5554,12 +5546,6 @@ if (!query) return true;
         return;
       }
 
-      if (this.helpOpen) {
-        this.helpOpen = false;
-        haptic?.(4);
-        return;
-      }
-
       if (this.accountMenuOpen) {
         this.accountMenuOpen = false;
         haptic?.(4);
@@ -5593,20 +5579,8 @@ if (!query) return true;
       haptic?.(6);
     }
 
-    openHelp() {
-      this.helpOpen = true;
-      this.accountMenuOpen = false;
-      haptic?.(10);
-    }
-
-    closeHelp() {
-      this.helpOpen = false;
-      haptic?.(4);
-    }
-
     openCookiePolicy() {
       this.cookiePolicyOpen = true;
-      this.helpOpen = false;
       this.accountMenuOpen = false;
       haptic?.(6);
     }
@@ -6009,16 +5983,6 @@ if (!query) return true;
               `
             : ""}
 
-          <button
-            class="aidc-help-top aidc-help-top-desktop"
-            type="button"
-            aria-label="Help and resources"
-            title="Help"
-            @click=${this.openHelp}
-          >
-            ${icon("help-circle")}
-          </button>
-
           <main class="aidc-main">
 
             <header class="aidc-mobile-header">
@@ -6037,16 +6001,6 @@ if (!query) return true;
               </a>
 
               <span class="aidc-mobile-header-spacer"></span>
-
-              <button
-                class="aidc-help-top"
-                type="button"
-                aria-label="Help and resources"
-                title="Help"
-                @click=${this.openHelp}
-              >
-                ${icon("help-circle")}
-              </button>
             </header>
 
             <div class="aidc-content">
@@ -6094,7 +6048,6 @@ if (!query) return true;
               title="Account"
               @click=${() => {
                 this.accountMenuOpen = !this.accountMenuOpen;
-                this.helpOpen = false;
                 haptic?.(6);
               }}
             >
@@ -6152,35 +6105,6 @@ if (!query) return true;
                   </div>
                 `
               : ""}
-
-          ${
-            this.helpOpen
-              ? html`
-                  <div class="aidc-help-sheet-layer">
-                    <button class="aidc-help-sheet-backdrop" type="button" aria-label="Close help" @click=${this.closeHelp}></button>
-                    <section class="aidc-help-sheet" role="dialog" aria-modal="true" aria-label="Help and resources">
-                      <div class="aidc-help-sheet-handle"></div>
-                      <header class="aidc-help-sheet-header">
-                        <div><span class="aidc-eyebrow">Help</span><h2>Resources</h2></div>
-                        <button class="aidc-icon-button" type="button" aria-label="Close help" @click=${this.closeHelp}>${icon("x-close")}</button>
-                      </header>
-                      <div class="aidc-help-sheet-links">
-                        <a class="aidc-help-sheet-link" href="https://ace-base.cc" target="_blank" rel="noopener noreferrer">
-                          <span class="aidc-help-sheet-icon">${icon("globe-02")}</span><span><strong>Website</strong><small>ace-base.cc</small></span>${icon("arrow-up-right-01")}
-                        </a>
-                        <a class="aidc-help-sheet-link" href="mailto:hello@ace-base.cc">
-                          <span class="aidc-help-sheet-icon">${icon("mail-01")}</span><span><strong>Email</strong><small>hello@ace-base.cc</small></span>${icon("arrow-right-01")}
-                        </a>
-                        <a class="aidc-help-sheet-link" href="https://docs.ace-base.cc" target="_blank" rel="noopener noreferrer">
-                          <span class="aidc-help-sheet-icon">${icon("book-open-01")}</span><span><strong>Documentation</strong><small>docs.ace-base.cc</small></span>${icon("arrow-up-right-01")}
-                        </a>
-                      </div>
-                    </section>
-                  </div>
-                `
-              : ""
-          }
-
           <aidc-create-dialog></aidc-create-dialog>
           <aidc-delete-modal></aidc-delete-modal>
           <aidc-toast></aidc-toast>
