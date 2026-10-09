@@ -1,4 +1,4 @@
-import type { ActivityEvent, ApiError, Application, DiscoveryStatus, LoginAnalytics, OperationsAnalytics, Quota, RedirectUri, User, AppCredential, AppBranding, Entitlements, SessionRecord, UptimeReport, UserRecord } from "../types";
+import type { ActivityEvent, ApiError, Application, DiscoveryStatus, LoginAnalytics, OperationsAnalytics, Quota, RedirectUri, User, AppCredential, AppBranding, Entitlements, SessionRecord, UptimeReport, UserRecord, OriginVerification } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -76,6 +76,9 @@ export const api = {
     }),
     get: (id: string) => request<{ application: Application }>(`/applications/${encodeURIComponent(id)}`),
     update: (id: string, input: Partial<Pick<Application, "name" | "description" | "origin_url" | "application_type">>) => request<{ application: Application }>(`/applications/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) }),
+    originVerification: (id: string) => request<{ verification: OriginVerification }>(`/applications/${encodeURIComponent(id)}/origin-verification`),
+    verifyOrigin: (id: string) => request<{ verification: OriginVerification }>(`/applications/${encodeURIComponent(id)}/origin-verification/verify`, { method: "POST", body: "{}" }),
+    addCloudflareOriginRecord: (id: string, apiToken: string) => request<{ provider: string; added: boolean; existing: boolean; verification: OriginVerification }>(`/applications/${encodeURIComponent(id)}/origin-verification/cloudflare`, { method: "POST", body: JSON.stringify({ api_token: apiToken }) }),
     remove: (id: string) => request<{ deleted: boolean }>(`/applications/${encodeURIComponent(id)}`, { method: "DELETE" }),
     redirectUris: (id: string) => request<{ redirect_uris: RedirectUri[] }>(`/applications/${encodeURIComponent(id)}/redirect-uris`),
     addRedirectUri: (id: string, uri: string) => request<{ redirect_uri: RedirectUri }>(`/applications/${encodeURIComponent(id)}/redirect-uris`, { method: "POST", body: JSON.stringify({ uri }) }),

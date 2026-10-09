@@ -46,6 +46,7 @@ function generateClientId(): string {
 }
 
 import crypto from "node:crypto";
+import { resolveTxt } from "node:dns/promises";
 
 export function buildApp() {
   const config = getConfig();
@@ -548,6 +549,104 @@ export function buildApp() {
     } catch (error) {
       request.log.error({ err: error }, "branding update failed");
       return reply.code(500).send({ error: "Failed to update branding." });
+    }
+  });
+
+  function originChallenge(originUrl: string | null, applicationId: string) {
+    if (!originUrl) return { required: false, verified: false, reason: "Origin URL is not configured", hostname: null, record_name: null, record_type: null, record_value: null };
+    const parsed = new URL(originUrl);
+    const hostname = parsed.hostname.toLowerCase();
+    if (parsed.protocol === "http:" && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(hostname)) return { required: false, verified: true, reason: "Localhost origins do not require DNS verification", hostname, record_name: null, record_type: null, record_value: null };
+    if (!config.ACE_ID_CLIENT_SECRET) throw new Error("Origin verification is not configured on the server.");
+    const token = crypto.createHmac("sha256", config.ACE_ID_CLIENT_SECRET).update(`${applicationId}\n${parsed.origin}`).digest("base64url");
+    return { required: true, verified: false, reason: "Add the TXT record, then verify it", hostname, record_name: `_aceid-challenge.${hostname}`, record_type: "TXT", record_value: `token=${token} expiry=never` };
+  }
+
+  async function checkOriginDns(originUrl: string | null, applicationId: string) {
+    const challenge = originChallenge(originUrl, applicationId);
+    if (!challenge.required) return { ...challenge, records: [], checked_at: new Date().toISOString(), dns_state: challenge.verified ? "verified" : "not_configured" };
+    let dnsTimeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const records = await Promise.race([
+        resolveTxt(challenge.record_name!),
+        new Promise<never>((_, reject) => { dnsTimeout = setTimeout(() => reject(new Error("DNS_TIMEOUT")), 5000); })
+      ]);
+      const flattened = records.map((chunks) => chunks.join(""));
+      const verified = flattened.some((record) => record.trim() === challenge.record_value);
+      return { ...challenge, verified, reason: verified ? "DNS challenge verified" : "TXT record found but did not match this application", records: flattened, checked_at: new Date().toISOString(), dns_state: verified ? "verified" : "mismatch" };
+    } catch (error) {
+      const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code?: unknown }).code) : "DNS_ERROR";
+      return { ...challenge, verified: false, reason: code === "ENOTFOUND" || code === "ENODATA" ? "TXT record not found yet. DNS propagation may take time." : code === "DNS_TIMEOUT" ? "DNS lookup timed out. Try again shortly." : "DNS lookup is temporarily unavailable. The TXT record below is still valid.", records: [], checked_at: new Date().toISOString(), dns_state: code };
+    } finally {
+      if (dnsTimeout) clearTimeout(dnsTimeout);
+    }
+  }
+
+  app.get("/api/applications/:id/origin-verification", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    try {
+      const owned = await getPool().query("SELECT origin_url FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+      if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
+      return { verification: await checkOriginDns(owned.rows[0].origin_url, id) };
+    } catch (error) {
+      request.log.error({ err: error }, "origin verification lookup failed");
+      return reply.code(503).send({ error: "Origin verification is currently unavailable." });
+    }
+  });
+
+  app.post("/api/applications/:id/origin-verification/verify", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    try {
+      const owned = await getPool().query("SELECT origin_url FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+      if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
+      return { verification: await checkOriginDns(owned.rows[0].origin_url, id) };
+    } catch (error) {
+      request.log.error({ err: error }, "origin verification check failed");
+      return reply.code(503).send({ error: "Origin verification is currently unavailable." });
+    }
+  });
+
+  app.post("/api/applications/:id/origin-verification/cloudflare", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const body = (request.body || {}) as { api_token?: unknown };
+    if (typeof body.api_token !== "string" || !body.api_token.trim() || body.api_token.length > 512) return reply.code(400).send({ error: "A valid Cloudflare API token is required." });
+    try {
+      const owned = await getPool().query("SELECT origin_url FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+      if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
+      if (!owned.rows[0].origin_url) return reply.code(400).send({ error: "Set an Origin URL before adding DNS records." });
+      const challenge = originChallenge(owned.rows[0].origin_url, id);
+      if (!challenge.required) return { provider: "cloudflare", added: false, existing: false, verification: challenge };
+      const token = body.api_token.trim();
+      const cloudflare = async (endpoint: string, init: RequestInit = {}) => {
+        const headers = new Headers({ Authorization: `Bearer ${token}`, Accept: "application/json" });
+        if (init.body) headers.set("Content-Type", "application/json");
+        if (init.headers) new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+        const response = await fetch(`https://api.cloudflare.com/client/v4${endpoint}`, { ...init, headers, signal: AbortSignal.timeout(10000) });
+        const data = await response.json().catch(() => null) as { success?: boolean; result?: Array<Record<string, unknown>>; errors?: Array<{ message?: string }> } | null;
+        if (!response.ok || !data?.success) { const error = new Error(data?.errors?.[0]?.message || "Cloudflare DNS request failed."); (error as Error & { status?: number }).status = response.status >= 400 && response.status < 500 ? response.status : 502; throw error; }
+        return data;
+      };
+      const labels = challenge.hostname!.split(".");
+      const candidates = labels.map((_, index) => labels.slice(index).join(".")).filter((name) => name.includes("."));
+      let zone: Record<string, unknown> | null = null;
+      for (const candidate of candidates) {
+        const params = new URLSearchParams({ name: candidate, status: "active", per_page: "50" });
+        const data = await cloudflare(`/zones?${params.toString()}`);
+        zone = (data.result || []).find((item) => typeof item.name === "string" && String(item.name).toLowerCase() === candidate) || null;
+        if (zone?.id) break;
+      }
+      if (!zone?.id) return reply.code(404).send({ error: "No active Cloudflare zone was found for this origin." });
+      const params = new URLSearchParams({ type: "TXT", name: challenge.record_name!, per_page: "100" });
+      const existing = await cloudflare(`/zones/${encodeURIComponent(String(zone.id))}/dns_records?${params.toString()}`);
+      const matching = (existing.result || []).find((record) => record.type === "TXT" && String(record.name).toLowerCase() === challenge.record_name!.toLowerCase() && record.content === challenge.record_value);
+      if (matching) return { provider: "cloudflare", added: false, existing: true, verification: await checkOriginDns(owned.rows[0].origin_url, id) };
+      await cloudflare(`/zones/${encodeURIComponent(String(zone.id))}/dns_records`, { method: "POST", body: JSON.stringify({ type: "TXT", name: challenge.record_name, content: challenge.record_value, ttl: 120, comment: "AIDC origin verification" }) });
+      await getPool().query("INSERT INTO public.application_activity (application_id, event_type, success, metadata) VALUES ($1, 'origin-verification.record-created', true, $2::jsonb)", [id, JSON.stringify({ provider: "cloudflare", zone_name: zone.name })]);
+      return { provider: "cloudflare", added: true, existing: false, verification: await checkOriginDns(owned.rows[0].origin_url, id) };
+    } catch (error) {
+      const status = typeof error === "object" && error !== null && "status" in error && typeof (error as { status?: unknown }).status === "number" ? (error as { status: number }).status : 502;
+      request.log.warn({ status, message: error instanceof Error ? error.message : "unknown error" }, "Cloudflare origin record creation failed");
+      return reply.code(status >= 400 && status < 500 ? status : 502).send({ error: status === 502 ? "Cloudflare DNS request failed." : error instanceof Error ? error.message : "Cloudflare request failed." });
     }
   });
 

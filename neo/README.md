@@ -9,6 +9,7 @@ A React + TypeScript developer console backed by Fastify and PostgreSQL. Neo kee
 - One-time client-secret rotation/revocation and per-application branding controls.
 - Live activity stream, login analytics, user search scoped to consenting users, per-application sessions and uptime checks, plus integration diagnostics.
 - Ace ID entitlement visibility including application quota, MAU allowance, feature flags, and payment/renewal metadata where provided.
+- Signed origin DNS challenges and optional one-shot Cloudflare TXT record provisioning; Cloudflare tokens are not persisted.
 - Local theme, accent, density, reduced-motion, and guidance preferences.
 - Health/readiness endpoints and typed API errors.
 
