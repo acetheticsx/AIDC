@@ -6,6 +6,7 @@ import { CreateApplicationModal } from "./components/CreateApplicationModal";
 import { ApplicationDrawer } from "./components/ApplicationDrawer";
 import { Applications } from "./views/Applications";
 import { Activity } from "./views/Activity";
+import { Analytics } from "./views/Analytics";
 import { Overview } from "./views/Overview";
 import { Settings } from "./views/Settings";
 import { Users } from "./views/Users";
@@ -53,11 +54,9 @@ export function App() {
     setSelectedApplication(null);
     await loadQuota();
   };
-
   const loadApplications = useCallback(async () => {
     const epoch = authEpoch.current;
-    setApplicationsLoading(true);
-    setApplicationsError(null);
+    setApplicationsLoading(true); setApplicationsError(null);
     try {
       const data = await api.applications.list();
       if (epoch !== authEpoch.current) return;
@@ -65,11 +64,8 @@ export function App() {
     } catch (error) {
       if ((error as { status?: number }).status === 401) { clearAuthenticatedState(); return; }
       setApplicationsError(error instanceof Error ? error.message : "Failed to load applications.");
-    } finally {
-      setApplicationsLoading(false);
-    }
+    } finally { setApplicationsLoading(false); }
   }, [clearAuthenticatedState]);
-
   const loadQuota = useCallback(async () => {
     const epoch = authEpoch.current;
     try {
@@ -81,10 +77,8 @@ export function App() {
       setQuota(null); setEntitlements(null);
     }
   }, []);
-
   const bootstrap = useCallback(async () => {
-    setAuthLoading(true);
-    setAuthError(null);
+    setAuthLoading(true); setAuthError("");
     try {
       const data = await api.auth.me();
       setUser(data.user ?? null);
@@ -92,11 +86,8 @@ export function App() {
       const status = (error as { status?: number }).status;
       if (status !== 401) setAuthError(error instanceof Error ? error.message : "Unable to reach the API.");
       clearAuthenticatedState();
-    } finally {
-      setAuthLoading(false);
-    }
+    } finally { setAuthLoading(false); }
   }, [clearAuthenticatedState]);
-
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("aidc-neo-preferences-v1") || "{}");
@@ -114,50 +105,32 @@ export function App() {
     window.addEventListener("hashchange", onHash);
     return () => { window.removeEventListener("hashchange", onHash); window.removeEventListener("aidc:preferences-change", onPreferenceChange); };
   }, [bootstrap]);
-
   useEffect(() => {
     if (!user) return;
-    void loadApplications();
-    void loadQuota();
+    void loadApplications(); void loadQuota();
   }, [user, loadApplications, loadQuota]);
-
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setCommandOpen(true);
-      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setCommandOpen(true); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-
   const createApplication = async (input: { name: string; description: string; origin_url?: string }) => {
-    setCreateBusy(true);
-    setCreateError(null);
+    setCreateBusy(true); setCreateError(null);
     try {
-      const data = await api.applications.create({
-        name: input.name,
-        description: input.description,
-        origin_url: input.origin_url,
-        application_type: "web"
-      });
+      const data = await api.applications.create({ ...input, application_type: "web" });
       if (!data.application) throw new Error("The server returned an invalid application.");
       setApplications((current) => [data.application, ...current]);
-      setCreateOpen(false);
-      await loadQuota();
+      setCreateOpen(false); await loadQuota();
     } catch (error) {
       const typed = error as { status?: number; message?: string; data?: { error?: string } };
       setCreateError(typed.data?.error || typed.message || "Failed to create application.");
-    } finally {
-      setCreateBusy(false);
-    }
+    } finally { setCreateBusy(false); }
   };
-
   const userName = useMemo(() => user?.name || user?.email || "Developer", [user]);
   const signIn = () => window.location.assign("/auth/login");
   const openCreateApplication = () => { setCreateError(null); setCreateOpen(true); };
-
   return <div className="neo-app">
     <Sidebar route={route} userName={user ? userName : undefined} onSignIn={signIn} onSignOut={() => void signOut()} logoutBusy={logoutBusy} />
     <div className="neo-main">
@@ -170,6 +143,7 @@ export function App() {
         <main className="neo-content">
           {route === "overview" && <Overview applications={applications} quota={quota} entitlements={entitlements} signedIn={Boolean(user)} showTips={showTips} onApplications={() => navigate("applications")} onActivity={() => navigate("activity")} onSettings={() => navigate("settings")} onCreate={openCreateApplication} />}
           {route === "applications" && <Applications applications={applications} loading={applicationsLoading} error={applicationsError} signedIn={Boolean(user)} onRetry={() => void loadApplications()} onCreate={openCreateApplication} onOpen={setSelectedApplication} />}
+          {route === "analytics" && <Analytics />}
           {route === "activity" && <Activity />}
           {route === "users" && <Users />}
           {route === "settings" && <Settings />}

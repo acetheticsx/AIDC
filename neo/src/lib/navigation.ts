@@ -1,6 +1,7 @@
 export const routes = [
   { id: "overview", label: "Overview", icon: "◇" },
   { id: "applications", label: "Applications", icon: "▦" },
+  { id: "analytics", label: "Analytics", icon: "↗" },
   { id: "activity", label: "Activity", icon: "◷" },
   { id: "users", label: "Users", icon: "◎" },
   { id: "settings", label: "Settings", icon: "⚙" }
