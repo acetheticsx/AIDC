@@ -19,6 +19,27 @@ describe("Neo API foundation", () => {
     await app.close();
   });
 
+  it("rate limits API traffic and exposes a retry hint", async () => {
+    const app = buildApp();
+    app.get("/api/test-rate-limit", async () => ({ ok: true }));
+    let response;
+    for (let index = 0; index < 121; index += 1) response = await app.inject({ method: "GET", url: "/api/test-rate-limit" });
+    expect(response?.statusCode).toBe(429);
+    expect(response?.json()).toMatchObject({ code: "RATE_LIMITED" });
+    expect(response?.headers["retry-after"]).toBeDefined();
+    await app.close();
+  });
+
+  it("applies a stricter rate limit to OAuth entry points", async () => {
+    const app = buildApp();
+    app.get("/auth/test-rate-limit", { config: { rateLimit: { max: 20, timeWindow: "10 minutes" } } }, async () => ({ ok: true }));
+    let response;
+    for (let index = 0; index < 21; index += 1) response = await app.inject({ method: "GET", url: "/auth/test-rate-limit" });
+    expect(response?.statusCode).toBe(429);
+    expect(response?.json()).toMatchObject({ code: "RATE_LIMITED" });
+    await app.close();
+  });
+
   it("does not expose framework errors to clients", async () => {
     const app = buildApp();
     app.get("/test-error", async () => {

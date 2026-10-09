@@ -9,7 +9,14 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "outDir": "dist-server",
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["server"]
+  "include": [
+    "server"
+  ],
+  "exclude": [
+    "server/**/*.test.ts"
+  ]
 }

@@ -1,25 +1,31 @@
 # AIDC Neo
 
-A React + TypeScript developer console backed by Fastify and PostgreSQL. Neo keeps identity and subscription ownership in Ace ID and preserves the existing AIDC environment contract.
+A React 19 + TypeScript console migration preserving the existing AIDC API and Ace ID/OIDC contract. Neo is isolated under `neo/`; it does not replace the legacy production app.
 
 ## Features
 
-- Ace ID OIDC login, PKCE, server-side sessions, CSRF protection, and local logout.
-- Application create, edit, delete, quota-aware creation, redirect URI management, and OIDC scope management.
-- One-time client-secret rotation/revocation and per-application branding controls.
-- Live activity stream and per-application event history, login analytics, user search scoped to consenting users, per-application sessions and uptime checks, plus integration diagnostics.
-- Clipboard fallback for client IDs, one-time secrets, and DNS challenge records.
-- Ace ID entitlement visibility including application quota, MAU allowance, feature flags, and payment/renewal metadata where provided.
-- Signed origin DNS challenges and optional one-shot Cloudflare TXT record provisioning; Cloudflare tokens are not persisted.
-- Local theme, accent, density, reduced-motion, and guidance preferences.
-- Health/readiness endpoints and typed API errors.
+- Bento overview with live application quota, entitlement state, active sessions, uptime signals, integration health, and recent activity.
+- Application lifecycle: create, inspect, update, and delete, with redirect URI management, OIDC scopes, one-time secret rotation, branding, origin DNS verification, session history, uptime checks, and application events.
+- Activity stream with search/filter, login analytics, operations analytics, and user search scoped to authorized applications.
+- Personal preferences: light/dark/system theme, orange/violet/blue/green accent, comfortable/compact density, reduced motion, and contextual tips.
+- Keyboard command palette, accessible loading/error states, retry actions, and responsive mobile navigation.
+- Server-side entitlement checks, bounded PostgreSQL pool, CSRF protection, rate limiting, request IDs, security headers, and readiness/liveness endpoints.
 
-## Environment variables
+## Runtime contract
 
-Use the same names as the existing AIDC service: `PORT`, `DATABASE_URL`, `ACE_ID_ISSUER`, `ACE_ID_CLIENT_ID`, `ACE_ID_CLIENT_SECRET`, `AIDC_PUBLIC_ORIGIN`, `AIDC_ENTITLEMENTS_SHARED_SECRET`, `AIDC_TRUST_PROXY_HOPS`, `DATABASE_SSL_CA`, `DATABASE_SSL_REJECT_UNAUTHORIZED`, and `DATABASE_POOL_MAX`. Register `${AIDC_PUBLIC_ORIGIN}/auth/callback` with Ace ID. Keep the entitlement shared secret dedicated to this integration and set the same value on Ace ID and AIDC. Never expose secrets in frontend variables.
+Neo intentionally reuses the same server environment names as AIDC main: `DATABASE_URL`, `ACE_ID_ISSUER`, `ACE_ID_CLIENT_ID`, `ACE_ID_CLIENT_SECRET`, `AIDC_PUBLIC_ORIGIN`, `AIDC_ENTITLEMENTS_SHARED_SECRET`, `AIDC_TRUST_PROXY_HOPS`, `DATABASE_SSL_CA`, `DATABASE_SSL_REJECT_UNAUTHORIZED`, `DATABASE_POOL_MAX`, `PORT`, and optional `HOST` (defaults to `0.0.0.0`).
 
-Use a separate Neon branch/database for beta testing.
+Do not put server secrets in `VITE_*` variables. The browser calls same-origin `/api` and `/auth` endpoints; Vite proxies those paths only in development. Configure `AIDC_PUBLIC_ORIGIN` to Neo's own HTTPS URL and register `<AIDC_PUBLIC_ORIGIN>/auth/callback` with Ace ID. Use a separate database branch for beta deployments.
 
-## Verify
+## Development
 
-`npm ci` · `npm run check` · `npm test` · `npm run build` · `npm run build:server`
+```sh
+npm ci
+npm run dev
+npm run check
+npm test
+npm run build
+npm start
+```
+
+The build compiles both the browser bundle (`dist/`) and Fastify server (`dist-server/`). The Dockerfile uses Node 22 and a production-only runtime stage.

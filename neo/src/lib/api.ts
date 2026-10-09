@@ -1,11 +1,12 @@
 import type { ActivityEvent, ApiError, Application, DiscoveryStatus, LoginAnalytics, OperationsAnalytics, Quota, RedirectUri, User, AppCredential, AppBranding, Entitlements, SessionRecord, UptimeReport, UserRecord, OriginVerification } from "../types";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "/api";
+const API_BASE = "/api";
 const REQUEST_TIMEOUT_MS = 15_000;
 
 function csrfToken(): string | null {
   const match = document.cookie.match(/(?:^|; )aidc_csrf=([^;]*)/);
-  return match?.[1] ? decodeURIComponent(match[1]) : null;
+  if (!match?.[1]) return null;
+  try { return decodeURIComponent(match[1]); } catch { return null; }
 }
 
 type RequestOptions = RequestInit & { base?: boolean };

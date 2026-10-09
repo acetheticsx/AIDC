@@ -4,10 +4,22 @@ import type { DiscoveryStatus } from "../types";
 type Preferences = { theme: "light" | "dark" | "system"; accent: "orange" | "violet" | "blue" | "green"; density: "comfortable" | "compact"; showTips: boolean; reduceMotion: boolean };
 const defaults: Preferences = { theme: "system", accent: "orange", density: "comfortable", showTips: true, reduceMotion: false };
 const key = "aidc-neo-preferences-v1";
-function readPreferences(): Preferences { try { const parsed = JSON.parse(localStorage.getItem(key) || "{}"); return { ...defaults, ...parsed }; } catch { return defaults; } }
+function readPreferences(): Preferences {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "{}");
+    return {
+      theme: ["light", "dark", "system"].includes(parsed.theme) ? parsed.theme : defaults.theme,
+      accent: ["orange", "violet", "blue", "green"].includes(parsed.accent) ? parsed.accent : defaults.accent,
+      density: ["comfortable", "compact"].includes(parsed.density) ? parsed.density : defaults.density,
+      showTips: typeof parsed.showTips === "boolean" ? parsed.showTips : defaults.showTips,
+      reduceMotion: typeof parsed.reduceMotion === "boolean" ? parsed.reduceMotion : defaults.reduceMotion
+    };
+  } catch { return defaults; }
+}
 export function Settings() {
   const [prefs, setPrefs] = useState<Preferences>(readPreferences);
   const [saved, setSaved] = useState(false);
+  const [storageError, setStorageError] = useState("");
   const [discovery, setDiscovery] = useState<DiscoveryStatus | null>(null);
   const [health, setHealth] = useState<boolean | null>(null);
   const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
@@ -16,10 +28,10 @@ export function Settings() {
   useEffect(() => { void checkIntegration(); }, []);
   useEffect(() => { const root = document.documentElement; root.dataset.theme = prefs.theme; root.dataset.accent = prefs.accent; root.dataset.density = prefs.density; root.dataset.reduceMotion = String(prefs.reduceMotion); }, [prefs]);
   const update = <K extends keyof Preferences>(name: K, value: Preferences[K]) => { setPrefs((current) => ({ ...current, [name]: value })); setSaved(false); };
-  const save = () => { localStorage.setItem(key, JSON.stringify(prefs)); setSaved(true); };
-  const reset = () => { setPrefs(defaults); localStorage.removeItem(key); setSaved(false); };
+  const save = () => { try { localStorage.setItem(key, JSON.stringify(prefs)); setSaved(true); setStorageError(""); window.dispatchEvent(new Event("aidc:preferences-change")); } catch { setSaved(false); setStorageError("Preferences could not be saved in this browser. Check storage permissions and try again."); } };
+  const reset = () => { setPrefs(defaults); setSaved(false); setStorageError(""); try { localStorage.removeItem(key); window.dispatchEvent(new Event("aidc:preferences-change")); } catch { setStorageError("Defaults are active for this session, but browser storage could not be cleared."); } };
   return <div className="neo-page"><section className="neo-section-heading"><div><span className="neo-kicker">Configuration</span><h2>Settings</h2><p>Personalize the console without changing identity or security configuration.</p></div><div className="neo-heading-actions"><button className="neo-button neo-button-secondary" onClick={reset}>Reset</button><button className="neo-button neo-button-primary" onClick={save}>Save preferences</button></div></section>
-    {saved && <div className="neo-save-status" role="status">✓ Preferences saved on this device.</div>}
+    {saved && <div className="neo-save-status" role="status">✓ Preferences saved on this device.</div>}{storageError && <div className="neo-form-error" role="alert">{storageError}</div>}
     <section className="neo-settings-grid"><article className="neo-panel"><span className="neo-label">Appearance</span><h3>Theme</h3><p>Choose the canvas that suits your workspace.</p><div className="neo-choice-row">{(["system", "light", "dark"] as const).map((value) => <button key={value} className={`neo-choice ${prefs.theme === value ? "selected" : ""}`} onClick={() => update("theme", value)}>{value.charAt(0).toUpperCase()+value.slice(1)}</button>)}</div></article>
     <article className="neo-panel"><span className="neo-label">Accent</span><h3>Color system</h3><p>Set a restrained accent color for interactive controls.</p><div className="neo-choice-row">{(["orange", "violet", "blue", "green"] as const).map((value) => <button key={value} className={`neo-choice neo-accent-choice accent-${value} ${prefs.accent === value ? "selected" : ""}`} onClick={() => update("accent", value)}><span/>{value.charAt(0).toUpperCase()+value.slice(1)}</button>)}</div></article>
     <article className="neo-panel"><span className="neo-label">Layout</span><h3>Information density</h3><p>Compact layouts fit more operational data on screen.</p><div className="neo-choice-row">{(["comfortable", "compact"] as const).map((value) => <button key={value} className={`neo-choice ${prefs.density === value ? "selected" : ""}`} onClick={() => update("density", value)}>{value.charAt(0).toUpperCase()+value.slice(1)}</button>)}</div><label className="neo-toggle"><span><strong>Reduce motion</strong><small>Respect motion-sensitive preferences.</small></span><input type="checkbox" checked={prefs.reduceMotion} onChange={(e) => update("reduceMotion", e.target.checked)}/></label></article>

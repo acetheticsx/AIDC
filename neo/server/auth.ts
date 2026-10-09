@@ -349,7 +349,7 @@ function clearOAuthCookies(reply: FastifyReply): void {
 }
 
 export function registerAuthRoutes(app: FastifyInstance): void {
-  app.get("/auth/login", async (_request, reply) => {
+  app.get("/auth/login", { config: { rateLimit: { max: 20, timeWindow: "10 minutes" } } }, async (_request, reply) => {
     if (!(await requireDiscovery(reply))) return;
 
     const state = randomToken(32);
@@ -381,7 +381,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       .redirect(`${discoveryState.doc!.authorization_endpoint}?${params.toString()}`);
   });
 
-  app.get("/auth/callback", async (request, reply) => {
+  app.get("/auth/callback", { config: { rateLimit: { max: 20, timeWindow: "10 minutes" } } }, async (request, reply) => {
     if (!(await requireDiscovery(reply))) return;
 
     const query = request.query as Record<string, string | undefined>;

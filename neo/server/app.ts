@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
+import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import { getConfig } from "./config.js";
 import {
@@ -61,11 +62,28 @@ export function buildApp() {
 
   void app.register(cookie);
 
+  void app.register(rateLimit, {
+    global: true,
+    max: 120,
+    timeWindow: 60_000,
+    cache: 10_000,
+    keyGenerator: (request) => request.ip,
+    allowList: (request) => {
+      const pathname = request.url.split("?", 1)[0] || "/";
+      return !pathname.startsWith("/api/") && !pathname.startsWith("/auth/");
+    },
+    errorResponseBuilder: (_request, context) => ({
+      error: "Too many requests. Try again shortly.",
+      code: "RATE_LIMITED",
+      retryAfter: Math.max(1, Math.ceil(context.ttl / 1000))
+    })
+  });
+
   const rateBuckets = new Map<string, { count: number; resetAt: number }>();
   app.addHook("onRequest", async (request, reply) => {
     reply.header("X-Request-ID", request.id);
-    const pathname = request.url.split("?", 1)[0] || "/"
-    const authTraffic = pathname === "/auth/login" || pathname === "/auth/callback";
+    const pathname = request.url.split("?", 1)[0] || "/";
+    const authTraffic = pathname.startsWith("/auth/");
     const apiTraffic = pathname.startsWith("/api/");
     if (!authTraffic && !apiTraffic) return;
     const now = Date.now();
@@ -82,17 +100,10 @@ export function buildApp() {
       return reply.code(429).send({ error: "Too many requests. Try again shortly.", code: "RATE_LIMITED" });
     }
     bucket.count += 1;
-    rateBuckets.delete(key);
-    rateBuckets.set(key, bucket);
+    rateBuckets.delete(key); rateBuckets.set(key, bucket);
     if (rateBuckets.size > 10_000) {
-      for (const [bucketKey, value] of rateBuckets) {
-        if (value.resetAt <= now) rateBuckets.delete(bucketKey);
-      }
-      while (rateBuckets.size > 10_000) {
-        const oldestKey = rateBuckets.keys().next().value;
-        if (!oldestKey) break;
-        rateBuckets.delete(oldestKey);
-      }
+      for (const [bucketKey, value] of rateBuckets) if (value.resetAt <= now) rateBuckets.delete(bucketKey);
+      while (rateBuckets.size > 10_000) { const oldestKey = rateBuckets.keys().next().value; if (!oldestKey) break; rateBuckets.delete(oldestKey); }
     }
   });
 

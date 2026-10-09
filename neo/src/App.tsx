@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { CommandPalette } from "./components/CommandPalette";
@@ -29,11 +29,17 @@ export function App() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [logoutBusy, setLogoutBusy] = useState(false);
+  const [showTips, setShowTips] = useState(true);
+  const authEpoch = useRef(0);
+  const clearAuthenticatedState = useCallback(() => {
+    authEpoch.current += 1;
+    setUser(null); setApplications([]); setQuota(null); setEntitlements(null); setSelectedApplication(null);
+  }, []);
   const signOut = async () => {
     if (logoutBusy) return;
     setLogoutBusy(true);
     try { await api.auth.logout(); } catch { /* Clear local view even if the session already expired. */ }
-    setUser(null); setApplications([]); setQuota(null); setEntitlements(null); setSelectedApplication(null);
+    clearAuthenticatedState();
     window.location.replace("/");
   };
   const updateApplication = async (id: string, changes: Partial<Pick<Application, "name" | "description" | "origin_url" | "application_type">>) => {
@@ -49,27 +55,30 @@ export function App() {
   };
 
   const loadApplications = useCallback(async () => {
+    const epoch = authEpoch.current;
     setApplicationsLoading(true);
     setApplicationsError(null);
     try {
       const data = await api.applications.list();
+      if (epoch !== authEpoch.current) return;
       setApplications(Array.isArray(data.applications) ? data.applications : []);
     } catch (error) {
-      if ((error as { status?: number }).status === 401) { setUser(null); return; }
+      if ((error as { status?: number }).status === 401) { clearAuthenticatedState(); return; }
       setApplicationsError(error instanceof Error ? error.message : "Failed to load applications.");
     } finally {
       setApplicationsLoading(false);
     }
-  }, []);
+  }, [clearAuthenticatedState]);
 
   const loadQuota = useCallback(async () => {
+    const epoch = authEpoch.current;
     try {
       const data = await api.quota.get();
-      setQuota(data.quota ?? null);
-      setEntitlements(data.entitlements ?? null);
+      if (epoch !== authEpoch.current) return;
+      setQuota(data.quota ?? null); setEntitlements(data.entitlements ?? null);
     } catch {
-      setQuota(null);
-      setEntitlements(null);
+      if (epoch !== authEpoch.current) return;
+      setQuota(null); setEntitlements(null);
     }
   }, []);
 
@@ -82,11 +91,11 @@ export function App() {
     } catch (error) {
       const status = (error as { status?: number }).status;
       if (status !== 401) setAuthError(error instanceof Error ? error.message : "Unable to reach the API.");
-      setUser(null);
+      clearAuthenticatedState();
     } finally {
       setAuthLoading(false);
     }
-  }, []);
+  }, [clearAuthenticatedState]);
 
   useEffect(() => {
     try {
@@ -96,11 +105,14 @@ export function App() {
       root.dataset.accent = saved.accent || "orange";
       root.dataset.density = saved.density || "comfortable";
       root.dataset.reduceMotion = String(Boolean(saved.reduceMotion));
+      setShowTips(saved.showTips !== false);
     } catch { /* Preferences are optional and never block authentication. */ }
+    const onPreferenceChange = () => { try { const saved = JSON.parse(localStorage.getItem("aidc-neo-preferences-v1") || "{}"); setShowTips(saved.showTips !== false); } catch { setShowTips(true); } };
+    window.addEventListener("aidc:preferences-change", onPreferenceChange);
     void bootstrap();
     const onHash = () => setRoute(readRoute());
     window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    return () => { window.removeEventListener("hashchange", onHash); window.removeEventListener("aidc:preferences-change", onPreferenceChange); };
   }, [bootstrap]);
 
   useEffect(() => {
@@ -144,6 +156,7 @@ export function App() {
 
   const userName = useMemo(() => user?.name || user?.email || "Developer", [user]);
   const signIn = () => window.location.assign("/auth/login");
+  const openCreateApplication = () => { setCreateError(null); setCreateOpen(true); };
 
   return <div className="neo-app">
     <Sidebar route={route} userName={user ? userName : undefined} onSignIn={signIn} onSignOut={() => void signOut()} logoutBusy={logoutBusy} />
@@ -155,8 +168,8 @@ export function App() {
         <main className="neo-content"><div className="neo-state neo-state-error" role="alert"><strong>Console connection failed</strong><span>{authError}</span><button className="neo-button neo-button-secondary" onClick={() => void bootstrap()}>Retry</button></div></main>
       ) : (
         <main className="neo-content">
-          {route === "overview" && <Overview applications={applications} quota={quota} entitlements={entitlements} signedIn={Boolean(user)} onApplications={() => navigate("applications")} />}
-          {route === "applications" && <Applications applications={applications} loading={applicationsLoading} error={applicationsError} signedIn={Boolean(user)} onRetry={() => void loadApplications()} onCreate={() => { setCreateError(null); setCreateOpen(true); }} onOpen={setSelectedApplication} />}
+          {route === "overview" && <Overview applications={applications} quota={quota} entitlements={entitlements} signedIn={Boolean(user)} showTips={showTips} onApplications={() => navigate("applications")} onActivity={() => navigate("activity")} onSettings={() => navigate("settings")} onCreate={openCreateApplication} />}
+          {route === "applications" && <Applications applications={applications} loading={applicationsLoading} error={applicationsError} signedIn={Boolean(user)} onRetry={() => void loadApplications()} onCreate={openCreateApplication} onOpen={setSelectedApplication} />}
           {route === "activity" && <Activity />}
           {route === "users" && <Users />}
           {route === "settings" && <Settings />}
