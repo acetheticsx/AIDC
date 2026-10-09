@@ -654,3 +654,26 @@ test("Deplexo uses the version 1 Docker build configuration", () => {
   assert.match(dockerfile, /RUN cd server && npm ci --omit=dev/);
   assert.match(dockerfile, /CMD \[\"node\", \"server\/server\.js\"\]/);
 });
+
+test("auth redirect loop is guarded across page reloads and clears after a valid session", () => {
+  assert.match(app, /AUTH_REDIRECT_GUARD_KEY/);
+  assert.match(app, /sessionStorage\.getItem\(AUTH_REDIRECT_GUARD_KEY\)/);
+  assert.match(app, /sessionStorage\.removeItem\(AUTH_REDIRECT_GUARD_KEY\)/);
+  assert.match(app, /did not complete\. Retry sign-in instead of redirecting again/);
+});
+
+test("AIDC logout clears local state immediately without an OIDC end-session redirect", () => {
+  const start = app.indexOf("  async logout() {");
+  const end = app.indexOf("\n  }\n};", start);
+  const logout = start >= 0 && end > start ? app.slice(start, end) : "";
+  assert.ok(logout.length > 0);
+  assert.match(logout, /state\.user = null/);
+  assert.match(logout, /void api\.auth\.logout\(\)\.catch/);
+  assert.match(logout, /window\.location\.replace\("\/"\)/);
+  assert.doesNotMatch(logout, /data\?\.logout_url/);
+});
+
+test("clipboard fallback selects the full value and supports Clipboard API without a secure-context gate", () => {
+  assert.match(app, /navigator\.clipboard\?\.writeText/);
+  assert.match(app, /textarea\.setSelectionRange\(0, textarea\.value\.length\)/);
+});

@@ -221,13 +221,22 @@ function handleError(error, fallbackMessage) {
    Auth
 ───────────────────────────────────────────── */
 
+const AUTH_REDIRECT_GUARD_KEY = "aidc-auth-redirect-attempt";
+
 function requireAuth() {
-  if (authRedirecting) {
-    return;
+  if (authRedirecting) return;
+
+  try {
+    if (sessionStorage.getItem(AUTH_REDIRECT_GUARD_KEY) === "1") {
+      notify("Ace ID sign-in did not complete. Retry sign-in instead of redirecting again.", "error");
+      return;
+    }
+    sessionStorage.setItem(AUTH_REDIRECT_GUARD_KEY, "1");
+  } catch {
+    // Storage can be unavailable in privacy modes; retain the in-page guard.
   }
 
   authRedirecting = true;
-
   window.location.replace(LOGIN_PATH);
 }
 
@@ -265,6 +274,9 @@ const auth = {
           state.user = data?.user || null;
           state.authReady = true;
           state.authDegraded = false;
+          if (state.user) {
+            try { sessionStorage.removeItem(AUTH_REDIRECT_GUARD_KEY); } catch {}
+          }
 
           emitState();
 
@@ -360,32 +372,26 @@ const auth = {
   },
 
   async logout() {
-    try {
-      const data = await api.auth.logout();
+    if (authRedirecting) return;
+    authRedirecting = true;
 
-      /*
-       * Clear local state before leaving.
-       */
-      state.user = null;
-      state.authReady = true;
-      state.authDegraded = false;
-      state.ui.consoleOpen = false;
+    // Clear this app's session immediately; a slow identity-provider end-session
+    // endpoint must not leave the console appearing signed in.
+    state.user = null;
+    state.authReady = true;
+    state.authDegraded = false;
+    state.ui.consoleOpen = false;
+    state.applications = [];
+    state.quota = null;
+    try { sessionStorage.removeItem(AUTH_REDIRECT_GUARD_KEY); } catch {}
+    emitState();
 
-      emitState();
-
-      if (data?.logout_url) {
-        window.location.replace(data.logout_url);
-      } else {
-        window.location.replace("/");
-      }
-    } catch (error) {
-      console.error("Logout failed:", error);
-
-      notify(
-        error?.message || "Failed to sign out.",
-        "error"
-      );
-    }
+    // Revoke the AIDC session in the background, but do not block local logout
+    // on a provider redirect or an unreachable remote endpoint.
+    void api.auth.logout().catch(error => {
+      console.warn("Remote logout cleanup failed:", error?.message || error);
+    });
+    window.location.replace("/");
   }
 };
 
@@ -1596,18 +1602,13 @@ async function copyToClipboard(value) {
   const valueToCopy = String(value);
 
   try {
-    if (
-      navigator.clipboard &&
-      window.isSecureContext
-    ) {
+    if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(valueToCopy);
-
       haptic(6);
-
       return true;
     }
   } catch {
-    // Fall through to legacy method.
+    // Clipboard permissions vary by browser; try the focused fallback below.
   }
 
   try {
@@ -1625,12 +1626,11 @@ async function copyToClipboard(value) {
 
     document.body.appendChild(textarea);
 
-    textarea.focus();
+    textarea.focus({ preventScroll: true });
     textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
 
-    const copied =
-      document.execCommand("copy");
-
+    const copied = document.execCommand("copy");
     textarea.remove();
 
     if (copied) {
