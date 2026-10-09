@@ -443,6 +443,21 @@ test("session viewer is scoped to the owned application and never returns sessio
   assert.doesNotMatch(server, /SELECT[^;]*token_hash[^;]*FROM public\.aceid_sessions/s);
 });
 
+test("OAuth callback clears state and PKCE cookies and prevents callback caching", () => {
+  const start = server.indexOf('app.get(\n  "/auth/callback"');
+  const end = server.indexOf("\n);", start);
+  const callback = start >= 0 && end > start ? server.slice(start, end) : "";
+  assert.ok(callback.length > 0, "OAuth callback route should exist");
+
+  const cacheHeaders = callback.indexOf('res.set("Cache-Control", "no-store, max-age=0")');
+  const discoveryGuard = callback.indexOf("requireDiscovery");
+  assert.ok(cacheHeaders >= 0 && cacheHeaders < discoveryGuard, "cache and referrer headers must be set before discovery can fail");
+  assert.ok(callback.includes('clearCookie(OAUTH_STATE_COOKIE, "/auth")'), "state cookie must be cleared on successful login");
+  assert.ok(callback.includes('clearCookie(OAUTH_VERIFIER_COOKIE, "/auth")'), "PKCE verifier cookie must be cleared on successful login");
+  assert.ok(callback.indexOf('clearCookie(OAUTH_STATE_COOKIE, "/auth")') < callback.indexOf("serializeCookie(SESSION_COOKIE"), "temporary OAuth cookies must be cleared before session cookies are set");
+  assert.doesNotMatch(callback, /\.\.\.clearOauthCookies/, "undefined OAuth cookie collections must never be spread into the response");
+});
+
 test("OAuth uptime history reuses durable application activity data", () => {
   assert.match(server, /event_type = 'uptime\.check'/);
   assert.match(server, /INSERT INTO public\.application_activity/);

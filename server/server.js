@@ -1641,6 +1641,12 @@ app.get(
  */
 app.get(
   "/auth/callback",
+  (req, res, next) => {
+    res.set("Cache-Control", "no-store, max-age=0");
+    res.set("Pragma", "no-cache");
+    res.set("Referrer-Policy", "no-referrer");
+    next();
+  },
   requireDiscovery,
   async (req, res) => {
     const { code, state, error: oauthError } = req.query;
@@ -1886,19 +1892,18 @@ app.get(
       });
 
       const cookies = [
-        ...clearOauthCookies,
-        serializeCookie(
-          SESSION_COOKIE,
-          session.token,
-          {
-            maxAge: SESSION_TTL_MS,
-            httpOnly: true,
-            path: "/"
-          }
-        ),
+        clearCookie(OAUTH_STATE_COOKIE, "/auth"),
+        clearCookie(OAUTH_VERIFIER_COOKIE, "/auth"),
+        serializeCookie(SESSION_COOKIE, session.token, {
+          maxAge: SESSION_TTL_MS,
+          httpOnly: true,
+          sameSite: "Lax",
+          path: "/"
+        }),
         serializeCookie(CSRF_COOKIE, session.csrfToken, {
           maxAge: SESSION_TTL_MS,
           httpOnly: false,
+          sameSite: "Lax",
           path: "/"
         })
       ];
