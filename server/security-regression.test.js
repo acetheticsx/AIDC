@@ -348,6 +348,15 @@ test("origin verification uses a scoped TXT challenge without controlling lifecy
   assert.doesNotMatch(server, /ORIGIN_DOMAIN_UNVERIFIED/);
 });
 
+test("Origin URL validation rejects IPv6 literals for HTTPS DNS verification", () => {
+  const start = server.indexOf("function validateOriginUrl(");
+  const end = server.indexOf("const dnsResolvers", start);
+  const validator = server.slice(start, end);
+  assert.match(validator, /hostname\.replace/);
+  assert.match(validator, /isIP\(/);
+  assert.match(validator, /HTTPS Origin URLs must use a domain name for TXT verification/);
+});
+
 test("Origin URL save binds the application update parameters correctly", () => {
   assert.match(server, /WHERE id = \$11\s+AND owner_id = \$12/);
   assert.match(ui, /View DNS records/);

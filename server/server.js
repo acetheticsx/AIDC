@@ -667,7 +667,7 @@ function validateOriginUrl(value, { required = false } = {}) {
     return { valid: false, error: "HTTP origins are only allowed for localhost" };
   }
 
-  if (parsed.protocol === "https:" && isIP(hostname)) {
+  if (parsed.protocol === "https:" && isIP(hostname.replace(/^\[|\]$/g, ""))) {
     return {
       valid: false,
       error: "HTTPS Origin URLs must use a domain name for TXT verification"
