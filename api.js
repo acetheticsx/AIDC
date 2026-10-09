@@ -183,31 +183,6 @@ export const api = {
     }
   },
 
-  originVerification: {
-    get(applicationId) {
-      return request(`/applications/${id(applicationId)}/origin-verification`);
-    },
-
-    verify(applicationId) {
-      return request(
-        `/applications/${id(applicationId)}/origin-verification/verify`,
-        { method: "POST" }
-      );
-    },
-
-    addCloudflareRecord(applicationId, apiToken) {
-      return request(
-        `/applications/${id(applicationId)}/origin-verification/cloudflare`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            api_token: apiToken
-          })
-        }
-      );
-    }
-  },
-
   redirectUris: {
     list(applicationId) {
       return request(`/applications/${id(applicationId)}/redirect-uris`);
