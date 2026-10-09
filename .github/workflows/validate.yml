@@ -53,8 +53,8 @@ jobs:
         with:
           node-version: 24
 
-      - name: Install migration dependencies
-        run: npm install --no-package-lock --ignore-scripts
+      - name: Install locked migration dependencies
+        run: npm ci --ignore-scripts
 
       - name: Type check
         run: npm run check
@@ -64,3 +64,9 @@ jobs:
 
       - name: Neo unit tests
         run: npm test
+
+      - name: Server TypeScript build
+        run: npm run build:server
+
+      - name: Dependency audit
+        run: npm audit --omit=dev --audit-level=high

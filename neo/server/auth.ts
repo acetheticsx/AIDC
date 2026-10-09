@@ -109,8 +109,9 @@ export function validateRuntimeConfig(): void {
 
   const parsedOrigin = new URL(origin);
   if (!["http:", "https:"].includes(parsedOrigin.protocol) ||
-      parsedOrigin.pathname !== "/" &&
-      parsedOrigin.pathname !== "") {
+      parsedOrigin.username || parsedOrigin.password ||
+      (parsedOrigin.pathname !== "/" && parsedOrigin.pathname !== "") ||
+      parsedOrigin.search || parsedOrigin.hash) {
     throw new Error("AIDC_PUBLIC_ORIGIN must be a bare HTTP(S) origin.");
   }
 }
@@ -214,10 +215,11 @@ async function loadDiscovery(): Promise<boolean> {
 function startDiscovery(): Promise<boolean> {
   if (discoveryState.inFlight) return discoveryState.inFlight;
   const attempt = loadDiscovery();
-  discoveryState.inFlight = attempt.finally(() => {
-    if (discoveryState.inFlight === attempt) discoveryState.inFlight = null;
+  const tracked = attempt.finally(() => {
+    if (discoveryState.inFlight === tracked) discoveryState.inFlight = null;
   });
-  return discoveryState.inFlight;
+  discoveryState.inFlight = tracked;
+  return tracked;
 }
 
 async function requireDiscovery(reply: FastifyReply): Promise<boolean> {

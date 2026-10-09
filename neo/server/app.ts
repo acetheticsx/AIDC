@@ -54,10 +54,40 @@ export function buildApp() {
     trustProxy: config.AIDC_TRUST_PROXY_HOPS > 0
       ? config.AIDC_TRUST_PROXY_HOPS
       : false,
-    requestIdHeader: "x-request-id"
+    requestIdHeader: false,
+    genReqId: () => crypto.randomUUID()
   });
 
   void app.register(cookie);
+
+  const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+  app.addHook("onRequest", async (request, reply) => {
+    reply.header("X-Request-ID", request.id);
+    const pathname = request.url.split("?", 1)[0];
+    const authTraffic = pathname === "/auth/login" || pathname === "/auth/callback";
+    const apiTraffic = pathname.startsWith("/api/");
+    if (!authTraffic && !apiTraffic) return;
+    const now = Date.now();
+    const windowMs = authTraffic ? 10 * 60_000 : 60_000;
+    const limit = authTraffic ? 20 : 120;
+    const key = `${authTraffic ? "auth" : "api"}:${request.ip}`;
+    let bucket = rateBuckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      bucket = { count: 0, resetAt: now + windowMs };
+      rateBuckets.set(key, bucket);
+    }
+    if (bucket.count >= limit) {
+      reply.header("Retry-After", String(Math.max(1, Math.ceil((bucket.resetAt - now) / 1000))));
+      return reply.code(429).send({ error: "Too many requests. Try again shortly.", code: "RATE_LIMITED" });
+    }
+    bucket.count += 1;
+    if (rateBuckets.size > 10_000) {
+      for (const [bucketKey, value] of rateBuckets) {
+        if (value.resetAt <= now || rateBuckets.size > 9_000) rateBuckets.delete(bucketKey);
+        if (rateBuckets.size <= 9_000) break;
+      }
+    }
+  });
 
   app.addHook("onSend", async (_request, reply) => {
     reply.header("Cache-Control", "no-store");
@@ -318,6 +348,249 @@ export function buildApp() {
 
     if (!result.rows[0]) return reply.code(404).send({ error: "Application not found." });
     return { application: result.rows[0] };
+  });
+
+  app.patch("/api/applications/:id", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const body = (request.body || {}) as Record<string, unknown>;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) return reply.code(400).send({ error: "Invalid application ID." });
+    const current = await getPool().query("SELECT id, application_type FROM public.applications WHERE id = $1 AND owner_id = $2 LIMIT 1", [id, request.developer!.id]);
+    if (!current.rows[0]) return reply.code(404).send({ error: "Application not found." });
+    const changes: string[] = [];
+    const values: unknown[] = [];
+    const set = (column: string, value: unknown) => { values.push(value); changes.push(`${column} = $${values.length}`); };
+    if (body.name !== undefined) {
+      if (typeof body.name !== "string" || !body.name.trim() || body.name.trim().length > 120) return reply.code(400).send({ error: "Name must be 1–120 characters." });
+      set("name", body.name.trim());
+    }
+    if (body.description !== undefined) {
+      if (typeof body.description !== "string" || body.description.length > 2000) return reply.code(400).send({ error: "Description must be 2000 characters or fewer." });
+      set("description", body.description.trim());
+    }
+    if (body.origin_url !== undefined) {
+      const origin = validateOrigin(body.origin_url);
+      if (body.origin_url !== "" && body.origin_url !== null && !origin) return reply.code(400).send({ error: "Origin URL must be a valid HTTP(S) origin." });
+      set("origin_url", origin);
+    }
+    if (body.application_type !== undefined) {
+      if (body.application_type !== "web" && body.application_type !== "native") return reply.code(400).send({ error: "Application type must be web or native." });
+      set("application_type", body.application_type);
+    }
+    if (!changes.length) return reply.code(400).send({ error: "No supported fields supplied." });
+    values.push(id, request.developer!.id);
+    try {
+      const result = await getPool().query(`UPDATE public.applications SET ${changes.join(", ")}, updated_at = now() WHERE id = $${values.length - 1} AND owner_id = $${values.length} RETURNING id, name, description, client_id, application_type, origin_url, status, created_at, updated_at`, values);
+      return { application: result.rows[0] };
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") return reply.code(409).send({ error: "An application with that name already exists." });
+      request.log.error({ err: error }, "application update failed");
+      return reply.code(500).send({ error: "Failed to update application." });
+    }
+  });
+
+  app.delete("/api/applications/:id", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) return reply.code(400).send({ error: "Invalid application ID." });
+    const client = await getPool().connect();
+    try {
+      await client.query("BEGIN");
+      const found = await client.query("SELECT id, client_id FROM public.applications WHERE id = $1 AND owner_id = $2 FOR UPDATE", [id, request.developer!.id]);
+      if (!found.rows[0]) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "Application not found." }); }
+      const appClientId = found.rows[0].client_id;
+      for (const table of ["application_branding", "application_credentials", "application_scopes", "redirect_uris", "application_activity"]) {
+        await client.query(`DELETE FROM public.${table} WHERE application_id = $1`, [id]);
+      }
+      const revoked = await client.query(`UPDATE public.aceid_clients SET redirect_uris = ARRAY[]::text[], post_logout_redirect_uris = ARRAY[]::text[], grant_types = ARRAY[]::text[], response_types = ARRAY[]::text[], scopes = ARRAY[]::text[], client_secret = NULL, client_secret_hash = NULL, token_endpoint_auth_method = 'none', owner_user_id = NULL, owner_id = NULL, updated_at = now() WHERE client_id = $1 AND owner_user_id = $2 RETURNING client_id`, [appClientId, request.developer!.id]);
+      if (!revoked.rows.length) { await client.query("ROLLBACK"); return reply.code(502).send({ error: "Ace ID client registration could not be revoked. Nothing was deleted.", code: "CLIENT_REVOCATION_FAILED" }); }
+      await client.query("DELETE FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+      await client.query("COMMIT");
+      return { deleted: true };
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      request.log.error({ err: error }, "application deletion failed");
+      return reply.code(500).send({ error: "Failed to delete application." });
+    } finally { client.release(); }
+  });
+
+  app.get("/api/applications/:id/redirect-uris", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const owned = await getPool().query("SELECT id FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+    if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
+    const result = await getPool().query("SELECT id, application_id, uri, created_at FROM public.redirect_uris WHERE application_id = $1 ORDER BY created_at ASC", [id]);
+    return { redirect_uris: result.rows };
+  });
+
+  app.post("/api/applications/:id/redirect-uris", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const body = (request.body || {}) as { uri?: unknown };
+    const owned = await getPool().query("SELECT id, application_type FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+    if (!owned.rows[0]) return reply.code(404).send({ error: "Application not found." });
+    if (typeof body.uri !== "string" || body.uri.length > 2048) return reply.code(400).send({ error: "A valid redirect URI is required." });
+    let parsed: URL;
+    try { parsed = new URL(body.uri.trim()); } catch { return reply.code(400).send({ error: "Redirect URI must be a valid URL." }); }
+    if (parsed.hash || parsed.username || parsed.password || !["http:", "https:"].includes(parsed.protocol)) return reply.code(400).send({ error: "Redirect URI cannot contain credentials or fragments and must use HTTP(S)." });
+    const native = owned.rows[0].application_type === "native";
+    if (parsed.protocol === "http:" && !(native && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname))) return reply.code(400).send({ error: "HTTP redirects are only allowed for native loopback applications." });
+    try {
+      const result = await getPool().query("INSERT INTO public.redirect_uris (application_id, uri) VALUES ($1, $2) RETURNING id, application_id, uri, created_at", [id, parsed.toString()]);
+      return reply.code(201).send({ redirect_uri: result.rows[0] });
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") return reply.code(409).send({ error: "This redirect URI is already registered." });
+      request.log.error({ err: error }, "redirect URI creation failed");
+      return reply.code(500).send({ error: "Failed to add redirect URI." });
+    }
+  });
+
+  app.delete("/api/applications/:id/redirect-uris/:uriId", { preHandler: requireAuth }, async (request, reply) => {
+    const params = request.params as { id: string; uriId: string };
+    const owned = await getPool().query("SELECT id FROM public.applications WHERE id = $1 AND owner_id = $2", [params.id, request.developer!.id]);
+    if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
+    const result = await getPool().query("DELETE FROM public.redirect_uris WHERE id = $1 AND application_id = $2 RETURNING id", [params.uriId, params.id]);
+    if (!result.rows.length) return reply.code(404).send({ error: "Redirect URI not found." });
+    return { deleted: true };
+  });
+
+  app.get("/api/applications/:id/scopes", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const owned = await getPool().query("SELECT id FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+    if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
+    const result = await getPool().query("SELECT scope FROM public.application_scopes WHERE application_id = $1 ORDER BY scope ASC", [id]);
+    return { scopes: result.rows.map((row) => row.scope as string) };
+  });
+
+  app.put("/api/applications/:id/scopes", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const body = (request.body || {}) as { scopes?: unknown };
+    if (!Array.isArray(body.scopes) || body.scopes.length > 10 || body.scopes.some((scope) => typeof scope !== "string")) return reply.code(400).send({ error: "Scopes must be a list of supported strings." });
+    const scopes = [...new Set((body.scopes as string[]).map((scope) => scope.trim().toLowerCase()).filter(Boolean))];
+    const allowed = new Set(["openid", "profile", "email"]);
+    if (!scopes.includes("openid") || scopes.some((scope) => !allowed.has(scope))) return reply.code(400).send({ error: "openid is required; supported scopes are openid, profile, and email." });
+    const client = await getPool().connect();
+    try {
+      await client.query("BEGIN");
+      const owned = await client.query("SELECT id, client_id FROM public.applications WHERE id = $1 AND owner_id = $2 FOR UPDATE", [id, request.developer!.id]);
+      if (!owned.rows[0]) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "Application not found." }); }
+      await client.query("DELETE FROM public.application_scopes WHERE application_id = $1", [id]);
+      for (const scope of scopes) await client.query("INSERT INTO public.application_scopes (application_id, scope) VALUES ($1, $2)", [id, scope]);
+      await client.query("UPDATE public.aceid_clients SET scopes = $1::text[], updated_at = now() WHERE client_id = $2 AND owner_user_id = $3", [scopes, owned.rows[0].client_id, request.developer!.id]);
+      await client.query("COMMIT");
+      return { scopes };
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      request.log.error({ err: error }, "scope update failed");
+      return reply.code(500).send({ error: "Failed to update scopes." });
+    } finally { client.release(); }
+  });
+
+  app.get("/api/applications/:id/credentials", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const owned = await getPool().query("SELECT id FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+    if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
+    const result = await getPool().query("SELECT id, application_id, secret_prefix, created_at, last_used_at, revoked_at FROM public.application_credentials WHERE application_id = $1 ORDER BY created_at DESC", [id]);
+    return { credentials: result.rows };
+  });
+
+  app.post("/api/applications/:id/credentials/rotate", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const client = await getPool().connect();
+    try {
+      await client.query("BEGIN");
+      const owned = await client.query("SELECT id FROM public.applications WHERE id = $1 AND owner_id = $2 FOR UPDATE", [id, request.developer!.id]);
+      if (!owned.rows.length) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "Application not found." }); }
+      await client.query("UPDATE public.application_credentials SET revoked_at = now() WHERE application_id = $1 AND revoked_at IS NULL", [id]);
+      const secret = `aidcs_${crypto.randomBytes(32).toString("base64url")}`;
+      const secretHash = crypto.createHash("sha256").update(secret).digest("hex");
+      const secretPrefix = secret.slice(0, 18);
+      const result = await client.query("INSERT INTO public.application_credentials (application_id, secret_hash, secret_prefix) VALUES ($1, $2, $3) RETURNING id, application_id, secret_prefix, created_at, last_used_at, revoked_at", [id, secretHash, secretPrefix]);
+      await client.query("INSERT INTO public.application_activity (application_id, event_type, success, metadata) VALUES ($1, 'credential.rotated', true, '{}'::jsonb)", [id]);
+      await client.query("COMMIT");
+      return reply.code(201).send({ credential: { ...result.rows[0], secret } });
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      request.log.error({ err: error }, "credential rotation failed");
+      return reply.code(500).send({ error: "Failed to rotate credentials." });
+    } finally { client.release(); }
+  });
+
+  app.delete("/api/applications/:id/credentials/:credentialId", { preHandler: requireAuth }, async (request, reply) => {
+    const params = request.params as { id: string; credentialId: string };
+    const owned = await getPool().query("SELECT id FROM public.applications WHERE id = $1 AND owner_id = $2", [params.id, request.developer!.id]);
+    if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
+    const result = await getPool().query("UPDATE public.application_credentials SET revoked_at = now() WHERE id = $1 AND application_id = $2 AND revoked_at IS NULL RETURNING id", [params.credentialId, params.id]);
+    if (!result.rows.length) return reply.code(404).send({ error: "Active credential not found." });
+    await getPool().query("INSERT INTO public.application_activity (application_id, event_type, success, metadata) VALUES ($1, 'credential.revoked', true, '{}'::jsonb)", [params.id]);
+    return { revoked: true };
+  });
+
+  app.get("/api/applications/:id/branding", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const owned = await getPool().query("SELECT id FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+    if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
+    const result = await getPool().query("SELECT application_id, display_name, logo_url, accent_color, updated_at FROM public.application_branding WHERE application_id = $1", [id]);
+    return { branding: result.rows[0] || { application_id: id, display_name: null, logo_url: null, accent_color: null, updated_at: null } };
+  });
+
+  app.put("/api/applications/:id/branding", { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const body = (request.body || {}) as Record<string, unknown>;
+    const displayName = typeof body.display_name === "string" ? body.display_name.trim() : "";
+    const logoUrl = typeof body.logo_url === "string" ? body.logo_url.trim() : "";
+    const accent = typeof body.accent_color === "string" ? body.accent_color.trim() : "";
+    if (displayName.length > 120) return reply.code(400).send({ error: "Display name must be 120 characters or fewer." });
+    if (logoUrl) { try { const url = new URL(logoUrl); if (url.protocol !== "https:" || url.username || url.password) throw new Error(); } catch { return reply.code(400).send({ error: "Logo URL must be a valid HTTPS URL without credentials." }); } }
+    if (accent && !/^#[0-9a-f]{6}$/i.test(accent)) return reply.code(400).send({ error: "Accent color must be a six-digit hex color." });
+    const owned = await getPool().query("SELECT id FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
+    if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
+    try {
+      const result = await getPool().query("INSERT INTO public.application_branding (application_id, display_name, logo_url, accent_color, updated_at) VALUES ($1, $2, $3, $4, now()) ON CONFLICT (application_id) DO UPDATE SET display_name = EXCLUDED.display_name, logo_url = EXCLUDED.logo_url, accent_color = EXCLUDED.accent_color, updated_at = now() RETURNING application_id, display_name, logo_url, accent_color, updated_at", [id, displayName || null, logoUrl || null, accent || null]);
+      await getPool().query("INSERT INTO public.application_activity (application_id, event_type, success, metadata) VALUES ($1, 'branding.updated', true, '{}'::jsonb)", [id]);
+      return { branding: result.rows[0] };
+    } catch (error) {
+      request.log.error({ err: error }, "branding update failed");
+      return reply.code(500).send({ error: "Failed to update branding." });
+    }
+  });
+
+  app.get("/api/activity", { preHandler: requireAuth }, async (request) => {
+    const query = request.query as { limit?: string };
+    const parsed = Number.parseInt(query.limit || "50", 10);
+    const limit = Number.isFinite(parsed) ? Math.min(100, Math.max(1, parsed)) : 50;
+    const result = await getPool().query(`SELECT activity.id, activity.application_id, apps.name AS application_name, activity.event_type, activity.success, activity.metadata, activity.created_at FROM public.application_activity activity JOIN public.applications apps ON apps.id = activity.application_id WHERE apps.owner_id = $1 ORDER BY activity.created_at DESC LIMIT $2`, [request.developer!.id, limit]);
+    return { events: result.rows };
+  });
+
+  app.get("/api/analytics/logins", { preHandler: requireAuth }, async (request, reply) => {
+    const query = request.query as { days?: string };
+    const parsed = Number.parseInt(query.days || "7", 10);
+    const days = [7, 14, 30].includes(parsed) ? parsed : 7;
+    try {
+      const result = await getPool().query(`WITH owned_clients AS (SELECT client_id FROM public.applications WHERE owner_id = $1), oidc_logins AS (SELECT DISTINCT s.id, CASE WHEN COALESCE(s.payload->>'loginTs', '') ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN to_timestamp((s.payload->>'loginTs')::double precision) ELSE s.created_at END AS login_at, NULLIF(s.payload->>'accountId', '') AS account_id FROM public.aceid_oidc_store s WHERE s.model_name = 'Session' AND s.payload->>'kind' = 'Session' AND EXISTS (SELECT 1 FROM owned_clients c WHERE COALESCE(s.payload->'authorizations', '{}'::jsonb) ? c.client_id)), daily AS (SELECT date_trunc('day', login_at)::date AS day, COUNT(*)::int AS logins, COUNT(DISTINCT account_id)::int AS users FROM oidc_logins WHERE login_at >= CURRENT_DATE - ($2::int - 1) AND login_at < CURRENT_DATE + INTERVAL '1 day' GROUP BY 1), failures AS (SELECT date_trunc('day', created_at)::date AS day, COUNT(*)::int AS count FROM public.aceid_auth_events WHERE client_id IN (SELECT client_id FROM owned_clients) AND event_type = 'login_failed' AND created_at >= CURRENT_DATE - ($2::int - 1) AND created_at < CURRENT_DATE + INTERVAL '1 day' GROUP BY 1) SELECT calendar.day::date AS date, COALESCE(daily.logins,0)::int AS count, COALESCE(daily.users,0)::int AS users, COALESCE(failures.count,0)::int AS failures FROM generate_series(CURRENT_DATE - ($2::int - 1), CURRENT_DATE, INTERVAL '1 day') calendar(day) LEFT JOIN daily ON daily.day = calendar.day::date LEFT JOIN failures ON failures.day = calendar.day::date ORDER BY calendar.day ASC`, [request.developer!.id, days]);
+      const items = result.rows.map((row) => ({ date: row.date, count: Number(row.count) || 0, uniqueUsers: Number(row.users) || 0, failedAttempts: Number(row.failures) || 0 }));
+      const totals = items.reduce((acc, row) => ({ total: acc.total + row.count, failedAttempts: acc.failedAttempts + row.failedAttempts }), { total: 0, failedAttempts: 0 });
+      return { days, items, ...totals, uniqueUsers: items.reduce((max, row) => Math.max(max, row.uniqueUsers), 0) };
+    } catch (error) {
+      request.log.error({ err: error }, "login analytics failed");
+      return reply.code(503).send({ error: "Login analytics are currently unavailable." });
+    }
+  });
+
+  app.get("/api/analytics/operations", { preHandler: requireAuth }, async (request, reply) => {
+    const query = request.query as { days?: string };
+    const parsed = Number.parseInt(query.days || "30", 10);
+    const days = [7, 14, 30].includes(parsed) ? parsed : 30;
+    try {
+      const [sessionsResult, uptimeResult] = await Promise.all([
+        getPool().query(`WITH owned_clients AS (SELECT id, name, client_id FROM public.applications WHERE owner_id = $1), session_rows AS (SELECT DISTINCT ON (s.id) s.id, s.user_id, u.email, u.username, u.display_name, u.avatar_url, s.created_at, s.last_seen_at, s.expires_at, s.revoked_at, s.user_agent, s.authenticated_at, c.name AS application_name, c.id AS application_id FROM public.aceid_sessions s JOIN public.aceid_users u ON u.id = s.user_id JOIN public.aceid_consents consent ON consent.user_id = s.user_id JOIN owned_clients c ON c.client_id = consent.client_id WHERE s.expires_at > now() AND s.revoked_at IS NULL ORDER BY s.id, COALESCE(s.last_seen_at, s.created_at) DESC) SELECT * FROM session_rows ORDER BY COALESCE(last_seen_at, created_at) DESC LIMIT 12`, [request.developer!.id]),
+        getPool().query(`SELECT a.id, a.name, a.status AS application_status, COUNT(activity.*)::int AS total_checks, COUNT(activity.*) FILTER (WHERE activity.success)::int AS successful_checks, ROUND(100.0 * COUNT(activity.*) FILTER (WHERE activity.success) / NULLIF(COUNT(activity.*), 0), 2) AS uptime_percent, MAX(activity.created_at) AS last_checked_at, BOOL_OR(activity.success) FILTER (WHERE activity.created_at >= now() - INTERVAL '15 minutes') AS recent_success FROM public.applications a LEFT JOIN public.application_activity activity ON activity.application_id = a.id AND activity.event_type = 'uptime.check' AND activity.created_at >= now() - ($2::int * INTERVAL '1 day') WHERE a.owner_id = $1 GROUP BY a.id, a.name, a.status ORDER BY a.name ASC`, [request.developer!.id, days])
+      ]);
+      const recent = sessionsResult.rows.map((row) => ({ ...row, status: row.revoked_at ? "revoked" : new Date(row.expires_at) <= new Date() ? "expired" : "active" }));
+      const applications = uptimeResult.rows.map((row) => ({ id: row.id, name: row.name, application_status: row.application_status, total_checks: Number(row.total_checks) || 0, successful_checks: Number(row.successful_checks) || 0, uptime_percent: row.uptime_percent === null ? null : Number(row.uptime_percent), last_checked_at: row.last_checked_at || null, status: row.recent_success === true ? "operational" : row.recent_success === false ? "degraded" : "no_data" }));
+      const values = applications.filter((item) => item.uptime_percent !== null).map((item) => item.uptime_percent as number);
+      return { days, sessions: { active: recent.length, recent }, uptime: { operational: applications.filter((item) => item.status === "operational").length, total: applications.length, average_percent: values.length ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2)) : null, applications } };
+    } catch (error) {
+      request.log.error({ err: error }, "operations analytics failed");
+      return reply.code(503).send({ error: "Operations analytics are currently unavailable." });
+    }
   });
 
   app.get("/api/quota", { preHandler: requireAuth }, async (request, reply) => {

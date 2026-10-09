@@ -1,43 +1,27 @@
-import type { Application } from "../types";
-
-type Props = {
-  application: Application | null;
-  onClose: () => void;
-};
-
-export function ApplicationDrawer({ application, onClose }: Props) {
+import { useEffect, useState } from "react";
+import { api } from "../lib/api";
+import type { AppBranding, AppCredential, Application, RedirectUri } from "../types";
+type Changes = Partial<Pick<Application, "name" | "description" | "origin_url" | "application_type">>;
+type Props = { application: Application | null; onClose: () => void; onUpdate: (id: string, changes: Changes) => Promise<void>; onDelete: (id: string) => Promise<void> };
+export function ApplicationDrawer({ application, onClose, onUpdate, onDelete }: Props) {
+  const [editing, setEditing] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const [name, setName] = useState(""); const [description, setDescription] = useState(""); const [origin, setOrigin] = useState("");
+  const [uris, setUris] = useState<RedirectUri[]>([]); const [newUri, setNewUri] = useState(""); const [scopes, setScopes] = useState<string[]>(["openid", "profile", "email"]); const [tab, setTab] = useState<"overview"|"redirects"|"scopes"|"credentials"|"branding">("overview");
+  const [credentials, setCredentials] = useState<AppCredential[]>([]); const [freshSecret, setFreshSecret] = useState(""); const [branding, setBranding] = useState<AppBranding>({ application_id: "" });
+  useEffect(() => { if (!application) return; setName(application.name); setDescription(application.description || ""); setOrigin(application.origin_url || ""); setEditing(false); setError(""); setTab("overview"); void api.applications.redirectUris(application.id).then((data) => setUris(data.redirect_uris || [])).catch(() => setUris([])); void api.applications.scopes(application.id).then((data) => setScopes(data.scopes?.length ? data.scopes : ["openid"])).catch(() => setScopes(["openid", "profile", "email"])); void api.applications.credentials(application.id).then((data) => setCredentials(data.credentials || [])).catch(() => setCredentials([])); void api.applications.branding(application.id).then((data) => setBranding(data.branding)).catch(() => setBranding({ application_id: application.id })); setFreshSecret(""); }, [application?.id]);
   if (!application) return null;
-
-  return (
-    <div className="neo-overlay neo-drawer-overlay" role="presentation" onMouseDown={onClose}>
-      <aside
-        className="neo-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="application-drawer-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="neo-modal-head">
-          <div>
-            <span className="neo-kicker">Application</span>
-            <h2 id="application-drawer-title">{application.name}</h2>
-          </div>
-          <button className="neo-icon-button" onClick={onClose} aria-label="Close">×</button>
-        </div>
-
-        <div className="neo-detail-list">
-          <div><span>Description</span><strong>{application.description || "Not configured"}</strong></div>
-          <div><span>Origin URL</span><strong>{application.origin_url || "Not configured"}</strong></div>
-          <div><span>Type</span><strong>{application.application_type || "Web"}</strong></div>
-          <div><span>Application ID</span><code>{application.id}</code></div>
-          <div><span>Created</span><strong>{application.created_at ? new Date(application.created_at).toLocaleString() : "Unavailable"}</strong></div>
-        </div>
-
-        <div className="neo-drawer-note">
-          Detailed lifecycle controls will be migrated here next, using the existing
-          server authorization and application endpoints.
-        </div>
-      </aside>
-    </div>
-  );
+  const save = async () => { setBusy(true); setError(""); try { await onUpdate(application.id, { name, description, origin_url: origin }); setEditing(false); } catch (e) { setError(e instanceof Error ? e.message : "Update failed."); } finally { setBusy(false); } };
+  const addUri = async () => { if (!newUri.trim()) return; setBusy(true); setError(""); try { const result = await api.applications.addRedirectUri(application.id, newUri.trim()); setUris((current) => [...current, result.redirect_uri]); setNewUri(""); } catch (e) { setError(e instanceof Error ? e.message : "Could not add redirect URI."); } finally { setBusy(false); } };
+  const saveScopes = async () => { setBusy(true); setError(""); try { const result = await api.applications.updateScopes(application.id, scopes); setScopes(result.scopes); } catch (e) { setError(e instanceof Error ? e.message : "Could not save scopes."); } finally { setBusy(false); } };
+  const removeApp = async () => { if (!window.confirm(`Delete “${application.name}”? This revokes its Ace ID client and removes its configuration and activity.`)) return; setBusy(true); setError(""); try { await onDelete(application.id); } catch (e) { setError(e instanceof Error ? e.message : "Deletion failed."); } finally { setBusy(false); } };
+  return <div className="neo-overlay neo-drawer-overlay" role="presentation" onMouseDown={onClose}><aside className="neo-drawer" role="dialog" aria-modal="true" aria-labelledby="application-drawer-title" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="neo-modal-head"><div><span className="neo-kicker">Application controls</span><h2 id="application-drawer-title">{application.name}</h2></div><button className="neo-icon-button" onClick={onClose} aria-label="Close">×</button></div>
+    <nav className="neo-tabs" aria-label="Application sections">{([ ["overview","Overview"],["redirects","Redirect URIs"],["scopes","Scopes"],["credentials","Credentials"],["branding","Branding"]] as const).map(([id,label]) => <button key={id} className={tab===id?"active":""} onClick={() => setTab(id)}>{label}</button>)}</nav>
+    {error && <div className="neo-form-error" role="alert">{error}</div>}
+    {tab === "overview" && <>{editing ? <form className="neo-form neo-drawer-form" onSubmit={(e) => { e.preventDefault(); void save(); }}><label>Application name<input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required /></label><label>Description<textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} rows={3}/></label><label>Origin URL<input type="url" value={origin} onChange={(e) => setOrigin(e.target.value)} placeholder="https://app.example.com" /></label><div className="neo-modal-actions"><button type="button" className="neo-button neo-button-secondary" onClick={() => setEditing(false)}>Cancel</button><button className="neo-button neo-button-primary" disabled={busy}>{busy?"Saving…":"Save changes"}</button></div></form> : <><div className="neo-detail-list"><div><span>Description</span><strong>{application.description || "Not configured"}</strong></div><div><span>Origin URL</span><strong>{application.origin_url || "Not configured"}</strong></div><div><span>Type</span><strong>{application.application_type || "Web"}</strong></div><div><span>Client ID</span><code>{application.client_id || "Unavailable"}</code><button className="neo-button neo-button-secondary" onClick={() => application.client_id && void navigator.clipboard?.writeText(application.client_id)}>Copy client ID</button></div><div><span>Application ID</span><code>{application.id}</code></div><div><span>Created</span><strong>{application.created_at ? new Date(application.created_at).toLocaleString() : "Unavailable"}</strong></div></div><div className="neo-drawer-actions"><button className="neo-button neo-button-secondary" onClick={() => setEditing(true)}>Edit application</button><button className="neo-button neo-button-danger" onClick={() => void removeApp()} disabled={busy}>Delete application</button></div></>}</>}
+    {tab === "redirects" && <section className="neo-drawer-section"><p>Exact redirect URI matching is required during OIDC authorization.</p><form className="neo-inline-form" onSubmit={(e) => { e.preventDefault(); void addUri(); }}><input type="url" value={newUri} onChange={(e) => setNewUri(e.target.value)} placeholder="https://app.example.com/callback" aria-label="New redirect URI" required/><button className="neo-button neo-button-primary" disabled={busy}>Add</button></form>{uris.length ? <div className="neo-config-list">{uris.map((uri) => <div key={uri.id}><code>{uri.uri}</code><button className="neo-icon-button" aria-label={`Remove ${uri.uri}`} disabled={busy} onClick={() => { if (!window.confirm("Remove this redirect URI?")) return; setBusy(true); void api.applications.removeRedirectUri(application.id, uri.id).then(() => setUris((current) => current.filter((item) => item.id !== uri.id))).catch((e) => setError(e instanceof Error ? e.message : "Could not remove URI.")).finally(() => setBusy(false)); }}>×</button></div>)}</div> : <div className="neo-state"><strong>No redirect URIs configured</strong><span>Add a callback URI to finish OAuth setup.</span></div>}</section>}
+    {tab === "scopes" && <section className="neo-drawer-section"><p>Grant only the identity claims your app needs. <code>openid</code> is required.</p>{(["openid","profile","email"] as const).map((scope) => <label className="neo-toggle" key={scope}><span><strong>{scope}</strong><small>{scope === "openid" ? "Required for OIDC identity" : scope === "profile" ? "Basic profile claims" : "Email address and verification status"}</small></span><input type="checkbox" checked={scopes.includes(scope)} disabled={scope === "openid" || busy} onChange={(e) => setScopes((current) => e.target.checked ? [...current, scope] : current.filter((value) => value !== scope))}/></label>)}<button className="neo-button neo-button-primary neo-full" disabled={busy} onClick={() => void saveScopes()}>{busy?"Saving…":"Save scopes"}</button></section>}
+    {tab === "credentials" && <section className="neo-drawer-section"><p>Secrets are stored as hashes. A newly rotated secret is shown once and cannot be retrieved later.</p>{freshSecret && <div className="neo-secret-panel"><strong>New client secret</strong><code>{freshSecret}</code><button className="neo-button neo-button-secondary" onClick={() => { void navigator.clipboard?.writeText(freshSecret); }}>Copy secret</button><small>Store it securely now. Leaving this view clears it from the screen.</small></div>}<button className="neo-button neo-button-primary" disabled={busy} onClick={() => { if (!window.confirm("Rotate credentials? All currently active credentials will be revoked.")) return; setBusy(true); setError(""); void api.applications.rotateCredentials(application.id).then((result) => { setCredentials((current) => [{ ...result.credential, secret: undefined }, ...current.map((item) => item.revoked_at ? item : { ...item, revoked_at: new Date().toISOString() })]); setFreshSecret(result.credential.secret || ""); }).catch((e) => setError(e instanceof Error ? e.message : "Credential rotation failed.")).finally(() => setBusy(false)); }}>{busy?"Working…":"Rotate client secret"}</button>{credentials.length ? <div className="neo-config-list">{credentials.map((credential) => <div key={credential.id}><span className={`neo-status-pill ${credential.revoked_at ? "is-revoked" : ""}`}>{credential.revoked_at ? "Revoked" : "Active"}</span><code>{credential.secret_prefix}…</code><button className="neo-icon-button" disabled={busy || Boolean(credential.revoked_at)} title="Revoke credential" onClick={() => { if (!window.confirm("Revoke this credential?")) return; setBusy(true); void api.applications.revokeCredential(application.id, credential.id).then(() => setCredentials((items) => items.map((item) => item.id === credential.id ? { ...item, revoked_at: new Date().toISOString() } : item))).catch((e) => setError(e instanceof Error ? e.message : "Could not revoke credential.")).finally(() => setBusy(false)); }}>×</button></div>)}</div> : <div className="neo-state"><strong>No credentials issued</strong><span>Rotate a client secret to create one.</span></div>}</section>}
+    {tab === "branding" && <section className="neo-drawer-section"><p>Customize the application name, logo, and accent color shown on supported identity screens.</p><label className="neo-field-label">Display name<input value={branding.display_name || ""} maxLength={120} onChange={(e) => setBranding((current) => ({ ...current, display_name: e.target.value }))} placeholder={application.name}/></label><label className="neo-field-label">Logo URL<input type="url" value={branding.logo_url || ""} onChange={(e) => setBranding((current) => ({ ...current, logo_url: e.target.value }))} placeholder="https://cdn.example.com/logo.png"/></label><label className="neo-field-label">Accent color<input type="text" value={branding.accent_color || ""} onChange={(e) => setBranding((current) => ({ ...current, accent_color: e.target.value }))} placeholder="#F97316" pattern="^#[0-9a-fA-F]{6}$"/></label><button className="neo-button neo-button-primary neo-full" disabled={busy} onClick={() => { setBusy(true); setError(""); void api.applications.updateBranding(application.id, { display_name: branding.display_name || null, logo_url: branding.logo_url || null, accent_color: branding.accent_color || null }).then((result) => setBranding(result.branding)).catch((e) => setError(e instanceof Error ? e.message : "Branding update failed.")).finally(() => setBusy(false)); }}>{busy?"Saving…":"Save branding"}</button></section>}
+  </aside></div>;
 }

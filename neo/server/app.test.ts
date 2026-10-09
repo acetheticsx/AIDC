@@ -10,6 +10,15 @@ describe("Neo API foundation", () => {
     await app.close();
   });
 
+  it("protects activity and application configuration APIs", async () => {
+    const app = buildApp();
+    for (const url of ["/api/activity", "/api/analytics/logins", "/api/analytics/operations", "/api/applications/not-a-uuid/redirect-uris"]) {
+      const response = await app.inject({ method: "GET", url });
+      expect(response.statusCode, url).toBe(401);
+    }
+    await app.close();
+  });
+
   it("does not expose framework errors to clients", async () => {
     const app = buildApp();
     app.get("/test-error", async () => {

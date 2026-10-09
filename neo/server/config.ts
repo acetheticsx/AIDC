@@ -9,7 +9,7 @@ const ConfigSchema = z.object({
   ACE_ID_CLIENT_SECRET: z.string().optional(),
   AIDC_PUBLIC_ORIGIN: z.string().optional(),
   AIDC_ENTITLEMENTS_SHARED_SECRET: z.string().optional(),
-  AIDC_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(20).default(0),
+  AIDC_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
   DATABASE_SSL_CA: z.string().optional(),
   DATABASE_SSL_REJECT_UNAUTHORIZED: z
     .enum(["true", "false"])

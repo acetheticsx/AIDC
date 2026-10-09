@@ -1,60 +1,22 @@
 # AIDC Neo
 
-Neo is the incremental React + TypeScript + Fastify migration of AIDC.
+A React + TypeScript developer console backed by Fastify and PostgreSQL. Neo keeps identity and subscription ownership in Ace ID and preserves the existing AIDC environment contract.
 
-## Identity and environment compatibility
+## Features
 
-Neo intentionally uses the same production environment variable names and Ace ID credentials as the legacy console:
+- Ace ID OIDC login, PKCE, server-side sessions, CSRF protection, and local logout.
+- Application create, edit, delete, quota-aware creation, redirect URI management, and OIDC scope management.
+- One-time client-secret rotation/revocation and per-application branding controls.
+- Live activity stream, login analytics, active-session and uptime summaries, plus integration diagnostics.
+- Local theme, accent, density, reduced-motion, and guidance preferences.
+- Health/readiness endpoints and typed API errors.
 
-- `ACE_ID_ISSUER`
-- `ACE_ID_CLIENT_ID`
-- `ACE_ID_CLIENT_SECRET`
-- `AIDC_PUBLIC_ORIGIN`
-- `AIDC_ENTITLEMENTS_SHARED_SECRET`
-- `DATABASE_URL`
-- `DATABASE_POOL_MAX`
-- `DATABASE_SSL_CA`
-- `DATABASE_SSL_REJECT_UNAUTHORIZED`
-- `AIDC_TRUST_PROXY_HOPS`
+## Environment variables
 
-Do not commit real values. For a beta deployment, copy the values from the existing Deplexo environment into the separate Neo/preview application. `AIDC_PUBLIC_ORIGIN` must match the beta URL because it is used to construct the OIDC callback.
+Use the same names as the existing AIDC service: `PORT`, `DATABASE_URL`, `ACE_ID_ISSUER`, `ACE_ID_CLIENT_ID`, `ACE_ID_CLIENT_SECRET`, `AIDC_PUBLIC_ORIGIN`, `AIDC_ENTITLEMENTS_SHARED_SECRET`, `AIDC_TRUST_PROXY_HOPS`, `DATABASE_SSL_CA`, `DATABASE_SSL_REJECT_UNAUTHORIZED`, and `DATABASE_POOL_MAX`. Register `${AIDC_PUBLIC_ORIGIN}/auth/callback` with Ace ID. Keep the entitlement shared secret dedicated to this integration and set the same value on Ace ID and AIDC. Never expose secrets in frontend variables.
 
-The migration reuses the existing PostgreSQL schema, including `aceid_users`, `sessions`, `applications`, `aceid_clients`, and `aceid_subscriptions`.
+Use a separate Neon branch/database for beta testing.
 
-## Local preview
+## Verify
 
-```bash
-npm install
-npm run dev
-```
-
-Vite serves the client on port 5173 and proxies `/api` and `/auth` to the Fastify server on port 3000.
-
-For a production-like local preview:
-
-```bash
-npm run build
-npm start
-```
-
-## Beta deployment
-
-Deploy `neo` as a separate Deplexo web app with:
-
-- repository: `acetheticsx/AIDC`
-- build root: `neo`
-- framework: Dockerfile
-- Dockerfile: `Dockerfile`
-- port: `3000`
-
-Deploy the exact commit SHA from the `neo` branch so the preview is pinned to a known revision. Keep production on `main`.
-
-Use the same Ace ID client credentials and database credentials, but set `AIDC_PUBLIC_ORIGIN` to the beta app's public origin and register that callback URI in Ace ID before testing login.
-
-Do not enable automatic deployment for the beta app until the branch is stable. Promote by deploying the exact reviewed Neo commit.
-
-## Security
-
-Neo does not create fake clients. Application creation requires the corresponding `public.aceid_clients` row owned by the authenticated Ace ID user, and rolls back the application if registration is missing.
-
-Real credentials belong in Deplexo environment settings, never in Git.
+`npm ci` · `npm run check` · `npm test` · `npm run build` · `npm run build:server`

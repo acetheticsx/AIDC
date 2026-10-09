@@ -26,6 +26,25 @@ export function App() {
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const signOut = async () => {
+    if (logoutBusy) return;
+    setLogoutBusy(true);
+    try { await api.auth.logout(); } catch { /* Clear local view even if the session already expired. */ }
+    setUser(null); setApplications([]); setQuota(null); setSelectedApplication(null);
+    window.location.replace("/");
+  };
+  const updateApplication = async (id: string, changes: Partial<Pick<Application, "name" | "description" | "origin_url" | "application_type">>) => {
+    const result = await api.applications.update(id, changes);
+    setApplications((items) => items.map((item) => item.id === id ? { ...item, ...result.application } : item));
+    setSelectedApplication(result.application);
+  };
+  const deleteApplication = async (id: string) => {
+    await api.applications.remove(id);
+    setApplications((items) => items.filter((item) => item.id !== id));
+    setSelectedApplication(null);
+    await loadQuota();
+  };
 
   const loadApplications = useCallback(async () => {
     setApplicationsLoading(true);
@@ -66,6 +85,14 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("aidc-neo-preferences-v1") || "{}");
+      const root = document.documentElement;
+      root.dataset.theme = saved.theme || "system";
+      root.dataset.accent = saved.accent || "orange";
+      root.dataset.density = saved.density || "comfortable";
+      root.dataset.reduceMotion = String(Boolean(saved.reduceMotion));
+    } catch { /* Preferences are optional and never block authentication. */ }
     void bootstrap();
     const onHash = () => setRoute(readRoute());
     window.addEventListener("hashchange", onHash);
@@ -115,7 +142,7 @@ export function App() {
   const signIn = () => window.location.assign("/auth/login");
 
   return <div className="neo-app">
-    <Sidebar route={route} userName={user ? userName : undefined} onSignIn={signIn} />
+    <Sidebar route={route} userName={user ? userName : undefined} onSignIn={signIn} onSignOut={() => void signOut()} logoutBusy={logoutBusy} />
     <div className="neo-main">
       <Topbar route={route} onCommand={() => setCommandOpen(true)} />
       {authLoading ? (
@@ -133,6 +160,6 @@ export function App() {
     </div>
     <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
     <CreateApplicationModal open={createOpen} busy={createBusy} error={createError} onClose={() => !createBusy && setCreateOpen(false)} onCreate={createApplication} />
-    <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} />
+    <ApplicationDrawer application={selectedApplication} onClose={() => setSelectedApplication(null)} onUpdate={updateApplication} onDelete={deleteApplication} />
   </div>;
 }
