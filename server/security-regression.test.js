@@ -248,8 +248,8 @@ test("analytics ignores malformed login timestamps", () => {
 });
 
 test("frontend bundles have explicit cache-busted versions", () => {
-  assert.match(app, /\.\/ui\.js\?v=20261008-1/);
-  assert.match(index, /\/app\.js\?v=20261008-1/);
+  assert.match(app, /\.\/ui\.js\?v=20261009-2/);
+  assert.match(index, /\/app\.js\?v=20261009-2/);
   assert.match(index, /\/style\.css\?v=20261008-1/);
 });
 
