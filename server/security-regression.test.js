@@ -656,8 +656,8 @@ test("Deplexo uses the version 1 Docker build configuration", () => {
 });
 
 test("OAuth callback clears state and PKCE cookies before setting the new session", () => {
-  const start = server.indexOf('app.get(\\n  "/auth/callback"');
-  const end = server.indexOf('app.post(\\n  "/auth/logout"', start);
+  const start = server.indexOf('/auth/callback');
+  const end = server.indexOf('/auth/logout', start);
   const callback = start >= 0 && end > start ? server.slice(start, end) : "";
   assert.ok(callback.length > 0, "OAuth callback route should exist");
   assert.ok(callback.includes("const clearOauthCookies = ["), "cookie cleanup array should be defined");
@@ -665,4 +665,4 @@ test("OAuth callback clears state and PKCE cookies before setting the new sessio
   assert.ok(callback.includes('clearCookie(OAUTH_VERIFIER_COOKIE, "/auth")'), "PKCE verifier cookie should be cleared");
   assert.ok(callback.includes("...clearOauthCookies"), "success path should clear OAuth cookies");
   assert.ok(!callback.includes("...clearOAuthCookies"), "cookie variable casing must remain consistent");
-});;
+});;;
