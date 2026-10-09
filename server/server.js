@@ -1655,6 +1655,11 @@ app.get(
       OAUTH_VERIFIER_COOKIE
     );
 
+    const clearOauthCookies = [
+      clearCookie(OAUTH_STATE_COOKIE, "/auth"),
+      clearCookie(OAUTH_VERIFIER_COOKIE, "/auth")
+    ];
+
     function clearOauthCookiesResponse(response) {
       response.clearCookie(OAUTH_STATE_COOKIE, {
         path: "/auth",
