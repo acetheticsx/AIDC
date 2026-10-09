@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { isIP } from "node:net";
+import crypto from "node:crypto";
+import { Resolver } from "node:dns/promises";
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
@@ -41,9 +43,14 @@ export function validateOrigin(value: unknown): string | null {
     if (parsed.username || parsed.password || parsed.hash || parsed.search) return null;
     if (parsed.pathname !== "/") return null;
 
-    const hostname = parsed.hostname.toLowerCase();
-    const unbracketedHostname = hostname.replace(/^\[|\]$/g, "");
-    const isLoopback = hostname === "localhost" || unbracketedHostname === "127.0.0.1" || unbracketedHostname === "::1";
+    const rawHostname = parsed.hostname.toLowerCase();
+    const hostname = rawHostname.endsWith(".") ? rawHostname.slice(0, -1) : rawHostname;
+    if (!hostname || hostname.endsWith(".")) return null;
+    if (hostname !== rawHostname) parsed.hostname = hostname;
+
+    const normalizedHostname = parsed.hostname.toLowerCase();
+    const unbracketedHostname = normalizedHostname.replace(/^\[|\]$/g, "");
+    const isLoopback = normalizedHostname === "localhost" || unbracketedHostname === "127.0.0.1" || unbracketedHostname === "::1";
 
     if (parsed.protocol === "http:" && !isLoopback) return null;
     if (parsed.protocol === "https:" && isIP(unbracketedHostname)) return null;
@@ -58,8 +65,51 @@ function generateClientId(): string {
   return `aidc_${crypto.randomBytes(24).toString("hex")}`;
 }
 
-import crypto from "node:crypto";
-import { resolveTxt } from "node:dns/promises";
+
+const dnsResolvers = [
+  { name: "system", resolver: new Resolver({ timeout: 2000, tries: 1 }) },
+  { name: "cloudflare", resolver: new Resolver({ timeout: 2000, tries: 1 }) },
+  { name: "google", resolver: new Resolver({ timeout: 2000, tries: 1 }) }
+] as const;
+
+dnsResolvers[1].resolver.setServers(["1.1.1.1", "1.0.0.1"]);
+dnsResolvers[2].resolver.setServers(["8.8.8.8", "8.8.4.4"]);
+
+export function normalizeTxtRecord(value: unknown): string {
+  return String(value ?? "").replace(/^["']|["']$/g, "").replace(/\s+/g, " ").trim();
+}
+
+export function txtRecordMatchesChallenge(record: string, expected: string): boolean {
+  const normalizedRecord = normalizeTxtRecord(record);
+  const normalizedExpected = normalizeTxtRecord(expected);
+  if (normalizedRecord === normalizedExpected) return true;
+  const recordToken = normalizedRecord.match(/(?:^|\s)token=([^\s]+)/i)?.[1];
+  const expectedToken = normalizedExpected.match(/(?:^|\s)token=([^\s]+)/i)?.[1];
+  if (!recordToken || !expectedToken) return false;
+  const recordBytes = Buffer.from(recordToken);
+  const expectedBytes = Buffer.from(expectedToken);
+  return recordBytes.length === expectedBytes.length && crypto.timingSafeEqual(recordBytes, expectedBytes);
+}
+
+function dnsErrorCode(error: unknown): string {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    return String((error as { code?: unknown }).code || "DNS_LOOKUP_FAILED");
+  }
+  return error instanceof Error ? error.message : "DNS_LOOKUP_FAILED";
+}
+
+async function resolveTxtWithRetry(resolver: Resolver, hostname: string): Promise<string[][]> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await resolver.resolveTxt(hostname);
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(dnsErrorCode(lastError));
+}
 
 export function buildApp() {
   const config = getConfig();
@@ -593,22 +643,54 @@ export function buildApp() {
 
   async function checkOriginDns(originUrl: string | null, applicationId: string) {
     const challenge = originChallenge(originUrl, applicationId);
-    if (!challenge.required) return { ...challenge, records: [], checked_at: new Date().toISOString(), dns_state: challenge.verified ? "verified" : "not_configured" };
-    let dnsTimeout: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const records = await Promise.race([
-        resolveTxt(challenge.record_name!),
-        new Promise<never>((_, reject) => { dnsTimeout = setTimeout(() => reject(new Error("DNS_TIMEOUT")), 5000); })
-      ]);
-      const flattened = records.map((chunks) => chunks.join(""));
-      const verified = flattened.some((record) => record.trim() === challenge.record_value);
-      return { ...challenge, verified, reason: verified ? "DNS challenge verified" : "TXT record found but did not match this application", records: flattened, checked_at: new Date().toISOString(), dns_state: verified ? "verified" : "mismatch" };
-    } catch (error) {
-      const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code?: unknown }).code) : "DNS_ERROR";
-      return { ...challenge, verified: false, reason: code === "ENOTFOUND" || code === "ENODATA" ? "TXT record not found yet. DNS propagation may take time." : code === "DNS_TIMEOUT" ? "DNS lookup timed out. Try again shortly." : "DNS lookup is temporarily unavailable. The TXT record below is still valid.", records: [], checked_at: new Date().toISOString(), dns_state: code };
-    } finally {
-      if (dnsTimeout) clearTimeout(dnsTimeout);
+    if (!challenge.required) {
+      return { ...challenge, records: [], resolver_results: [], checked_at: new Date().toISOString(), dns_state: challenge.verified ? "verified" : "not_configured" };
     }
+
+    const resolverResults = await Promise.all(dnsResolvers.map(async ({ name, resolver }) => {
+      try {
+        const answers = await resolveTxtWithRetry(resolver, challenge.record_name!);
+        return { resolver: name, records: answers.map((chunks) => chunks.join("")), error: null as string | null };
+      } catch (error) {
+        return { resolver: name, records: [] as string[], error: dnsErrorCode(error) };
+      }
+    }));
+
+    const records = [...new Set(resolverResults.flatMap((result) => result.records.map(normalizeTxtRecord).filter(Boolean)))];
+    const verified = records.some((record) => txtRecordMatchesChallenge(record, challenge.record_value!));
+    const missingCodes = new Set(["ENODATA", "ENOTFOUND", "NXDOMAIN", "NODATA"]);
+    const allResolversMissingRecord = resolverResults.every((result) => result.error !== null && missingCodes.has(result.error));
+    const allResolversUnavailable = resolverResults.every((result) => result.error !== null && !missingCodes.has(result.error));
+    const dnsState = verified ? "verified" : records.length > 0 ? "mismatch" : allResolversUnavailable ? "dns_unavailable" : "propagating";
+    const reason = verified
+      ? "DNS challenge verified by a public resolver"
+      : dnsState === "mismatch"
+        ? "TXT records were found, but none matched this application's challenge"
+        : dnsState === "dns_unavailable"
+          ? "Public DNS resolvers are temporarily unavailable. Retry verification shortly."
+          : allResolversMissingRecord
+            ? "TXT record was not found yet. DNS propagation may take time."
+            : "TXT record has not reached the public DNS resolvers yet.";
+
+    return {
+      ...challenge,
+      verified,
+      reason,
+      records,
+      checked_at: new Date().toISOString(),
+      dns_state: dnsState,
+      resolver_results: resolverResults.map((result) => ({ resolver: result.resolver, record_count: result.records.length, error: result.error }))
+    };
+  }
+
+  async function checkOriginDnsWithPropagationRetry(originUrl: string | null, applicationId: string) {
+    let verification = await checkOriginDns(originUrl, applicationId);
+    for (const delayMs of [500, 1200]) {
+      if (verification.verified || !["propagating", "dns_unavailable"].includes(verification.dns_state)) break;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      verification = await checkOriginDns(originUrl, applicationId);
+    }
+    return verification;
   }
 
   app.get("/api/applications/:id/origin-verification", { preHandler: requireAuth }, async (request, reply) => {
@@ -616,7 +698,7 @@ export function buildApp() {
     try {
       const owned = await getPool().query("SELECT origin_url FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
       if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
-      return { verification: await checkOriginDns(owned.rows[0].origin_url, id) };
+      return { verification: await checkOriginDnsWithPropagationRetry(owned.rows[0].origin_url, id) };
     } catch (error) {
       request.log.error({ err: error }, "origin verification lookup failed");
       return reply.code(503).send({ error: "Origin verification is currently unavailable." });
@@ -628,7 +710,7 @@ export function buildApp() {
     try {
       const owned = await getPool().query("SELECT origin_url FROM public.applications WHERE id = $1 AND owner_id = $2", [id, request.developer!.id]);
       if (!owned.rows.length) return reply.code(404).send({ error: "Application not found." });
-      return { verification: await checkOriginDns(owned.rows[0].origin_url, id) };
+      return { verification: await checkOriginDnsWithPropagationRetry(owned.rows[0].origin_url, id) };
     } catch (error) {
       request.log.error({ err: error }, "origin verification check failed");
       return reply.code(503).send({ error: "Origin verification is currently unavailable." });
@@ -668,10 +750,10 @@ export function buildApp() {
       const params = new URLSearchParams({ type: "TXT", name: challenge.record_name!, per_page: "100" });
       const existing = await cloudflare(`/zones/${encodeURIComponent(String(zone.id))}/dns_records?${params.toString()}`);
       const matching = (existing.result || []).find((record) => record.type === "TXT" && String(record.name).toLowerCase() === challenge.record_name!.toLowerCase() && record.content === challenge.record_value);
-      if (matching) return { provider: "cloudflare", added: false, existing: true, verification: await checkOriginDns(owned.rows[0].origin_url, id) };
+      if (matching) return { provider: "cloudflare", added: false, existing: true, verification: await checkOriginDnsWithPropagationRetry(owned.rows[0].origin_url, id) };
       await cloudflare(`/zones/${encodeURIComponent(String(zone.id))}/dns_records`, { method: "POST", body: JSON.stringify({ type: "TXT", name: challenge.record_name, content: challenge.record_value, ttl: 120, comment: "AIDC origin verification" }) });
       await getPool().query("INSERT INTO public.application_activity (application_id, event_type, success, metadata) VALUES ($1, 'origin-verification.record-created', true, $2::jsonb)", [id, JSON.stringify({ provider: "cloudflare", zone_name: zone.name })]);
-      return { provider: "cloudflare", added: true, existing: false, verification: await checkOriginDns(owned.rows[0].origin_url, id) };
+      return { provider: "cloudflare", added: true, existing: false, verification: await checkOriginDnsWithPropagationRetry(owned.rows[0].origin_url, id) };
     } catch (error) {
       const status = typeof error === "object" && error !== null && "status" in error && typeof (error as { status?: unknown }).status === "number" ? (error as { status: number }).status : 502;
       request.log.warn({ status, message: error instanceof Error ? error.message : "unknown error" }, "Cloudflare origin record creation failed");
